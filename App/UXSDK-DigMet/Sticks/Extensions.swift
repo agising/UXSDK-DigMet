@@ -95,9 +95,19 @@ extension Dispatch {
         }
     }
 
+    static func superBackground(_ task: @escaping () -> ()) {
+        Dispatch.global(qos: .unspecified).async {
+            task()
+        }
+    }
+
     static func main(_ task: @escaping () -> ()) {
         Dispatch.main.async {
             task()
         }
     }
+}
+
+extension Notification.Name {
+    static let didPosUpdate = Notification.Name("didPosUpdate")
 }
