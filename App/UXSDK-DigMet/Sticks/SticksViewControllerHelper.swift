@@ -6,73 +6,13 @@
 //  Copyright © 2020 DJI. All rights reserved.
 //
 
-import Photos
 import UIKit
 
-
-//
-// Class to use for allocation of resources, like camera, gimbal, etc.
-class Allocator: NSObject{
-    private var allocated = false
-    private var owner = ""
-    private var name = ""
-    private var dateAllocated = Date()
-    private var maxTime = Double(0)
-    
-    init(name: String){
-        self.name = name
-    }
-    
-    func allocate(_ owner: String, maxTime: Double)->Bool{
-        // Check if it is rightfully allocated
-        if self.allocated{
-            if self.maxTime > self.timeAllocated(){
-                // Resource is rightfully allocated
-                let tempStr = self.name + "-Allocator : Resource occupied by " + self.owner + ", " + owner + "tried to occupy"
-                print(tempStr)
-                return false
-            }
-            print(self.name + "-Allocator : Forcing allocation from " + self.owner)
-        }
-        // Resource is not rightfully allocated -> Allocate it!
-        self.allocated = true
-        self.owner = owner
-        self.dateAllocated = Date()
-        self.maxTime = maxTime
-        return true
-    }
-    
-    
-    func deallocate(){
-        print("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
-        self.allocated = false
-        self.owner = ""
-    }
-
-    func timeAllocated()->Double{
-        if self.allocated{
-            // timeIntervalSinceNow returns a negative time in seconds. This function returns positive value.
-            return -dateAllocated.timeIntervalSinceNow
-        }
-        else{
-            return Double(0)
-        }
-    }
-}
+// Rename this file to Notes
 
 
-// https://www.hackingwithswift.com/books/ios-swiftui/how-to-save-images-to-the-users-photo-library
-class imageSaver: NSObject {
-    func writeToPhotoAlbum(image: UIImage) {
-        UIImageWriteToSavedPhotosAlbum(image, self, #selector(saveError), nil)
-        
-    }
-    @objc func saveError(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
-        print("Save Finished")
-    }
-}
-
-
+//******************************
+// Read jsonAPI from http server
 class serverClass: NSObject{
     var key_value = ""
     

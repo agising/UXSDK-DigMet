@@ -17,6 +17,7 @@
 		971DFA21250B738C00FD6185 /* AircraftHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA20250B738C00FD6185 /* AircraftHelper.swift */; };
 		9738BB3E24F9197B000275FA /* Retry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9738BB3D24F9197B000275FA /* Retry.swift */; };
 		9771889024FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */; };
+		9785CA1A251937250075F1A8 /* Helper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9785CA19251937250075F1A8 /* Helper.swift */; };
 		979B35DA24F0173100236AEE /* SticksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979B35D924F0173100236AEE /* SticksViewController.swift */; };
 		979B35DC24F0176B00236AEE /* Sticks.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 979B35DB24F0176B00236AEE /* Sticks.storyboard */; };
 		97C60830250BC5C2007B45AF /* digmet_id_rsa in Resources */ = {isa = PBXBuildFile; fileRef = 97C6082F250BC5C2007B45AF /* digmet_id_rsa */; };
@@ -67,6 +68,7 @@
 		971DFA20250B738C00FD6185 /* AircraftHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftHelper.swift; sourceTree = "<group>"; };
 		9738BB3D24F9197B000275FA /* Retry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Retry.swift; sourceTree = "<group>"; };
 		9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SticksViewControllerHelper.swift; sourceTree = "<group>"; };
+		9785CA19251937250075F1A8 /* Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helper.swift; sourceTree = "<group>"; };
 		979B35D924F0173100236AEE /* SticksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SticksViewController.swift; sourceTree = "<group>"; };
 		979B35DB24F0176B00236AEE /* Sticks.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Sticks.storyboard; sourceTree = "<group>"; };
 		97C6082F250BC5C2007B45AF /* digmet_id_rsa */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = digmet_id_rsa; path = ../../../../DIgMet/digmet_id_rsa; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				979B35DB24F0176B00236AEE /* Sticks.storyboard */,
 				9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */,
 				971DFA20250B738C00FD6185 /* AircraftHelper.swift */,
+				9785CA19251937250075F1A8 /* Helper.swift */,
 			);
 			path = Sticks;
 			sourceTree = "<group>";
@@ -408,6 +411,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9771889024FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift in Sources */,
+				9785CA1A251937250075F1A8 /* Helper.swift in Sources */,
 				53C8811021507142003F4561 /* CustomMapViewController.swift in Sources */,
 				971DFA1D250B4B9900FD6185 /* zmqHelper.swift in Sources */,
 				A452DC452070D8CC00EFBA30 /* PanelsCollectionsViewController.swift in Sources */,

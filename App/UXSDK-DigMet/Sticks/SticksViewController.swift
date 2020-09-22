@@ -32,6 +32,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     let hostUsername = "gising"
     let hostPath = "/Users/gising/temp/"
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
+    var publisher: SwiftyZeroMQ.Socket?
     var replyEnable = false
     let replyEndpoint = "tcp://*:1234"
     let publishEndPoint = ""
@@ -49,6 +50,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
    
     var image: UIImage = UIImage.init() // Is this used?
     var image_index: UInt?
+    var sessionIndex: Int = 0 // Picture index of this session
+    var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
+    var jsonPictures: JSON = JSON()
     
     var lastImage: UIImage = UIImage.init()
     var lastImagePreview: UIImage = UIImage.init()
@@ -75,10 +79,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Steppers
     @IBOutlet weak var controlPeriodStepperButton: UIStepper!
     @IBOutlet weak var horizontalSpeedStepperButton: UIStepper!
-    
     @IBOutlet weak var horizontalSpeedStackView: UIStackView!
     @IBOutlet weak var controlPeriodStackView: UIStackView!
-    
     
     // Buttons
     @IBOutlet weak var DeactivateSticksButton: UIButton!
@@ -86,7 +88,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var DuttLeftButton: UIButton!
     @IBOutlet weak var DuttRightButton: UIButton!
-    
     @IBOutlet weak var savePhotoButton: UIButton!
     
     // Just to test an init function
@@ -94,8 +95,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         self.image_index = 0
         super.init(coder: aDecoder)
     }
-    
-    
 
     
     //**********************
@@ -187,6 +186,42 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                 completion(false)
                             }
                             else{
+                                var jsonMeta = JSON()
+                                //var headingRelativeToX: Double = 720
+                                let heading = self.copter.getHeading()
+                                let startHeading = self.copter.startHeading
+                                var headingRelativeToX: Double = 0
+                                if heading != nil && startHeading != nil {
+                                    headingRelativeToX = heading! - startHeading!
+                                }
+                                else{
+                                    headingRelativeToX = 360
+                                }
+                                //let apa = heading != nil ? heading! : 0
+                               //   guard let heading = self.copter.getHeading() else {
+//                                    let heading = 0
+//                                }
+//                                _ = heading
+//                                guard let startHeading = self.copter.startHeading else {
+//                                    let startHeading = 0
+//                                }
+                                //let headingRelativeToX = heading! - startHeading!
+
+//                                if heading != nil{
+//                                    headingRelativeToX = self.copter.getHeading()! - self.copter.startHeading!
+//                                }
+//                                guard let headingRelativeX = self.copter.getHeading() - self.copter.startHeading
+                                // NIL error 193!
+                                
+                                jsonMeta["headingToX"].stringValue = String(headingRelativeToX)
+                                jsonMeta["posX"].stringValue = String(self.copter.posX)
+                                jsonMeta["posY"].stringValue = String(self.copter.posY)
+                                jsonMeta["posZ"].stringValue = String(self.copter.posZ)
+                                jsonMeta["fileName"] = ""
+                                
+                                self.sessionIndex += 1
+                                self.jsonPictures[String(self.sessionIndex)] = jsonMeta
+
                                 completion(true)
                             }
                         })
@@ -225,20 +260,20 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // cameraSetMode checks if the newCamera mode is the active mode, and if not it tries to set the mode 'attempts' times. TODO - is attemtps needed?
     func cameraSetMode(_ newCameraMode: DJICameraMode,_ attempts: Int, completionHandler: @escaping (Bool) -> Void) {
         if attempts <= 0{
-            self.printSL("Too many attempts changing camera mode.")
+            self.printSL("CameraSetMode error: too many")
             completionHandler(false)
         }
         self.cameraModeReference = newCameraMode
         // Check if the wanted camera mode is already set
         self.camera?.getModeWithCompletion( {(mode: DJICameraMode, error: Error?) in
             if error != nil{
-                self.statusLabel.text = "Error getting Cameramode"
+                self.printSL("CameraGetMode Error: " + error.debugDescription)
                 completionHandler(false)
             }
             else{
                 self.cameraModeAcitve = mode
                 if self.cameraModeAcitve == self.cameraModeReference{
-                    self.printSL("Camera Mode is set")
+                    print("Camera Mode is set")
                     completionHandler(true)
                 }
                 else{
@@ -255,6 +290,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     
+    // Function could be redefined to send a notification that updates the GUI
     //****************************************************
     // Print to terminal and update status label on screen
     func printSL(_ str: String){
@@ -262,13 +298,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             self.statusLabel.text = str
         }
         print(str)
-    }
-    
-    //********************************
-    // Save an UIImage to Photos album
-    func saveUIImageToPhotosAlbum(image: UIImage){
-        let imageSaverHelper = imageSaver()
-        imageSaverHelper.writeToPhotoAlbum(image: image)
     }
     
     //********************************************
@@ -287,31 +316,14 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
-    //*****************************************************************************
-    // Load an image from the photo library. Seem to be loaded with poor resolution
-    func loadUIImageFromPhotoLibrary() -> UIImage? {
-        // https://stackoverflow.com/questions/29009621/url-of-image-after-uiimagewritetosavedphotosalbum-in-swift
-        // https://www.hackingwithswift.com/forums/swiftui/accessing-image-exif-data-creation-date-location-of-an-image/1429
-        let fetchOptions: PHFetchOptions = PHFetchOptions()
-        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
-        let fetchResult = PHAsset.fetchAssets(with: PHAssetMediaType.image, options: fetchOptions)
-        if (fetchResult.firstObject != nil) {
-            let lastAsset: PHAsset = fetchResult.lastObject!
-            self.previewImageView.image = lastAsset.image
-            self.printSL("Previewing image from path")
-            return lastAsset.image
-        }
-        else{
-            return nil
-        }
-    }
     
+    // Can be moved to separate file
     //*********************************************************
     // NOT USED Load an UIImage from memory using a path string
     func loadUIImageFromMemory(path: String){
         let image = UIImage(contentsOfFile: path)
         self.previewImageView.image = image
-        self.printSL("Previewing image from path")
+        print("Previewing image from path")
     }
     
     //
@@ -324,7 +336,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 print("Deallocating cameraAllocator")
                 self.cameraAllocator.deallocate()
                 if saveSuccess {
-                    print("Image downloaded to App")
+                    self.printSL("Image downloaded to App")
                     
                     Dispatch.superBackground{
                         // Scp to server. Use ssh allocator
@@ -336,11 +348,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                     }
                                     else{
                                         if scpSuccess{
-                                            self.printSL(info)
-                                            self.printSL("Scp to server ok. Send image info on PUB socket")
+                                            self.printSL("Uploaded: " + info)
+                                            print("Scp to server ok")
+                                            _ = self.publish(json: JSON(["CompletedFile": info])) // TODO test this
                                         }
                                         else{
-                                            self.printSL("Scp to server failed. Send on PUB?" + info)
+                                            self.printSL("Scp failed: " + info)
                                         }
                                         self.sshAllocator.deallocate()
                                     }
@@ -348,22 +361,21 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                             })
                         }
                         else{
-                            self.printSL("Ssh allocator busy. Reject this new scp-command")
+                            self.printSL("Ssh allocator busy")
                         }
                     }
                 }
                 else{
-                    self.printSL("Failed to download file from sdCard")
+                    self.printSL("Download from sdCard Failed")
                 }
             })
         }
     }
 
     
-    //*************************
-     // Save photo to app memory
+    //**********************************************************************
+     // Save photo from sdCardto app memory. Setup camera then call getImage
      func savePhoto(completionHandler: @escaping (Bool) -> Void){
-         // Download last image taken by drone. From on board sdCard to app memory to
          cameraSetMode(DJICameraMode.mediaDownload, 1, completionHandler: {(success: Bool) in
              if success {
 
@@ -373,29 +385,26 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                          completionHandler(true)
                      }
                      else{
-                         //self.printSL("Failed downloading imageData")
                         completionHandler(false)
-                         
                      }
                  })
              }
              else{
-                 self.printSL("Set camera mode failed. Interrupting camera too early?")
                  completionHandler(false)
              }
          })
      }
      
      
-    //*************************************************************************************
-    // Downloads an imageData from sdCard. Saves imageData to app. Previews image on screen
+    //*****************************************************************************************
+    // Downloads an imageData from sdCard. Saves imageData to app. Can previews image on screen
     func getImage(completionHandler: @escaping (Bool) -> Void){
         let manager = self.camera?.mediaManager
         manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
-            self.printSL("Refreshing file list...")
+            print("Refreshing file list...")
             if error != nil {
                 completionHandler(false)
-                self.printSL("Refreshing file list failed.")
+                self.printSL("Refresh file list Failed")
             }
             else{ // Get file references
                 guard let files = manager?.sdCardFileListSnapshot() else {
@@ -404,6 +413,21 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     return
                 }
                 self.printSL("Files on sdCard: " + String(describing: files.count))
+                if self.sdFirstIndex == -1 {
+                    self.sdFirstIndex = files.count - self.sessionIndex
+                    // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonPictures[self.sessionIndex = 1]
+                }
+                // Update Metadata with filename
+                for i in stride(from: self.sessionIndex, to: 0, by: -1){
+                    if self.jsonPictures[String(i)]["fileName"] == ""{
+                        self.jsonPictures[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
+                        print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
+                    }
+                    else{
+                        break
+                    }
+                }
+
                 let index = files.count - 1
                 // Create a image container for this scope
                 var imageData: Data?
@@ -411,7 +435,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 // Download bachthwise, append data. Closure is called each time data is updated.
                 files[index].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
                     if error != nil{
-                        // THis happens if download is triggered to close to taking a picture.
+                        // THis happens if download is triggered to close to taking a picture. Is the allocator used?
                         self.printSL("Error, not ready for download: " + String(error!.localizedDescription))
                         completionHandler(false)
                     }
@@ -425,7 +449,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                             completionHandler(true)
                             }
                         else{
-                            self.printSL("Could not fetch image from sdCard properly")
+                            self.printSL("Fetch image from sdCard Failed")
                             completionHandler(false)
                         }
                     }
@@ -441,7 +465,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         else {
                             imageData = data
                             i = 1
-                            //self.printSL("Initiating a new image")
                         }
                     }
                 })
@@ -449,12 +472,13 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         })
     }
     
+    // Can be moved to separate file
     // ******************************************************************
     // Download the preview of the last image taken. Preview it on screen
     func getPreview(completionHandler: @escaping (Bool) -> Void){
         let manager = self.camera?.mediaManager
         manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
-            self.printSL("Refreshing file list...")
+            print("Refreshing file list...")
             if error != nil {
                 completionHandler(false)
                 self.printSL("Refreshing file list failed.")
@@ -473,7 +497,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                     else{
                         self.previewImageView.image = files[index].thumbnail
-                        self.printSL("Thumbnail for preview")
+                        print("Thumbnail for preview")
                         completionHandler(true)
                     }
                 })
@@ -506,8 +530,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
              if session.isAuthorized == true {
                 // Upload Data object
                 completion(success, pending, "Uploading " + self.lastImageDataFilename + "...")
+                let fileNameUploading = self.lastImageDataFilename // This can change during upload process..
                 session.channel.uploadFile(self.lastImageDataURL!.path, to: self.hostPath)
-                info = "File uploaded: " + self.lastImageDataFilename
+                info = fileNameUploading
+                _ = self.publish(json: JSON(["CompletedFile": fileNameUploading]))
                 success = true
              }
              else{
@@ -573,47 +599,33 @@ public class SticksViewController: DUXDefaultLayoutViewController {
    }
 
        
-
+    //**************************
+    // Init the publisher socket
+    func initPublisher()->Bool{
+        do{
+            self.publisher = try context.socket(.publish)
+            try self.publisher?.bind(self.publishEndPoint)
+            return true
+            }
+        catch{
+            return false
+        }
+    }
     
-    //*****************************************************
-    // retreive the gimbal pitch. DOES CRASH THE APP! TODO
-    func getGimbalAttitude(){
-        // Get the key
-        guard let gimbalAttitudeInDegreesKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
-            print("Could not create DJIGimbalParamAttitudeInDegrees key")
-            return
+    func publish(json: JSON)->Bool{
+        let json_s = getJsonString(json: json)
+        do{
+            try self.publisher?.send(string: json_s)
+            print("Published: " + json_s)
+            return true
         }
-        // Get the keyManager
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Could not get the key manager, manke sure you are registered")
-            return
+        catch{
+            print("Tried to publish, but failed: " + json_s)
+            return false
         }
-        // Use key to retreive info
-        let gimbalAttitudeInDegreesValue = keyManager.getValueFor(gimbalAttitudeInDegreesKey)
-        let gimbalAttitudeInDegrees = gimbalAttitudeInDegreesValue?.value as! DJIGimbalState
-        _ = gimbalAttitudeInDegrees.attitudeInDegrees.pitch
-
-        // I want to use gimbalAttitude.attitudeInDegrees.pitch.description
-        var temp_str:String = ""
-        temp_str += "Roll" + gimbalAttitudeInDegrees.attitudeInDegrees.roll.description
-        temp_str += "Pitch" + gimbalAttitudeInDegrees.attitudeInDegrees.pitch.description
-        temp_str += "Yaw" + gimbalAttitudeInDegrees.attitudeInDegrees.yaw.description
-        self.statusLabel.text = temp_str
     }
     
 
-//    func startPUBThread()->Bool{
-//        do{
-//            let publisher = try context.socket(.publish)
-//                       try self.publisher.bind(self.publishEndPoint)
-//            
-//            return true
-//            }
-//        catch{
-//            return false
-//        }
-//    }
-// 
     // ******************************
     // Initiate the zmq reply thread.
     // MARK: ZMQ
@@ -784,9 +796,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     
-//***************
-// Button actions
-//***************
+    //***************
+    // Button actions
+    //***************
+    
     
     // ****************************************************************************
     // Control period stepper. Experiments with execution time for joystick command
@@ -820,7 +833,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         copter.stop()
         deactivateSticks()
         copter._operator = "USER" // Reject application control
-        
     }
 
     //************************************************************************************
@@ -839,46 +851,42 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
     }
 
-
     //***************************************************************************************************************
     // Sends a command to go body left for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Load image from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
         //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
+        //self.previewImageView.image = loadUIImageFromPhotoLibrary()
         //saveImageDataToApp(imageData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
         
         previewImageView.image = nil
         // Set the control command
         copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         //copter.stopListenToPos() test functionality of stop listen
- 
     }
     
     //********************************************************
     // Set gimbal pitch according to scheeme and take a photo.
     @IBAction func takePhotoButton(_ sender: Any) {
-        // Command the drone to take a picture and save it to the onboard sdCard. Change gimbal pitch accorsding to pattern.
-        copter.gotoXYZ(refPosX: 0, refPosY: 0, refPosZ: -15)
-        
-        
+         //copter.gotoXYZ(refPosX: 0, refPosY: 0, refPosZ: -15)
+
 //        previewImageView.image = nil
 //        statusLabel.text = "Capture image button pressed, preview cleared"
-//
+
 //        setGimbalPitch(pitch: self.nextGimbalPitch)
 //        updateGnextGimbalPitch()
 //
-//        // Dispatch to wait in the pitch movement, then capture an image. TODO - use closure instead of stupid timer.
-//        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
-//            self.captureImage(completion: {(success) in
-//                if success {
-//                    self.printSL("Photo successfully taken")
-//                }
-//                else{
-//                    self.printSL("Photo from button press failed to complete")
-//                }
-//            })
-//        })
-    
+        // Dispatch to wait in the pitch movement, then capture an image. TODO - use closure instead of stupid timer.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
+            self.captureImage(completion: {(success) in
+                if success {
+                    self.printSL("Photo successfully taken")
+                }
+                else{
+                    self.printSL("Photo from button press failed to complete")
+                }
+            })
+        })
     }
     
     
@@ -902,7 +910,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
         })
     }
-    
 
     //*************************************************************************
     // Download last imageData from sdCard and save to app memory. Save URL to self.
@@ -938,26 +945,33 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         if self.lastImageDataURL == nil{
             self.printSL("No image to upload")
         }
-        else{
-            Dispatch.background{
-                self.scpToServer(completion: {(success, pending, info) in
-                    Dispatch.main{
-                        if pending{
-                            self.printSL(info)
-                        }
-                        else{
-                            if success{
-                                self.printSL("SCP ok: " + info)
-                            }
-                            else{
-                                // Do something more..?
-                                self.printSL("SCP fail: " + info)
-                            }
-                        }
-                    }
-                })
-            }
+        if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
+            downloadPictureCMD()
         }
+        else{
+            self.printSL("Resource busy")
+        }
+        // If testing without drone, use this code instead of cameraAllocator.
+//        else{
+//            Dispatch.background{
+//                self.scpToServer(completion: {(success, pending, info) in
+//                    Dispatch.main{
+//                        if pending{
+//                            self.printSL(info)
+//                        }
+//                        else{
+//                            if success{
+//                                self.printSL("SCP ok: " + info)
+//                            }
+//                            else{
+//                                // Do something more..?
+//                                self.printSL("SCP fail: " + info)
+//                            }
+//                        }
+//                    }
+//                })
+//            }
+//        }
     }
     
     @objc func onDidPosUpdate(_ notification: Notification){
@@ -1049,9 +1063,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPosUpdate(_:)), name: .didPosUpdate, object: nil)
 
         // Start subscriptions
-        //copter.startListenToPos()
+        //copter.startListenToPos() // startListen to position requres home location for calculation of XYZ. Function is called when home pos is updated.
         copter.startListenToHomePosUpdated()
-
+        
+        _ = initPublisher()
         if startReplyThread(){
             self.printSL("Reply thread successfully started")
         }

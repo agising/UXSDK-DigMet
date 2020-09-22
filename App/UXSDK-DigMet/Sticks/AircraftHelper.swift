@@ -9,16 +9,12 @@
 import Foundation
 import DJIUXSDK
 
-
-
-
 class Copter {
     var flightController: DJIFlightController?
     var state: DJIFlightControllerState?
     var posX: Double = 0
     var posY: Double = 0
     var posZ: Double = 0
-    
     
     var ref_posX: Double = 0
     var ref_posY: Double = 0
@@ -35,7 +31,7 @@ class Copter {
     var yawRateLimit:Float = 10 // deg/s, defensive.
 
     var pos: CLLocation?
-    var startHeading: Double?  // This caused an issue at takeoff. TODO heading must be set for xy control.
+    var startHeading: Double?
     var homeLocation: CLLocation?
     var dssHome: CLLocation?
     var dssHomeHeading: Double?
@@ -227,7 +223,7 @@ class Copter {
     }
     
     //
-    // Get gimbal pitch
+    // Get gimbal pitch Attitude DOES NOT WORK
     func getGimbalPitchAtt()->DJIGimbalAttitude?{
         guard let gimbalAttitudeKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
             NSLog("Couldn't create the key")
@@ -247,7 +243,7 @@ class Copter {
     }
     
     //
-    // Get gimbal pitch2
+    // Get gimbal pitch Rotate DOES NOT WORK
     func getGimbalPitchRot()->DJIGimbalRotation?{
         guard let gimbalRotateKey = DJIGimbalKey(param: DJIGimbalParamRotate) else {
             NSLog("Couldn't create the key")

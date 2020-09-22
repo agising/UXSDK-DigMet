@@ -20,7 +20,7 @@ class RetryManager: NSObject {
             var counter = 1
             while self.errorToCheck != nil {
                 self.dispatchNow(block)
-                self.semaphore.wait(timeout: .now() + 2)
+                _ = self.semaphore.wait(timeout: .now() + 2)
                 if counter >= retry {
                     break
                 }
