@@ -60,6 +60,55 @@ class serverClass: NSObject{
 
 
 
+
+
+
+//
+//// The Z PD - controller
+//     else{
+//         // Implement P-controller, position error to ref vel. Rotate aka SimpleMode
+//         let x_diff: Float = Float(self.ref_posX - self.posX)
+//         let y_diff: Float = Float(self.ref_posY - self.posY)
+//         let z_diff: Float = Float(self.ref_posZ - self.posZ)
+//         var z_sign: Float = 0
+//         if z_diff >= 0{
+//             z_sign = 1
+//         }
+//         else{
+//             z_sign = -1
+//         }
+//         guard let checkedHeading = self.getHeading() else {return}
+//         guard let checkedStartHeading = self.startHeading else {return}
+//         let alpha = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
+//         
+//     
+//         self.ref_velX =  (x_diff * cos(alpha) + y_diff * sin(alpha))*hPosKP
+//         self.ref_velY = (-x_diff * sin(alpha) + y_diff * cos(alpha))*hPosKP
+//         
+//         self.ref_velZ = (z_diff) * vPosKP - Float(self.velZ) * vVelKD * z_sign
+//         print("refvelZ: " + String(self.ref_velZ) + ", z_diff: " + String(z_diff) + ", velZ: " + String(self.velZ))
+//         // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
+//         
+//
+//         sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: 0)
+//     }
+//
+
+
+
+
+
+
+
+//// If json is .Dictionary
+//for (wp,subJson):(String, JSON) in mission {
+//    print(wp)
+//    for(property,arg):(String, JSON) in subJson{
+//        print(property + ": " + arg.stringValue)
+//    }
+//}
+
+
 // Possible to work using DLSFTPClient
 //https://stackoverflow.com/questions/46968011/local-file-not-readable-when-trying-to-upload-in-swift
 

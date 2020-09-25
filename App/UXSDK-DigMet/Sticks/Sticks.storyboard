@@ -25,11 +25,11 @@
                                     <action selector="xclose:" destination="1m5-5v-g5t" eventType="touchUpInside" id="F4c-oZ-ODZ"/>
                                 </connections>
                             </button>
-                            <stackView opaque="NO" contentMode="scaleToFill" misplaced="YES" axis="vertical" spacing="4" translatesAutoresizingMaskIntoConstraints="NO" id="wmX-bV-6D7">
-                                <rect key="frame" x="214" y="30" width="239" height="118"/>
+                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="4" translatesAutoresizingMaskIntoConstraints="NO" id="wmX-bV-6D7">
+                                <rect key="frame" x="208.5" y="30" width="250" height="78"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ULH-sd-que" userLabel="ActivateSticksButton">
-                                        <rect key="frame" x="0.0" y="0.0" width="239" height="30"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="250" height="30"/>
                                         <color key="backgroundColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                         <state key="normal" title="Activate Sticks">
                                             <color key="titleColor" cocoaTouchSystemColor="groupTableViewBackgroundColor"/>
@@ -43,8 +43,8 @@
                                             <action selector="ActivateSticksPressed:" destination="1m5-5v-g5t" eventType="touchUpInside" id="g7a-pB-VgY"/>
                                         </connections>
                                     </button>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" textAlignment="natural" lineBreakMode="wordWrap" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YnT-Iq-vJj" userLabel="StatusLabel">
-                                        <rect key="frame" x="0.0" y="34" width="239" height="50"/>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" lineBreakMode="wordWrap" numberOfLines="4" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YnT-Iq-vJj" userLabel="StatusLabel">
+                                        <rect key="frame" x="0.0" y="34" width="250" height="0.0"/>
                                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <color key="tintColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="14"/>
@@ -52,8 +52,11 @@
                                         <nil key="highlightedColor"/>
                                     </label>
                                     <button opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tXs-kJ-fdV" userLabel="DeactivateSticksButton">
-                                        <rect key="frame" x="0.0" y="88" width="239" height="30"/>
+                                        <rect key="frame" x="0.0" y="38" width="250" height="40"/>
                                         <color key="backgroundColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="40" id="dCd-cu-Dsf"/>
+                                        </constraints>
                                         <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                         <inset key="contentEdgeInsets" minX="10" minY="6" maxX="10" maxY="6"/>
                                         <state key="normal" title="Deactivate Sticks">
@@ -68,6 +71,9 @@
                                     </button>
                                 </subviews>
                                 <color key="tintColor" systemColor="systemGreenColor" red="0.20392156859999999" green="0.78039215689999997" blue="0.34901960780000002" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="250" id="iy1-0M-nDE"/>
+                                </constraints>
                             </stackView>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="NUQ-U2-Rs4">
                                 <rect key="frame" x="100" y="226" width="92" height="49"/>
@@ -192,10 +198,10 @@
                                 </subviews>
                             </stackView>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" translatesAutoresizingMaskIntoConstraints="NO" id="nCp-Wv-OcA" userLabel="Server StackView">
-                                <rect key="frame" x="60" y="30" width="94" height="60"/>
+                                <rect key="frame" x="60" y="30" width="61" height="60"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="2hX-oY-Sx0">
-                                        <rect key="frame" x="0.0" y="0.0" width="94" height="30"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="61" height="30"/>
                                         <color key="backgroundColor" systemColor="systemBlueColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                         <state key="normal" title="Get Data"/>
                                         <connections>
@@ -203,7 +209,7 @@
                                         </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="f5k-lC-Lad" userLabel="Put Data">
-                                        <rect key="frame" x="0.0" y="30" width="94" height="30"/>
+                                        <rect key="frame" x="0.0" y="30" width="61" height="30"/>
                                         <color key="backgroundColor" systemColor="systemBlueColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                         <state key="normal" title="Put Data"/>
                                         <connections>
@@ -252,7 +258,6 @@
                             <constraint firstItem="Vc5-aK-bMl" firstAttribute="leading" secondItem="Ca7-cF-Tls" secondAttribute="leadingMargin" id="0Z0-WH-13k"/>
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="bottom" secondItem="Bi2-jk-BBv" secondAttribute="bottom" constant="50" id="5qt-uL-73B"/>
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="trailing" secondItem="Kaq-fT-XXy" secondAttribute="trailing" constant="5" id="8Nu-kp-6HP"/>
-                            <constraint firstItem="wmX-bV-6D7" firstAttribute="leading" secondItem="bOD-EF-bVN" secondAttribute="trailing" constant="60" id="9oa-FL-KRf"/>
                             <constraint firstItem="86X-go-OY0" firstAttribute="centerX" secondItem="Vc5-aK-bMl" secondAttribute="centerX" id="Aeg-eW-fHc"/>
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="trailing" secondItem="UNw-VT-nQ1" secondAttribute="trailing" constant="60" id="DEc-ef-PUh"/>
                             <constraint firstItem="UNw-VT-nQ1" firstAttribute="top" secondItem="S6R-gz-0iS" secondAttribute="top" constant="100" id="FaN-hP-kuK"/>
@@ -266,7 +271,6 @@
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="bottom" secondItem="Vc5-aK-bMl" secondAttribute="bottom" constant="100" id="OwO-YW-8uF"/>
                             <constraint firstItem="NUQ-U2-Rs4" firstAttribute="leading" secondItem="S6R-gz-0iS" secondAttribute="leading" constant="100" id="SFh-KW-rlZ"/>
                             <constraint firstItem="wmX-bV-6D7" firstAttribute="centerX" secondItem="Ca7-cF-Tls" secondAttribute="centerX" id="Szu-6J-g7k"/>
-                            <constraint firstItem="nCp-Wv-OcA" firstAttribute="width" secondItem="bOD-EF-bVN" secondAttribute="width" id="T1g-G4-niz"/>
                             <constraint firstItem="bOD-EF-bVN" firstAttribute="leading" secondItem="S6R-gz-0iS" secondAttribute="leading" constant="60" id="UvI-UW-uz7"/>
                             <constraint firstItem="Bi2-jk-BBv" firstAttribute="centerX" secondItem="Ca7-cF-Tls" secondAttribute="centerX" id="XoR-3b-krE"/>
                             <constraint firstItem="E3b-Yq-ZBD" firstAttribute="centerY" secondItem="86X-go-OY0" secondAttribute="centerY" id="ZBJ-Bp-tKe"/>
@@ -275,6 +279,7 @@
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="trailing" secondItem="fAl-O7-PRU" secondAttribute="trailing" constant="100" id="dke-HC-xqY"/>
                             <constraint firstItem="Kaq-fT-XXy" firstAttribute="top" secondItem="Ca7-cF-Tls" secondAttribute="top" constant="2" id="qmN-p5-nY9"/>
                             <constraint firstItem="Vc5-aK-bMl" firstAttribute="top" secondItem="86X-go-OY0" secondAttribute="bottom" constant="10" id="uzP-qd-gV3"/>
+                            <constraint firstItem="bOD-EF-bVN" firstAttribute="width" secondItem="UNw-VT-nQ1" secondAttribute="width" id="vR0-hz-jiW"/>
                         </constraints>
                         <viewLayoutGuide key="safeArea" id="S6R-gz-0iS"/>
                     </view>

@@ -110,4 +110,6 @@ extension Dispatch {
 
 extension Notification.Name {
     static let didPosUpdate = Notification.Name("didPosUpdate")
+    static let didVelUpdate = Notification.Name("didVelUpdate")
+    static let didPrintThis = Notification.Name("didPrintThis")
 }

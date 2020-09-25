@@ -8,13 +8,29 @@
 
 import Foundation
 import DJIUXSDK
+import SwiftyJSON
 
 class Copter {
     var flightController: DJIFlightController?
     var state: DJIFlightControllerState?
+    
+    var missionGeoFenceX: [Double] = [-5, 5]
+    var missionGeoFenceY: [Double] = [-5, 5]
+    var missionGeoFenceZ: [Double] = [-20, -2]
+    
+    var pendingMission = JSON()
+    var mission = JSON()
+    var missionNextWp = -1
+    var missionNextWpId = "id-1"
+    var missionIsActive = false
+
     var posX: Double = 0
     var posY: Double = 0
     var posZ: Double = 0
+    
+    var velX: Double = 0
+    var velY: Double = 0
+    var velZ: Double = 0
     
     var ref_posX: Double = 0
     var ref_posY: Double = 0
@@ -26,8 +42,8 @@ class Copter {
     var ref_velZ: Float = 0.0
     var ref_yawRate: Float = 0.0
     
-    var xyVelLimit: Float = 250 // cm/s horizontal speed
-    var zVelLimit: Float = 100 // cm/s vertical speed
+    var xyVelLimit: Float = 350 // cm/s horizontal speed
+    var zVelLimit: Float = 150 // cm/s vertical speed
     var yawRateLimit:Float = 10 // deg/s, defensive.
 
     var pos: CLLocation?
@@ -39,14 +55,22 @@ class Copter {
     
     var _operator: String = "USER"
 
-    var timer: Timer?
+    var duttTimer: Timer?
     var posCtrlTimer: Timer?
-    let sampleTime: Double = 50     // Sample time in ms
-    let controlPeriod: Double = 1500 // Number of millliseconds to send command
+    var trackingRecord: Int = 0         // Consequtive loops on correct position
+    let trackingRecordTarget: Int = 8  // Consequtive loops tracking target
+    let trackingPosLimit = 0.3          // Pos error requirement for tracking wp
+    let trackingVelLimit = 0.1          // Vel error requirement for tracking wp NOT USED
+    let sampleTime: Double = 50         // Sample time in ms
+    let controlPeriod: Double = 1500    // Number of millliseconds to send command
     var loopCnt: Int = 0
     var loopTarget: Int = 0
     var posCtrlLoopCnt: Int = 0
-    var posCtrlLoopTarget: Int = 50
+    var posCtrlLoopTarget: Int = 200
+    private let hPosKP: Float = 0.9     // Test KP 2!
+    private let vPosKP: Float = 1
+    private let vVelKD: Float = 0
+    
     
     // Init
     //init(controlPeriod: Double, sampleTime: Double){
@@ -56,6 +80,36 @@ class Copter {
         self.state = DJIFlightControllerState()
     }
 
+        //*************************************
+    // Start listening for position updates
+    func startListenToVel(){
+        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamVelocity) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+
+        keyManager.startListeningForChanges(on: locationKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+            if let checkedNewValue = newValue{
+                let vel = checkedNewValue.value as! DJISDKVector3D
+                // Velocities are in NED coordinate system !
+                guard let checkedHeading = self.getHeading() else {return}
+                let alpha = checkedHeading/180*Double.pi
+                
+                self.velX = vel.x * cos(alpha) + vel.y * sin(alpha)
+                self.velY = -vel.x * sin(alpha) + vel.y * cos(alpha)
+                self.velZ = vel.z
+                
+                //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
+            }
+        })
+    }
+
+    
     //*************************************
     // Start listening for position updates
     func startListenToPos(){
@@ -131,6 +185,7 @@ class Copter {
                 self.startHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
                 self.startListenToPos()
+                self.startListenToVel()
                 print("Home location has been updated, caught by listener")
             }
         })
@@ -284,6 +339,7 @@ class Copter {
 
     }
     
+    // TODO, is this used and/or still ok?
     func getPos(){
         guard let home = getHomeLocation() else {return}
         guard let curr = getCurrentLocation() else {return}
@@ -302,38 +358,7 @@ class Copter {
     }
     
     
-    //
-    // Get current state
-    func getState(){
-        
-        // The key way.. https://stackoverflow.com/questions/46299244/which-function-is-used-for-get-the-exact-location-of-gps-coordinates-of-dji-dron
-        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
-            NSLog("Couldn't create the key")
-            return
-        }
-        guard let homeLocationKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
-            NSLog("Couldn't create the key")
-            return
-        }
 
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager")
-            // This will happen if not registered
-            return
-        }
-        
-        
-        if let locationValue = keyManager.getValueFor(locationKey) {
-            let pos_ = locationValue.value as! CLLocation
-            // do something
-            print(pos_.coordinate.latitude)
-        }
-        if let locationValue = keyManager.getValueFor(homeLocationKey) {
-            let home_ = locationValue.value as! CLLocation
-            // do something
-            print(home_.coordinate.latitude)
-        }
-    }
     
     //************************
     // Set up reference frames
@@ -370,11 +395,27 @@ class Copter {
             return value
         }
     }
+    
+    func withinLimit(value: Double, lowerLimit: Double, upperLimit: Double)->Bool{
+        if value > upperLimit {
+            //print(value, upperLimit, lowerLimit)
+            return false
+        }
+        else if value < lowerLimit {
+            //print(value, lowerLimit, upperLimit)
+            return false
+        }
+        else {
+            //print(value, lowerLimit, upperLimit)
+            return true
+        }
+    }
+
 
     //**************************************************************************************************
     // Stop ongoing stick command, invalidate all related timers. TODO: handle all modes, stop is stop..
     func stop(){
-        timer?.invalidate()
+        duttTimer?.invalidate()
         posCtrlTimer?.invalidate()
         sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
     }
@@ -421,17 +462,17 @@ class Copter {
         self.ref_velZ = limitToMax(value: z, limit: zVelLimit/100)
         self.ref_yawRate = limitToMax(value: yawRate, limit: yawRateLimit)
         
-        // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
+        // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. DuttTimer will execute control commands for a period of time
         posCtrlTimer?.invalidate() // Cancel any posControl
-        timer?.invalidate()
+        duttTimer?.invalidate()
         loopCnt = 0
-        timer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(fireTimer), userInfo: nil, repeats: true)
+        duttTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(fireDuttTimer), userInfo: nil, repeats: true)
        }
     
     //***************************************************************************************************************
     // Send controller data (joystick). Called from fireTimer that send commands every x ms. Stop timer to stop commands.
     func sendControlData(velX: Float, velY: Float, velZ: Float, yawRate: Float) {
-        print("Sending x: \(velX), y: \(velY), z: \(velZ), yaw: \(yawRate)")
+        //print("Sending x: \(velX), y: \(velY), z: \(velZ), yaw: \(yawRate)")
        
 //        controlData.verticalThrottle = velZ // in m/s
 //        controlData.roll = velX
@@ -453,7 +494,6 @@ class Copter {
         let limitedYawRate = limitToMax(value: velX, limit: xyVelLimit/100)
                 
         // Construct the flight control data object. Roll axis is pointing forwards but we use velocities..
-        print("limitedVelZ: " + String(describing: limitedVelZ) + "is sent to verticalThrottle with negative sign")
         var controlData = DJIVirtualStickFlightControlData()
         controlData.verticalThrottle = -limitedVelZ
         controlData.roll = limitedVelX
@@ -467,7 +507,7 @@ class Copter {
             if error != nil {
                 print("Error sending control data from position controller")
                 // Disable the timer
-                self.timer?.invalidate()
+                self.duttTimer?.invalidate()
                 //self.loopCnt = 0
                 self.posCtrlTimer?.invalidate()
                 //self.posCtrlLoopCnt = 0
@@ -500,11 +540,74 @@ class Copter {
         })
     }
     
+    func wpFence(wp: JSON)->Bool{
+        return true
+    }
+    
+    func uploadMissionXYZ(mission: JSON)->(success: Bool, arg: String?){
+        // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
+        var wpCnt = 0
+        for (_,subJson):(String, JSON) in mission {
+            // Check wp-numbering
+            if mission["id" + String(wpCnt)].exists()
+            {
+                // Check for geofence violation
+                guard withinLimit(value: subJson["x"].doubleValue, lowerLimit: missionGeoFenceX[0], upperLimit: missionGeoFenceX[1]) else {return (false, "GeofenceX")}
+                guard withinLimit(value: subJson["y"].doubleValue, lowerLimit: missionGeoFenceY[0], upperLimit: missionGeoFenceY[1]) else {return (false, "GeofenceY")}
+                guard withinLimit(value: subJson["z"].doubleValue, lowerLimit: missionGeoFenceZ[0], upperLimit: missionGeoFenceZ[1]) else {return (false, "GeofenceZ")}
+                // Check speed in mission thread
+                wpCnt += 1
+                continue
+            }
+            else{
+                return (false, "Wp numbering faulty")
+            }
+        }
+        self.pendingMission = mission
+        return (true, "")
+    }
+    
+    func getWPXYZ(num: Int)->(Double, Double, Double){
+        let id = "id" + String(num)
+        let x = self.mission[id]["x"].doubleValue
+        let y = self.mission[id]["y"].doubleValue
+        let z = self.mission[id]["z"].doubleValue
+        return(x, y, z)
+    }
+
+    
+    func setMissionNextWp(num: Int){
+        if mission["id" + String(num)].exists(){
+            self.missionNextWp = num
+            self.missionNextWpId = "id" + String(num)
+        }
+        else{
+            self.missionNextWp = -1
+            self.missionNextWpId = "id-1"
+        }
+    }
+    
+    func gogoXYZ(startWp: Int){
+        if self.pendingMission["id" + String(startWp)].exists(){
+            
+            // invalidate and such..
+            
+            self.mission = self.pendingMission
+            self.missionNextWp = startWp
+            self.missionIsActive = true
+            
+            let (x, y, z) = getWPXYZ(num: startWp)
+            gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
+        }
+    }
+    
     //**********************************************************************************
     // Function that sets reference position and executes the position controller timer.
-    func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double){
+    private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double){
         // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
+        // Function is private, only approved missions will be passed in here.
+        print("gotoXYZ: " + String(refPosX) + String(refPosY) + String(refPosZ))
         if refPosY > -10 && refPosY < 10{
             self.ref_posY = refPosY
         }
@@ -518,33 +621,56 @@ class Copter {
         
         self.ref_posZ = refPosZ
         if self.ref_posZ > -10{
-            print("Too low altitude for postion control")
+            print("Too low altitude for postion control: " + String(self.ref_posX) + String(self.ref_posY) + String(self.ref_posZ))
             return
         }
         
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
-        timer?.invalidate()
+        duttTimer?.invalidate()
         //loopCnt = 0
         
         posCtrlTimer?.invalidate()
         posCtrlLoopCnt = 0
         // Make sure noone else is updating the self.refPosXYZ ! TODO
         // Set fix timeinterval
-        posCtrlTimer = Timer.scheduledTimer(timeInterval: 0.11, target: self, selector: #selector(firePosCtrlTimer), userInfo: nil, repeats: true)
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+            self.posCtrlTimer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(self.firePosCtrlTimer), userInfo: nil, repeats: true)
+  //      })
     }
     
+    //********************************************************************************************
+    // Algorithm for determining of a wp is tracked or not. When tracked the mission can continue.
+    func trackingWP(posLimit: Double, velLimit: Double)->Bool{
+        
+        let x2 = pow(self.ref_posX - self.posX, 2)
+        let y2 = pow(self.ref_posY - self.posY, 2)
+        let z2 = pow(self.ref_posZ - self.posZ, 2)
+        let posError = sqrt(x2 + y2 + z2)
+        if posError < posLimit{
+            trackingRecord += 1
+            print("tracking")
+        }
+        else{
+            trackingRecord = 0
+        }
+        if trackingRecord >= trackingRecordTarget{
+            return true
+        }
+        else{
+            return false
+        }
+    }
 }
 
 extension Copter{
     //************************************************************************************************************
     // Timer function that loops every x ms until timer is invalidated. Each loop control data (joystick) is sent.
    
-    @objc func fireTimer() {
+    @objc func fireDuttTimer() {
         loopCnt += 1
         if loopCnt >= loopTarget {
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
-            timer?.invalidate()
-            //loopCnt = 0 // More safe to remove..
+            duttTimer?.invalidate()
         }
         else {
             sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: self.ref_yawRate)
@@ -554,27 +680,43 @@ extension Copter{
     @objc func firePosCtrlTimer() {
         posCtrlLoopCnt += 1
         // If we arrived
-        let trackedLimit = 0.1
-        if abs(self.ref_posX - self.posX) < trackedLimit && abs(self.ref_posY - self.posY) < trackedLimit && abs(self.ref_posZ - self.posZ) < trackedLimit{
+
+        if trackingWP(posLimit: trackingPosLimit, velLimit: trackingVelLimit){
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
-            posCtrlTimer?.invalidate()
+            
+            // if we are on a mission
+            if self.missionIsActive{
+                print("Mission is active")
+                self.setMissionNextWp(num: self.missionNextWp + 1)
+                if self.missionNextWp != -1{
+                    let (x, y, z) = self.getWPXYZ(num: self.missionNextWp)
+                    self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
+                }
+                else{
+                    print("id is -1")
+                    self.missionIsActive = false
+                    self.posCtrlTimer?.invalidate() // dont fire timer again
+                }
+                print("if stream: Publish next wp id :" + String(self.missionNextWpId))
+            }
         }
+            
         // The controller
-            
-            
         else{
             // Implement P-controller, position error to ref vel. Rotate aka SimpleMode
             let x_diff: Float = Float(self.ref_posX - self.posX)
             let y_diff: Float = Float(self.ref_posY - self.posY)
             let z_diff: Float = Float(self.ref_posZ - self.posZ)
-            
+ 
             guard let checkedHeading = self.getHeading() else {return}
             guard let checkedStartHeading = self.startHeading else {return}
             let alpha = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
             
-            self.ref_velX =  x_diff * cos(alpha) + y_diff * sin(alpha)
-            self.ref_velY = -x_diff * sin(alpha) + y_diff * cos(alpha)
-            self.ref_velZ = z_diff
+        
+            self.ref_velX =  (x_diff * cos(alpha) + y_diff * sin(alpha))*hPosKP
+            self.ref_velY = (-x_diff * sin(alpha) + y_diff * cos(alpha))*hPosKP
+            
+            self.ref_velZ = (z_diff) * vPosKP
             // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
             
 
@@ -584,8 +726,14 @@ extension Copter{
         // For safety during testing..
         if posCtrlLoopCnt >= posCtrlLoopTarget{
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
-            print("FATAL - Position controller had to be interrupted - FATAL")
+
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Position controller max time exeeded"])
+            
             posCtrlTimer?.invalidate()
         }
     }
 }
+
+
+
+

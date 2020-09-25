@@ -60,6 +60,12 @@ class Allocator: NSObject{
     }
 }
 
+class Subscriptions: NSObject{
+    var location_local_xyz = false
+    var pic_ready = false
+    
+}
+
 
 // https://www.hackingwithswift.com/books/ios-swiftui/how-to-save-images-to-the-users-photo-library
 class imageSaver: NSObject {
