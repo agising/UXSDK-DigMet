@@ -62,9 +62,8 @@ class Allocator: NSObject{
 }
 
 class Subscriptions: NSObject{
-    var location_local_xyz = false
-    var pic_ready = false
-    
+    var XYZ = false
+    var image_XYZ = false
 }
 
 

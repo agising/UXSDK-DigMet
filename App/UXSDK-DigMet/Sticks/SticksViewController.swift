@@ -53,7 +53,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var image_index: UInt?
     var sessionIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
-    var jsonPictures: JSON = JSON()
+    var jsonMetaData: JSON = JSON()
     
     var lastImage: UIImage = UIImage.init()
     var lastImagePreview: UIImage = UIImage.init()
@@ -170,6 +170,39 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
         
     
+    func writeMetaDataXYZ()->Bool{
+        if copter.startHeadingXYZ == nil{
+            // OriginXYZ is not yet set. Try to set it!
+            if copter.setOriginXYZ(){
+                print("OriginXYZ set from writeMetadata")
+            }
+            else{
+                self.printSL("Write metadata could not set OriginXYZ, aircraft ready?")
+                return false
+            }
+        }
+        
+        var jsonMeta = JSON()
+        //var headingRelativeToX: Double = 720
+        guard let heading = self.copter.getHeading() else {return false}
+        guard let gimbalYaw = getYawRelativeToAircaftHeading() else {return false}
+        guard let startHeadingXYZ = self.copter.startHeadingXYZ else {return false}
+
+        let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
+        jsonMeta["fileName"] = JSON("")
+        jsonMeta["x"] = JSON(self.copter.posX)
+        jsonMeta["y"] = JSON(self.copter.posY)
+        jsonMeta["z"] = JSON(self.copter.posZ)
+        jsonMeta["agl"] = JSON(-1)
+        jsonMeta["local_yaw"] = JSON(localYaw)
+
+        self.sessionIndex += 1
+        self.jsonMetaData[String(self.sessionIndex)] = jsonMeta
+        print(jsonMeta)
+        return true
+    }
+    
+    
     //*************************************************************
     // captureImage sets up the camera if needed and takes a photo.
     func captureImage(completion: @escaping (Bool)-> Void ) {
@@ -186,27 +219,16 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                 NSLog("Shoot Photo Error: " + String(describing: error))
                                 completion(false)
                             }
-                            else{
-                                var jsonMeta = JSON()
-                                //var headingRelativeToX: Double = 720
-                                let heading = self.copter.getHeading()
-                                let startHeading = self.copter.startHeading
-                                var headingRelativeToX: Double = 0
-                                if heading != nil && startHeading != nil {
-                                    headingRelativeToX = heading! - startHeading!
+                            else{ // Write metadata
+                                if self.subscriptions.image_XYZ{
+                                    if self.writeMetaDataXYZ(){
+                                        // Metadata was successfully written
+                                        _ = 1
+                                    }
+                                    else{
+                                        print("MetaData failed to write")
+                                    }
                                 }
-                                else{
-                                    headingRelativeToX = 360
-                                }
-                                jsonMeta["headingToX"].stringValue = String(headingRelativeToX)
-                                jsonMeta["posX"].stringValue = String(self.copter.posX)
-                                jsonMeta["posY"].stringValue = String(self.copter.posY)
-                                jsonMeta["posZ"].stringValue = String(self.copter.posZ)
-                                jsonMeta["fileName"] = ""
-                                
-                                self.sessionIndex += 1
-                                self.jsonPictures[String(self.sessionIndex)] = jsonMeta
-
                                 completion(true)
                             }
                         })
@@ -335,7 +357,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                         if scpSuccess{
                                             self.printSL("Uploaded: " + info)
                                             print("Scp to server ok")
-                                            _ = self.publish(topic: "image_XYZ", json: JSON(["CompletedFile": info])) // TODO align with documentation
                                         }
                                         else{
                                             self.printSL("Scp failed: " + info)
@@ -400,12 +421,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 self.printSL("Files on sdCard: " + String(describing: files.count))
                 if self.sdFirstIndex == -1 {
                     self.sdFirstIndex = files.count - self.sessionIndex
-                    // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonPictures[self.sessionIndex = 1]
+                    // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonMetaData[self.sessionIndex = 1]
                 }
-                // Update Metadata with filename
+                // Update Metadata with filename for the n last pictures without a filename added already
                 for i in stride(from: self.sessionIndex, to: 0, by: -1){
-                    if self.jsonPictures[String(i)]["fileName"] == ""{
-                        self.jsonPictures[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
+                    if self.jsonMetaData[String(i)]["fileName"] == ""{
+                        self.jsonMetaData[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
                         print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
                     }
                     else{
@@ -421,7 +442,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 files[index].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
                     if error != nil{
                         // THis happens if download is triggered to close to taking a picture. Is the allocator used?
-                        self.printSL("Error, not ready for download: " + String(error!.localizedDescription))
+                        self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
                         completionHandler(false)
                     }
                     else if isComplete { // No more data blocks to collect
@@ -516,9 +537,21 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 // Upload Data object
                 completion(success, pending, "Uploading " + self.lastImageDataFilename + "...")
                 let fileNameUploading = self.lastImageDataFilename // This can change during upload process..
+                
+                // Find the MetaData to attach when file is uploaded (if subscribed)
+                var metaData = JSON()
+                for i in stride(from: self.sessionIndex, to: 0, by: -1){
+                    if self.jsonMetaData[String(i)]["fileName"].stringValue == fileNameUploading{
+                        metaData = self.jsonMetaData[String(i)]
+                    }
+                }
+                
+                // Upload the file
                 session.channel.uploadFile(self.lastImageDataURL!.path, to: self.hostPath)
                 info = fileNameUploading
-                _ = self.publish(topic: "image_XYZ", json: JSON(["fileName": fileNameUploading]))  // TODO, align with API
+                if self.subscriptions.image_XYZ{
+                    _ = self.publish(topic: "image_XYZ", json: metaData)
+                }
                 success = true
              }
              else{
@@ -660,10 +693,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r = createJsonAck("arm_take_off")
                         copter.takeOff()
                     }
-                case "gogo_xyz":
-                    json_r = createJsonAck("gogo_xyz")
-                    self.printSL("Received cmd gogo_xyz")
-                    // Gogo xyz code TODO
+                case "gogo_XYZ":
+                    json_r = createJsonAck("gogo_XYZ")
+                    self.printSL("Received cmd gogo_XYZ")
+                    // Gogo XYZ code TODO
 
                 case "heart_beat": // DONE
                     json_r = createJsonAck("heart_beat")
@@ -720,18 +753,18 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.printSL("Received cmd set_yaw")
                     json_r = createJsonAck("set_yaw")
                     // Set yaw code TODO
-                case "upload_mission_xyz":
-                    self.printSL("Received cmd upload_mission_xyz")
+                case "upload_mission_XYZ":
+                    self.printSL("Received cmd upload_mission_XYZ")
                     
                     let (success, arg) = copter.uploadMissionXYZ(mission: json_m["arg"])
                      if success{
-                        json_r = createJsonAck("upload_mission_xyz")
+                        json_r = createJsonAck("upload_mission_XYZ")
                      }
                      else{
-                        json_r = createJsonNack("upload_mission_xyz")
+                        json_r = createJsonNack("upload_mission_XYZ")
                         print("Mission upload failed: " + arg!)
                     }
-                    // Upload mission xyz code TODO
+                    // Upload mission XYZ code TODO
                 
                 case "photo":
                     switch json_m["arg"]["cmd"]{
@@ -765,11 +798,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.printSL("Received cmd data_stream")
                     // Data stream code
                     switch json_m["arg"]["attribute"]{
-                        case "location_local_XYZ":
-                            self.subscriptions.location_local_xyz = json_m["arg"]["enable"].boolValue
+                        case "XYZ":
+                            self.subscriptions.XYZ = json_m["arg"]["enable"].boolValue
                             json_r = createJsonAck("data_stream")
-                        case "pic_ready":
-                            self.subscriptions.location_local_xyz = json_m["arg"]["enable"].boolValue
+                        case "image_XYZ":
+                            self.subscriptions.image_XYZ = json_m["arg"]["enable"].boolValue
                             json_r = createJsonAck("data_stream")
                         default:
                             json_r = createJsonNack("data_stream")
@@ -855,33 +888,44 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         previewImageView.image = nil
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-        var json = JSON()
-        json["id0"] = JSON()
-        json["id0"]["x"] = JSON(1)
-        json["id0"]["y"] = JSON(2)
-        json["id0"]["z"] = JSON(-13)
-        json["id0"]["local_yaw"] = JSON(0)
-
-        json["id1"] = JSON()
-        json["id1"]["x"] = JSON(0)
-        json["id1"]["y"] = JSON(0)
-        json["id1"]["z"] = JSON(-16)
-        json["id1"]["local_yaw"] = JSON(0)
-
-        json["id2"] = JSON()
-        json["id2"]["x"] = JSON(1)
-        json["id2"]["y"] = JSON(2)
-        json["id2"]["z"] = JSON(-13)
-        json["id2"]["local_yaw"] = JSON(0)
-
-        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-        if success{
-            copter.gogoXYZ(startWp: 0)
+//        var json = JSON()
+//        json["id0"] = JSON()
+//        json["id0"]["x"] = JSON(1)
+//        json["id0"]["y"] = JSON(2)
+//        json["id0"]["z"] = JSON(-13)
+//        json["id0"]["local_yaw"] = JSON(0)
+//
+//        json["id1"] = JSON()
+//        json["id1"]["x"] = JSON(0)
+//        json["id1"]["y"] = JSON(0)
+//        json["id1"]["z"] = JSON(-16)
+//        json["id1"]["local_yaw"] = JSON(0)
+//
+//        json["id2"] = JSON()
+//        json["id2"]["x"] = JSON(1)
+//        json["id2"]["y"] = JSON(2)
+//        json["id2"]["z"] = JSON(-13)
+//        json["id2"]["local_yaw"] = JSON(0)
+//
+//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
+//        if success{
+//            copter.gogoXYZ(startWp: 0)
+//        }
+//        else{
+//            print("Mission failed to upload: " + arg!)
+//        }
+//        printJson(jsonObject: json)
+        
+        if self.subscriptions.image_XYZ{
+            self.subscriptions.image_XYZ = false
+            print("Subscription false")
         }
         else{
-            print("Mission failed to upload: " + arg!)
+            self.subscriptions.image_XYZ = true
+            print("Subscription true")
         }
-        printJson(jsonObject: json)
+        
+  
     }
 
     //***************************************************************************************************************
@@ -928,24 +972,27 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         
        // printJson(jsonObject: json)
        
-        if let gimbalRelativeHeading = getYawRelativeToAircaftHeading(){
-            self.printSL("Yaw relative to ac :" + String(gimbalRelativeHeading))
-        }
-        else{
-            print("gimbal heading not available")
-        }
-        if copter.setOriginXYZ(){
-            print("originXYZ set")
-        }
-        else{
-            if copter.startHeadingXYZ != nil{
-                self.printSL("OriginXYZ cannot be updated")
-            }
-            else
-            {
-                print("Aircraft not ready to set OriginXYZ")
-            }
-        }
+//        if let gimbalRelativeHeading = getYawRelativeToAircaftHeading(){
+//            self.printSL("Yaw relative to ac :" + String(gimbalRelativeHeading))
+//        }
+//        else{
+//            print("gimbal heading not available")
+//        }
+//        if copter.setOriginXYZ(){
+//            print("originXYZ set")
+//        }
+//        else{
+//            if copter.startHeadingXYZ != nil{
+//                self.printSL("OriginXYZ cannot be updated")
+//            }
+//            else
+//            {
+//                print("Aircraft not ready to set OriginXYZ")
+//            }
+//        }
+        
+        takePictureCMD()
+        
 
     }
     
