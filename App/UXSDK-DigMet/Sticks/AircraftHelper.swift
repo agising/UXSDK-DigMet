@@ -128,8 +128,10 @@ class Copter {
         keyManager.startListeningForChanges(on: locationKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
             if let checkedNewValue = newValue{
                 self.pos = (checkedNewValue.value as! CLLocation)
-                guard let home = self.getHomeLocation() else {return}
-                guard let checkedStartHeading = self.startHeading else {return}
+                
+                // Update the XYZ coordinates relative to the XYZ frame. XYZ if XYZ is not set prior to takeoff, the homelocation updated at takeoff will be set as XYZ origin.
+                guard let home = self.startLocationXYZ else {return}
+                guard let checkedStartHeading = self.startHeadingXYZ else {return}
                 
                 let lat_diff = self.pos!.coordinate.latitude - home.coordinate.latitude
                 let lon_diff = self.pos!.coordinate.longitude - home.coordinate.longitude
@@ -148,6 +150,22 @@ class Copter {
                 NotificationCenter.default.post(name: .didPosUpdate, object: nil)
             }
         })
+    }
+    
+    // ******************************************************************************************
+    // Set the origin and orientation for XYZ coordinate system. Can only be set once for safety!
+    func setOriginXYZ()->Bool{
+        if let _ = self.startHeadingXYZ {
+            print("Caution: XYZ coordinate system already set!")
+            return false
+        }
+        guard let pos = getCurrentLocation() else {return false}
+        guard let heading = getHeading() else {return false}
+        guard let gimbalYaw = getYawRelativeToAircaftHeading() else {return false}
+        self.startHeadingXYZ = heading + gimbalYaw
+        self.startLocationXYZ = pos
+        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here + gimbal yaw"])
+        return true
     }
 
     //************************************
@@ -184,9 +202,15 @@ class Copter {
             if let checkedNewValue = newValue{
                 self.startHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
-                self.startListenToPos()
-                // No reason to track velocities as for now. Uncomment to enable
-                //self.startListenToVel()
+
+                // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
+                if self.startHeadingXYZ == nil && self.getIsFlying() == true {
+                    print("The local XYZ is not set, setting loacl XYZ to home position and start heading")
+                    self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
+                    self.startHeadingXYZ = self.startHeading
+                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
+
+                }
                 print("Home location has been updated, caught by listener")
             }
         })
@@ -197,27 +221,27 @@ class Copter {
         self.dssHome = getCurrentLocation()
     }
     
-    //*************************************
-    // Get home location as location object
-    func getHomeLocation()->CLLocation?{
-        // Start listen to home location instead
-        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
-            NSLog("Couldn't create the key")
-            return nil
-        }
-
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return nil
-        }
-                
-        if let locationValue = keyManager.getValueFor(locationKey) {
-            let homeLocation = locationValue.value as! CLLocation
-            self.homeLocation = homeLocation
-            return homeLocation
-        }
-     return nil
-    }
+//    //*************************************
+//    // Get home location as location object
+//    func getHomeLocation()->CLLocation?{
+//        // Start listen to home location instead
+//        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
+//            NSLog("Couldn't create the key")
+//            return nil
+//        }
+//
+//        guard let keyManager = DJISDKManager.keyManager() else {
+//            print("Couldn't get the keyManager, are you registered")
+//            return nil
+//        }
+//
+//        if let locationValue = keyManager.getValueFor(locationKey) {
+//            let homeLocation = locationValue.value as! CLLocation
+//            self.homeLocation = homeLocation
+//            return homeLocation
+//        }
+//     return nil
+//    }
     
     //*************************************
     // Get current location as location object
@@ -289,9 +313,6 @@ class Copter {
             print("Gimbal pitch (ROT): " + String(describing: gimbalRotation.pitch))
         }
         
-        if let home = self.getHomeLocation(){
-            print("Home location lat: " + String(describing: home.coordinate.latitude))
-        }
 
         if let currLocation = self.getCurrentLocation(){
             print("Current location lat: " + String(describing: currLocation.coordinate.latitude))
@@ -300,22 +321,22 @@ class Copter {
     }
     
     // TODO, is this used and/or still ok?
-    func getPos(){
-        guard let home = getHomeLocation() else {return}
-        guard let curr = getCurrentLocation() else {return}
-        guard let startHeading = self.startHeading else {return}
-        _ = startHeading
-
-        let lat_diff = curr.coordinate.latitude - home.coordinate.latitude
-        let lon_diff = curr.coordinate.longitude - home.coordinate.longitude
-
-        let posN = lat_diff * 1854 * 60
-        let posE = lon_diff * 1854 * 60 * cos(home.coordinate.latitude)
-        let posD = curr.altitude
-        
-        let distance = curr.distance(from: home).magnitude
-        print("posN: " + String(posN) + ", posE: " + String(posE), ", posD: " + String(posD) + ", Distance: " + String(describing: distance))
-    }
+//    func getPos(){
+//        guard let home = getHomeLocation() else {return}
+//        guard let curr = getCurrentLocation() else {return}
+//        guard let startHeading = self.startHeading else {return}
+//        _ = startHeading
+//
+//        let lat_diff = curr.coordinate.latitude - home.coordinate.latitude
+//        let lon_diff = curr.coordinate.longitude - home.coordinate.longitude
+//
+//        let posN = lat_diff * 1854 * 60
+//        let posE = lon_diff * 1854 * 60 * cos(home.coordinate.latitude)
+//        let posD = curr.altitude
+//
+//        let distance = curr.distance(from: home).magnitude
+//        print("posN: " + String(posN) + ", posE: " + String(posE), ", posD: " + String(posD) + ", Distance: " + String(describing: distance))
+//    }
     
 
 
@@ -339,6 +360,13 @@ class Copter {
         self.flightController?.rollPitchControlMode = DJIVirtualStickRollPitchControlMode.velocity
         self.state = DJIFlightControllerState()
         //self.flightController?.delegate?.flightController?(self.flightController!, didUpdate: self.state!)
+        
+        // Activate listeners
+        self.startListenToHomePosUpdated()
+        self.startListenToPos()
+        // No reason to track velocities as for now. Uncomment to enable
+        //self.startListenToVel()
+
     }
         
     //***************************************************
@@ -670,7 +698,7 @@ extension Copter{
             let z_diff: Float = Float(self.ref_posZ - self.posZ)
  
             guard let checkedHeading = self.getHeading() else {return}
-            guard let checkedStartHeading = self.startHeading else {return}
+            guard let checkedStartHeading = self.startHeadingXYZ else {return}
             let alpha = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
             
         

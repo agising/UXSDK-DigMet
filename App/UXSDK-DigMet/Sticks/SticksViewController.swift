@@ -897,32 +897,32 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         //copter.stopListenToPos() test functionality of stop listen
 
-        var json = JSON()
-        json["id0"] = JSON()
-        json["id0"]["x"] = JSON(0)
-        json["id0"]["y"] = JSON(-2)
-        json["id0"]["z"] = JSON(-15)
-        json["id0"]["local_yaw"] = JSON(0)
-        
-        json["id1"] = JSON()
-        json["id1"]["x"] = JSON(0)
-        json["id1"]["y"] = JSON(4)
-        json["id1"]["z"] = JSON(-18)
-        json["id1"]["local_yaw"] = JSON(0)
-
-        json["id2"] = JSON()
-        json["id2"]["x"] = JSON(0)
-        json["id2"]["y"] = JSON(-2)
-        json["id2"]["z"] = JSON(-15)
-        json["id2"]["local_yaw"] = JSON(0)
-
-        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-         if success{
-            //copter.gogoXYZ(startWp: 0)
-         }
-         else{
-             print("Mission failed to upload: " + arg!)
-         }
+//        var json = JSON()
+//        json["id0"] = JSON()
+//        json["id0"]["x"] = JSON(0)
+//        json["id0"]["y"] = JSON(-2)
+//        json["id0"]["z"] = JSON(-15)
+//        json["id0"]["local_yaw"] = JSON(0)
+//
+//        json["id1"] = JSON()
+//        json["id1"]["x"] = JSON(0)
+//        json["id1"]["y"] = JSON(4)
+//        json["id1"]["z"] = JSON(-18)
+//        json["id1"]["local_yaw"] = JSON(0)
+//
+//        json["id2"] = JSON()
+//        json["id2"]["x"] = JSON(0)
+//        json["id2"]["y"] = JSON(-2)
+//        json["id2"]["z"] = JSON(-15)
+//        json["id2"]["local_yaw"] = JSON(0)
+//
+//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
+//         if success{
+//            //copter.gogoXYZ(startWp: 0)
+//         }
+//         else{
+//             print("Mission failed to upload: " + arg!)
+//         }
         
        // _ = self.publish(topic: "no_topic", json: json)
         
@@ -934,7 +934,19 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         else{
             print("gimbal heading not available")
         }
-        
+        if copter.setOriginXYZ(){
+            print("originXYZ set")
+        }
+        else{
+            if copter.startHeadingXYZ != nil{
+                self.printSL("OriginXYZ cannot be updated")
+            }
+            else
+            {
+                print("Aircraft not ready to set OriginXYZ")
+            }
+        }
+
     }
     
     //********************************************************
@@ -961,7 +973,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             })
         })
     }
-    
     
     //**********************************************
     // Download and preview the last image on sdCard
@@ -1140,13 +1151,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         self.printSL("RangeExtension is not set in viewDidLoad")
                     }
                 })
-                self.gimbal?.setYawSimultaneousFollowEnabled(true, withCompletion: {(error: Error?) in
-                    if error != nil {
-                        self.printSL("Gimbal yaw simultatious not set in viewDidLoad")
-                    }
-                })
                 
-                printGimbalCapabilities(theGimbal: self.gimbal)
+                //printGimbalCapabilities(theGimbal: self.gimbal)
                 
                 // Have to dispatch in order for change to fall through before checking it
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
@@ -1177,7 +1183,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 
         // Start subscriptions
         //copter.startListenToPos() // startListen to position requres home location for calculation of XYZ. Function is called when home pos is updated.
-        copter.startListenToHomePosUpdated()
+
         
         _ = initPublisher()
         if startReplyThread(){
