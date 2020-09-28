@@ -9,6 +9,7 @@
 import Foundation
 import UIKit
 import Photos
+import DJIUXSDK
 
 //
 // Class to use for allocation of resources, like camera, gimbal, etc.
@@ -104,4 +105,101 @@ func saveUIImageToPhotosAlbum(image: UIImage){
 }
 
 
+// Gimbal stuff
+// Print the gimbal capabilites. Call like so: printGimbalCapabilities(theGimbal: self.gimbal)
+func printGimbalCapabilities(theGimbal: DJIGimbal?){
+    let capabilities = theGimbal?.capabilities
+    for (key, value) in capabilities!{
+        //print(key,value)
+        let theType = type(of: value)
+        if theType == DJIParamCapabilityMinMax.self{
+            let minMax = value as! DJIParamCapabilityMinMax
+            if minMax.max == nil{
+                print("Gimbal feature is not available: ", key)
+            }
+            else{
+                print("Gimbal feature is available: ", key, ", min: ", minMax.min, ", max: ", minMax.max)
+            }
+        }
+        if theType == DJIParamCapability.self{
+            let cap = value as! DJIParamCapability
+            print("Status of gimbal feature ", key, "is :", cap.isSupported)
+        }
+    }
+}
 
+// **********************************************************
+// Get the gimbal yaw relative to aircraft heading. Tested ok
+func getYawRelativeToAircaftHeading()->Double?{
+    guard let gimbalStateKey = DJIGimbalKey(param: DJIGimbalParamAttitudeYawRelativeToAircraft) else {
+        NSLog("Couldn't create the key")
+        return nil
+    }
+
+    guard let keyManager = DJISDKManager.keyManager() else {
+        print("Couldn't get the keyManager, are you registered")
+        return nil
+    }
+            
+    if let gimbalStateValue = keyManager.getValueFor(gimbalStateKey) {
+        let yawRelativeToAircraftHeading = gimbalStateValue.value as? Double
+        return yawRelativeToAircraftHeading
+    }
+ return nil
+}
+
+
+//
+// Get gimbal pitch Attitude always returns nil
+
+func getGimbalPitchAtt()->DJIGimbalAttitude?{
+    guard let gimbalStateKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
+        NSLog("Couldn't create the key")
+        return nil
+    }
+
+    guard let keyManager = DJISDKManager.keyManager() else {
+        print("Couldn't get the keyManager, are you registered")
+        return nil
+    }
+            
+    if let gimbalStateValue = keyManager.getValueFor(gimbalStateKey){
+        if let attitude = gimbalStateValue.value as? DJIGimbalAttitude{
+            return attitude
+        }
+    }
+ return nil
+}
+// Call safely like this
+//let gState:DJIGimbalAttitude? = getGimbalPitchAtt()
+//
+//       self.printSL("gimbal pithc: " + String(describing: gState.debugDescription))
+//       if let gPitch = gState?.pitch{
+//           print("Pitch is: ", gPitch)
+//       }
+//       else{
+//           print("Pitch is nil")
+//       }
+
+
+
+
+//
+// Get gimbal pitch Rotate DOES NOT WORK
+func getGimbalPitchRot()->DJIGimbalRotation?{
+    guard let gimbalRotateKey = DJIGimbalKey(param: DJIGimbalParamRotate) else {
+        NSLog("Couldn't create the key")
+        return nil
+    }
+
+    guard let keyManager = DJISDKManager.keyManager() else {
+        print("Couldn't get the keyManager, are you registered")
+        return nil
+    }
+            
+    if let rotationValue = keyManager.getValueFor(gimbalRotateKey) {
+        let rotation = rotationValue.value as! DJIGimbalRotation
+        return rotation
+    }
+ return nil
+}

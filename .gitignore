@@ -34,6 +34,7 @@ Podfile.lock
 *.hmap
 *.ipa
 *.xcworkspace
+*.cxscheme
 
 # CocoaPods
 #

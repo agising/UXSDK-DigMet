@@ -51,7 +51,9 @@ class Copter {
     var homeLocation: CLLocation?
     var dssHome: CLLocation?
     var dssHomeHeading: Double?
-
+    
+    var startHeadingXYZ: Double?
+    var startLocationXYZ: CLLocation?
     
     var _operator: String = "USER"
 
@@ -113,8 +115,6 @@ class Copter {
     //*************************************
     // Start listening for position updates
     func startListenToPos(){
-    
-        
         guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
             NSLog("Couldn't create the key")
             return
@@ -185,7 +185,8 @@ class Copter {
                 self.startHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
                 self.startListenToPos()
-                self.startListenToVel()
+                // No reason to track velocities as for now. Uncomment to enable
+                //self.startListenToVel()
                 print("Home location has been updated, caught by listener")
             }
         })
@@ -277,55 +278,14 @@ class Copter {
         return nil
     }
     
-    //
-    // Get gimbal pitch Attitude DOES NOT WORK
-    func getGimbalPitchAtt()->DJIGimbalAttitude?{
-        guard let gimbalAttitudeKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
-            NSLog("Couldn't create the key")
-            return nil
-        }
-
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return nil
-        }
-                
-        if let attitudeValue = keyManager.getValueFor(gimbalAttitudeKey) {
-            let attitude = attitudeValue.value as! DJIGimbalAttitude
-            return attitude
-        }
-     return nil
-    }
-    
-    //
-    // Get gimbal pitch Rotate DOES NOT WORK
-    func getGimbalPitchRot()->DJIGimbalRotation?{
-        guard let gimbalRotateKey = DJIGimbalKey(param: DJIGimbalParamRotate) else {
-            NSLog("Couldn't create the key")
-            return nil
-        }
-
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return nil
-        }
-                
-        if let rotationValue = keyManager.getValueFor(gimbalRotateKey) {
-            let rotation = rotationValue.value as! DJIGimbalRotation
-            return rotation
-        }
-     return nil
-    }
-    
-    
     //****************
     // Tester function
     func stateTest(){
-        if let gimbalAttitude = self.getGimbalPitchAtt(){
+        if let gimbalAttitude = getGimbalPitchAtt(){
             print("Gimbal pitch: (ATT)" + String(describing: gimbalAttitude.pitch))
         }
         
-        if let gimbalRotation = self.getGimbalPitchRot(){
+        if let gimbalRotation = getGimbalPitchRot(){
             print("Gimbal pitch (ROT): " + String(describing: gimbalRotation.pitch))
         }
         
@@ -357,7 +317,7 @@ class Copter {
         print("posN: " + String(posN) + ", posE: " + String(posE), ", posD: " + String(posD) + ", Distance: " + String(describing: distance))
     }
     
-    
+
 
     
     //************************
@@ -598,6 +558,8 @@ class Copter {
             
             let (x, y, z) = getWPXYZ(num: startWp)
             gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
+            // Notify about going to startWP
+            NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
         }
     }
     
@@ -648,7 +610,6 @@ class Copter {
         let posError = sqrt(x2 + y2 + z2)
         if posError < posLimit{
             trackingRecord += 1
-            print("tracking")
         }
         else{
             trackingRecord = 0
@@ -697,7 +658,7 @@ extension Copter{
                     self.missionIsActive = false
                     self.posCtrlTimer?.invalidate() // dont fire timer again
                 }
-                print("if stream: Publish next wp id :" + String(self.missionNextWpId))
+                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
             }
         }
             

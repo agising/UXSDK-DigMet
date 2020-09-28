@@ -335,7 +335,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                         if scpSuccess{
                                             self.printSL("Uploaded: " + info)
                                             print("Scp to server ok")
-                                            _ = self.publish(json: JSON(["CompletedFile": info])) // TODO test this
+                                            _ = self.publish(topic: "image_XYZ", json: JSON(["CompletedFile": info])) // TODO align with documentation
                                         }
                                         else{
                                             self.printSL("Scp failed: " + info)
@@ -518,7 +518,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 let fileNameUploading = self.lastImageDataFilename // This can change during upload process..
                 session.channel.uploadFile(self.lastImageDataURL!.path, to: self.hostPath)
                 info = fileNameUploading
-                _ = self.publish(json: JSON(["CompletedFile": fileNameUploading]))
+                _ = self.publish(topic: "image_XYZ", json: JSON(["fileName": fileNameUploading]))  // TODO, align with API
                 success = true
              }
              else{
@@ -597,10 +597,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
-    func publish(json: JSON)->Bool{
+    func publish(topic: String, json: JSON)->Bool{
         let json_s = getJsonString(json: json)
         do{
-            let topic = uglyfyString("location_local_XYZ")
             let publishStr = topic + " " + json_s
             try self.publisher?.send(string: publishStr)
             print("Published: " + publishStr)
@@ -919,23 +918,23 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 
         let (success, arg) = copter.uploadMissionXYZ(mission: json)
          if success{
-            copter.gogoXYZ(startWp: 0)
+            //copter.gogoXYZ(startWp: 0)
          }
          else{
              print("Mission failed to upload: " + arg!)
          }
         
-        _ = self.publish(json: json)
+       // _ = self.publish(topic: "no_topic", json: json)
         
-        printJson(jsonObject: json)
-//        json["arg"] = JSON(str)
-//
-//        var json = JSON()
-//        json["fcn"] = JSON("nack")
-//        json["arg"] = JSON(str)
-//        {"fcn": "nack",
-//            "arg": "str"}
-//        }
+       // printJson(jsonObject: json)
+       
+        if let gimbalRelativeHeading = getYawRelativeToAircaftHeading(){
+            self.printSL("Yaw relative to ac :" + String(gimbalRelativeHeading))
+        }
+        else{
+            print("gimbal heading not available")
+        }
+        
     }
     
     //********************************************************
@@ -1060,10 +1059,20 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //self.posYLabel.text = String(format: "%.1f", copter.velY)
         //self.posZLabel.text = String(format: "%.1f", copter.velZ)
     }
-
     
     @objc func onDidPrintThis(_ notification: Notification){
         self.printSL(String(describing: notification.userInfo!["printThis"]!))
+    }
+    
+    @objc func onDidNextWp(_ notification: Notification){
+        if let data = notification.userInfo as? [String: String]{
+            var json_o = JSON()
+            for (key, value) in data{
+                json_o[key] = JSON(value)
+            }
+            _ = self.publish(topic: "WP_ID", json:  json_o)
+            printSL("Going to WP " + json_o["next_wp"].stringValue)
+        }
     }
     
     //*************************************************************************
@@ -1131,10 +1140,17 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         self.printSL("RangeExtension is not set in viewDidLoad")
                     }
                 })
-
+                self.gimbal?.setYawSimultaneousFollowEnabled(true, withCompletion: {(error: Error?) in
+                    if error != nil {
+                        self.printSL("Gimbal yaw simultatious not set in viewDidLoad")
+                    }
+                })
+                
+                printGimbalCapabilities(theGimbal: self.gimbal)
+                
                 // Have to dispatch in order for change to fall through before checking it
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                    self.gimbal?.getPitchRangeExtensionEnabled(completion: {(success: Bool, error_msg: Error?) in
+                    self.gimbal?.getPitchRangeExtensionEnabled(completion: {(success: Bool, error: Error?) in
                         self.pitchRangeExtension_set = success
                     })
                 })
@@ -1155,6 +1171,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPosUpdate(_:)), name: .didPosUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidVelUpdate(_:)), name: .didVelUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPrintThis(_:)), name: .didPrintThis, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)
 
         
 

@@ -35,10 +35,10 @@ func cleanUpString(str: String)->String{
     return str
  }
 
-func createJsonAck(_ fcnString: String) -> JSON {
+func createJsonAck(_ str: String) -> JSON {
     var json = JSON()
     json["fcn"] = JSON("ack")
-    json["arg"] = JSON(fcnString)
+    json["arg"] = JSON(str)
     return json
  }
 
