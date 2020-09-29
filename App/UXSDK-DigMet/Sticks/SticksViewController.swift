@@ -23,9 +23,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //**********************
     // Variable declarations
     var aircraft: DJIAircraft?
-
     var camera: DJICamera?
-    var gimbal: DJIGimbal?
+    var DJIgimbal: DJIGimbal?
     
     var server = serverClass() // For test. Could get a JSON from http server.
     let hostIp = "25.22.96.189" // Use dict or something to store several ip adresses
@@ -48,6 +47,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var cameraAllocator = Allocator(name: "camera")
     
     var copter = Copter()
+    var gimbal = Gimbal()
    
     var image: UIImage = UIImage.init() // Is this used?
     var image_index: UInt?
@@ -152,42 +152,29 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
-    //***************************
-    // Set the gimbal pitch value
-    func setGimbalPitch(pitch: Int){
-        // Check if rangeExtension for gimbal has been set sucessfully
-        if self.pitchRangeExtension_set != true{
-            self.printSL("Gimbal range extension not set")
-        }
-        // Create a DJIGimbalRotaion object
-        let gimbal_rotation = DJIGimbalRotation(pitchValue: pitch as NSNumber, rollValue: 0, yawValue: 0, time: 1, mode: DJIGimbalRotationMode.absoluteAngle, ignore: true)
-        // Feed rotate object to Gimbal method rotate
-        self.gimbal?.rotate(with: gimbal_rotation, completion: { (error: Error?) in
-            if error != nil {
-                self.printSL("Gimbal rotation" + String(describing: error))
-            }
-        })
-    }
-        
-    
     func writeMetaDataXYZ()->Bool{
-        if copter.startHeadingXYZ == nil{
+        guard let gimbalYaw = self.gimbal.getYawRelativeToAircaftHeading() else {
+            print("Error: writeMetaData gimbal yaw")
+            return false}
+        guard let heading = self.copter.getHeading() else {
+            print("Error: writeMetaData copter heading")
+            return false}
+        guard let startHeadingXYZ = self.copter.startHeadingXYZ else {
             // OriginXYZ is not yet set. Try to set it!
-            if copter.setOriginXYZ(){
+            if copter.setOriginXYZ(gimbalYaw: gimbalYaw){
                 print("OriginXYZ set from writeMetadata")
+                // Go again!
+                _ = writeMetaDataXYZ()
+                // Return true because to problem is fixed and the func is called again.
+                return true
             }
             else{
                 self.printSL("Write metadata could not set OriginXYZ, aircraft ready?")
                 return false
             }
         }
-        
-        var jsonMeta = JSON()
-        //var headingRelativeToX: Double = 720
-        guard let heading = self.copter.getHeading() else {return false}
-        guard let gimbalYaw = getYawRelativeToAircaftHeading() else {return false}
-        guard let startHeadingXYZ = self.copter.startHeadingXYZ else {return false}
 
+        var jsonMeta = JSON()
         let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
         jsonMeta["fileName"] = JSON("")
         jsonMeta["x"] = JSON(self.copter.posX)
@@ -226,7 +213,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                                         _ = 1
                                     }
                                     else{
-                                        print("MetaData failed to write")
+                                        print("MetaData failed to write, initiating ")
                                     }
                                 }
                                 completion(true)
@@ -447,6 +434,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                     else if isComplete { // No more data blocks to collect
                         if let imageData = imageData{
+                            // let encodedImageData = imageData.base64EncodedData() https://github.com/DavidBolis261/Previous_Work/blob/master/Base64Encoding&Decoding.swift
                             self.saveImageDataToApp(imageData: imageData, filename: files[index].fileName)
                             //let image = UIImage(data: imageData)
                             //self.lastImage = image!
@@ -693,10 +681,47 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r = createJsonAck("arm_take_off")
                         copter.takeOff()
                     }
+                case "data_stream":
+                    self.printSL("Received cmd data_stream: " + json_m["arg"]["attribute"].stringValue)
+                    // Data stream code
+                    switch json_m["arg"]["attribute"]{
+                        case "XYZ":
+                            self.subscriptions.XYZ = json_m["arg"]["enable"].boolValue
+                            json_r = createJsonAck("data_stream")
+                        case "image_XYZ":
+                            self.subscriptions.image_XYZ = json_m["arg"]["enable"].boolValue
+                            json_r = createJsonAck("data_stream")
+                        default:
+                            json_r = createJsonNack("data_stream")
+                    }
+                case "disconnect":
+                    json_r = createJsonAck("disconnect")
+                    self.printSL("Received cmd disconnect")
+                    // Disconnect code
+                    return
+                case "gimbal_set":
+                    self.printSL("Received cmd gimbal_set")
+                    json_r = createJsonAck("gimbal_set")
+                    self.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
+                    // No feedback, can't read the gimbal pitch value.
+                    
                 case "gogo_XYZ":
-                    json_r = createJsonAck("gogo_XYZ")
                     self.printSL("Received cmd gogo_XYZ")
-                    // Gogo XYZ code TODO
+                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                        let next_wp = json_m["arg"]["next_wp"].intValue
+                        if copter.pendingMission["id" + String(next_wp)].exists(){
+                                Dispatch.main{
+                                    _ = self.copter.gogoXYZ(startWp: next_wp)
+                                }
+                                json_r = createJsonAck("gogo_XYZ")
+                            }
+                            else{
+                                json_r = createJsonNack("gogo_XYZ")
+                            }
+                        }
+                    else{
+                         json_r = createJsonNack("gogo_XYZ")
+                    }
 
                 case "heart_beat": // DONE
                     json_r = createJsonAck("heart_beat")
@@ -727,6 +752,30 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                     else{
                         json_r = createJsonNack("land")
+                    }
+                case "photo":
+                switch json_m["arg"]["cmd"]{
+                    case "take_picture":
+                        self.printSL("Received cmd photo with arg take_picture")
+                        if self.cameraAllocator.allocate("take_picture", maxTime: 3) {
+                            json_r = createJsonAck("photo")
+                            takePictureCMD()
+                        }
+                        else{ // camera resource busy
+                            json_r = createJsonNack("photo")
+                        }
+                    case "download_picture":
+                        self.printSL("Received cmd photo with arg download_picture")
+                        if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
+                            json_r = createJsonAck("photo")
+                            downloadPictureCMD()
+                        }
+                        else { // Camera resource busy
+                            json_r = createJsonNack("photo")
+                        }
+                    default:
+                        self.printSL("Received cmd photo with unknow arg: " + json_m["arg"]["cmd"].stringValue)
+                        json_r = createJsonNack("photo")
                     }
                 case "save_home_position":
                     self.printSL("Received cmd save_home_position")
@@ -764,54 +813,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r = createJsonNack("upload_mission_XYZ")
                         print("Mission upload failed: " + arg!)
                     }
-                    // Upload mission XYZ code TODO
-                
-                case "photo":
-                    switch json_m["arg"]["cmd"]{
-                        case "take_picture":
-                            self.printSL("Received cmd photo with arg take_picture")
-                            if self.cameraAllocator.allocate("take_picture", maxTime: 3) {
-                                json_r = createJsonAck("photo")
-                                takePictureCMD()
-                            }
-                            else{ // camera resource busy
-                                json_r = createJsonNack("photo")
-                            }
-                        case "download_picture":
-                            self.printSL("Received cmd photo with arg download_picture")
-                            if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
-                                json_r = createJsonAck("photo")
-                                downloadPictureCMD()
-                            }
-                            else { // Camera resource busy
-                                json_r = createJsonNack("photo")
-                            }
-                        default:
-                            self.printSL("Received cmd photo with unknow arg: " + json_m["arg"]["cmd"].stringValue)
-                            json_r = createJsonNack("photo")
-                        }
-                case "gimbal_set":
-                    json_r = createJsonAck("gimbal_set")
-                    self.printSL("Received cmd gimbal_set")
-                    // Gimbal set code
-                case "data_stream":
-                    self.printSL("Received cmd data_stream")
-                    // Data stream code
-                    switch json_m["arg"]["attribute"]{
-                        case "XYZ":
-                            self.subscriptions.XYZ = json_m["arg"]["enable"].boolValue
-                            json_r = createJsonAck("data_stream")
-                        case "image_XYZ":
-                            self.subscriptions.image_XYZ = json_m["arg"]["enable"].boolValue
-                            json_r = createJsonAck("data_stream")
-                        default:
-                            json_r = createJsonNack("data_stream")
-                    }
-                case "disconnect":
-                    json_r = createJsonAck("disconnect")
-                    self.printSL("Received cmd disconnect")
-                    // Disconnect code
-                    return
                 default:
                     json_r = createJsonNack("API call not recognized")
                     self.printSL("API call not recognized: " + json_m["fcn"].stringValue)
@@ -819,11 +820,15 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 }
                 // Create string from json and send reply
                 let reply_str = getJsonString(json: json_r)
+                try socket.send(string: reply_str)
                 if json_r["fcn"].stringValue == "nack"{
                     print(json_r)
                 }
-                try socket.send(string: reply_str)
-                print("Replied: " + reply_str)
+                if json_r["arg"].stringValue != "heart_beat"{
+                    print("Reply:")
+                    print(json_r)
+                }
+                
                }
             catch {
                 self.printSL(String(describing: error))
@@ -888,44 +893,45 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         previewImageView.image = nil
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-//        var json = JSON()
-//        json["id0"] = JSON()
-//        json["id0"]["x"] = JSON(1)
-//        json["id0"]["y"] = JSON(2)
-//        json["id0"]["z"] = JSON(-13)
-//        json["id0"]["local_yaw"] = JSON(0)
-//
-//        json["id1"] = JSON()
-//        json["id1"]["x"] = JSON(0)
-//        json["id1"]["y"] = JSON(0)
-//        json["id1"]["z"] = JSON(-16)
-//        json["id1"]["local_yaw"] = JSON(0)
-//
-//        json["id2"] = JSON()
-//        json["id2"]["x"] = JSON(1)
-//        json["id2"]["y"] = JSON(2)
-//        json["id2"]["z"] = JSON(-13)
-//        json["id2"]["local_yaw"] = JSON(0)
-//
-//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-//        if success{
-//            copter.gogoXYZ(startWp: 0)
-//        }
-//        else{
-//            print("Mission failed to upload: " + arg!)
-//        }
-//        printJson(jsonObject: json)
-        
-        if self.subscriptions.image_XYZ{
-            self.subscriptions.image_XYZ = false
-            print("Subscription false")
+        var json = JSON()
+        json["id0"] = JSON()
+        json["id0"]["x"] = JSON(1)
+        json["id0"]["y"] = JSON(2)
+        json["id0"]["z"] = JSON(-13)
+        json["id0"]["local_yaw"] = JSON(0)
+
+        json["id1"] = JSON()
+        json["id1"]["x"] = JSON(0)
+        json["id1"]["y"] = JSON(0)
+        json["id1"]["z"] = JSON(-16)
+        json["id1"]["local_yaw"] = JSON(0)
+
+        json["id2"] = JSON()
+        json["id2"]["x"] = JSON(1)
+        json["id2"]["y"] = JSON(2)
+        json["id2"]["z"] = JSON(-13)
+        json["id2"]["local_yaw"] = JSON(0)
+
+        let (success, arg) = copter.uploadMissionXYZ(mission: json)
+        if success{
+            _ = copter.gogoXYZ(startWp: 0)
         }
         else{
-            self.subscriptions.image_XYZ = true
-            print("Subscription true")
+            print("Mission failed to upload: " + arg!)
         }
+        printJson(jsonObject: json)
+    
         
-  
+//        if self.subscriptions.image_XYZ{
+//            self.subscriptions.image_XYZ = false
+//            print("Subscription false")
+//            self.gimbal.setPitch(pitch: -90)
+//        }
+//        else{
+//            self.subscriptions.image_XYZ = true
+//            print("Subscription true")
+//            self.gimbal.setPitch(pitch: 12.2)
+//        }
     }
 
     //***************************************************************************************************************
@@ -991,6 +997,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //            }
 //        }
         
+        copter.gogoXYZ(startWp: 0)
         takePictureCMD()
         
 
@@ -1170,7 +1177,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             self.aircraft = product
             
             // Store flight controller reference in the Copter class
-            if let fc = product.flightController {
+            if let fc = self.aircraft?.flightController {
                 // Store the flightController reference
                 self.copter.flightController = fc
                 self.copter.initFlightController()
@@ -1191,22 +1198,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 self.printSL("Camera not loaded")
             }
             // Store the gimbal reference
-            if let gimb = product.gimbal {
-                self.gimbal = gimb
-                self.gimbal?.setPitchRangeExtensionEnabled(true, withCompletion: {(error: Error?) in
-                    if error != nil {
-                        self.printSL("RangeExtension is not set in viewDidLoad")
-                    }
-                })
-                
-                //printGimbalCapabilities(theGimbal: self.gimbal)
-                
-                // Have to dispatch in order for change to fall through before checking it
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                    self.gimbal?.getPitchRangeExtensionEnabled(completion: {(success: Bool, error: Error?) in
-                        self.pitchRangeExtension_set = success
-                    })
-                })
+            if let gimbalReference = self.aircraft?.gimbal {
+                self.gimbal.gimbal = gimbalReference
+                self.gimbal.initGimbal()
             }
             else{
                 setupOk = false

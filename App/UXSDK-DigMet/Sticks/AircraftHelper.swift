@@ -154,14 +154,14 @@ class Copter {
     
     // ******************************************************************************************
     // Set the origin and orientation for XYZ coordinate system. Can only be set once for safety!
-    func setOriginXYZ()->Bool{
+    func setOriginXYZ(gimbalYaw: Double)->Bool{
         if let _ = self.startHeadingXYZ {
             print("Caution: XYZ coordinate system already set!")
             return false
         }
         guard let pos = getCurrentLocation() else {return false}
         guard let heading = getHeading() else {return false}
-        guard let gimbalYaw = getYawRelativeToAircaftHeading() else {return false}
+        //guard let gimbalYaw = gimbalObject.getYawRelativeToAircaftHeading() else {return false}
         self.startHeadingXYZ = heading + gimbalYaw
         self.startLocationXYZ = pos
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here + gimbal yaw"])
@@ -305,13 +305,13 @@ class Copter {
     //****************
     // Tester function
     func stateTest(){
-        if let gimbalAttitude = getGimbalPitchAtt(){
-            print("Gimbal pitch: (ATT)" + String(describing: gimbalAttitude.pitch))
-        }
-        
-        if let gimbalRotation = getGimbalPitchRot(){
-            print("Gimbal pitch (ROT): " + String(describing: gimbalRotation.pitch))
-        }
+//        if let gimbalAttitude = getGimbalPitchAtt(){
+//            print("Gimbal pitch: (ATT)" + String(describing: gimbalAttitude.pitch))
+//        }
+//
+//        if let gimbalRotation = getGimbalPitchRot(){
+//            print("Gimbal pitch (ROT): " + String(describing: gimbalRotation.pitch))
+//        }
         
 
         if let currLocation = self.getCurrentLocation(){
@@ -344,19 +344,9 @@ class Copter {
     //************************
     // Set up reference frames
     func initFlightController(){
-        // Default the coordinate system to body and reference yaw to heading
-        self.flightController?.setFlightOrientationMode(DJIFlightOrientationMode.aircraftHeading, withCompletion: { (error: Error?) in
-            if error == nil{
-                print("Orientation mode set")
-            }
-            else{
-                print("Orientation mode not set: " + error.debugDescription)
-            }
-        })
-
         // Set properties of VirtualSticks
         self.flightController?.rollPitchCoordinateSystem = DJIVirtualStickFlightCoordinateSystem.body
-        self.flightController?.yawControlMode = DJIVirtualStickYawControlMode.angularVelocity
+        self.flightController?.yawControlMode = DJIVirtualStickYawControlMode.angularVelocity // Auto reset to angle if controller reconnects
         self.flightController?.rollPitchControlMode = DJIVirtualStickRollPitchControlMode.velocity
         self.state = DJIFlightControllerState()
         //self.flightController?.delegate?.flightController?(self.flightController!, didUpdate: self.state!)
@@ -488,20 +478,25 @@ class Copter {
         controlData.pitch = limitedVelY
         controlData.yaw = limitedYawRate
         
-        
-        // Send the control data to the FC
-        self.flightController?.send(controlData, withCompletion: { (error: Error?) in
-           // There's an error so let's stop (What happens with last sent command..?
-            if error != nil {
-                print("Error sending control data from position controller")
-                // Disable the timer
-                self.duttTimer?.invalidate()
-                //self.loopCnt = 0
-                self.posCtrlTimer?.invalidate()
-                //self.posCtrlLoopCnt = 0
-            }
-           
-        })
+        if (self.flightController?.yawControlMode.self == DJIVirtualStickYawControlMode.angularVelocity){
+            // Send the control data to the FC only if yawControlMode is angularVelocity
+            self.flightController?.send(controlData, withCompletion: { (error: Error?) in
+               // There's an error so let's stop (What happens with last sent command..?
+                if error != nil {
+                    print("Error sending control data from position controller")
+                    // Disable the timer
+                    self.duttTimer?.invalidate()
+                    //self.loopCnt = 0
+                    self.posCtrlTimer?.invalidate()
+                    //self.posCtrlLoopCnt = 0
+                }
+            })
+        }
+        else{
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Error: YawControllerMode is not correct"])
+            print("DJIVirtualStickYawControlMode is not longer angularVelocity!")
+            self.flightController?.yawControlMode = DJIVirtualStickYawControlMode.angularVelocity
+        }
     }
     
     func takeOff(){
@@ -575,7 +570,9 @@ class Copter {
         }
     }
     
-    func gogoXYZ(startWp: Int){
+    //**********************************************************************************************
+    // Starts the pending mission on startWp. returns false if startWp is not in the pending mission
+    func gogoXYZ(startWp: Int)->Bool{
         if self.pendingMission["id" + String(startWp)].exists(){
             
             // invalidate and such..
@@ -588,16 +585,21 @@ class Copter {
             gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
             // Notify about going to startWP
             NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
+            return true
+        }
+        else{
+            print("Error: gogoXYZ, no such wp id: id" + String(startWp))
+            return false
         }
     }
     
-    //**********************************************************************************
-    // Function that sets reference position and executes the position controller timer.
+    //**************************************************************************************
+    // Function that sets reference position and executes the XYZ position controller timer.
     private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double){
         // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
         // Function is private, only approved missions will be passed in here.
-        print("gotoXYZ: " + String(refPosX) + String(refPosY) + String(refPosZ))
+        //TODO hardconded geofence
         if refPosY > -10 && refPosY < 10{
             self.ref_posY = refPosY
         }
@@ -611,10 +613,11 @@ class Copter {
         
         self.ref_posZ = refPosZ
         if self.ref_posZ > -10{
-            print("Too low altitude for postion control: " + String(self.ref_posX) + String(self.ref_posY) + String(self.ref_posZ))
+            print("Too low altitude for postion control, refPosZ: " + String(self.ref_posZ))
             return
         }
-        
+
+        print("gotoXYZ, new reference positoin, x:" + String(refPosX) + ", y: " + String(refPosY) + ", z: " + String(refPosZ))
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
         duttTimer?.invalidate()
         //loopCnt = 0
@@ -622,10 +625,7 @@ class Copter {
         posCtrlTimer?.invalidate()
         posCtrlLoopCnt = 0
         // Make sure noone else is updating the self.refPosXYZ ! TODO
-        // Set fix timeinterval
-//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-            self.posCtrlTimer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(self.firePosCtrlTimer), userInfo: nil, repeats: true)
-  //      })
+        self.posCtrlTimer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(self.firePosCtrlTimer), userInfo: nil, repeats: true)
     }
     
     //********************************************************************************************
@@ -669,7 +669,7 @@ extension Copter{
     @objc func firePosCtrlTimer() {
         posCtrlLoopCnt += 1
         // If we arrived
-
+        
         if trackingWP(posLimit: trackingPosLimit, velLimit: trackingVelLimit){
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
             
@@ -696,11 +696,11 @@ extension Copter{
             let x_diff: Float = Float(self.ref_posX - self.posX)
             let y_diff: Float = Float(self.ref_posY - self.posY)
             let z_diff: Float = Float(self.ref_posZ - self.posZ)
- 
+            
             guard let checkedHeading = self.getHeading() else {return}
             guard let checkedStartHeading = self.startHeadingXYZ else {return}
             let alpha = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
-            
+
         
             self.ref_velX =  (x_diff * cos(alpha) + y_diff * sin(alpha))*hPosKP
             self.ref_velY = (-x_diff * sin(alpha) + y_diff * cos(alpha))*hPosKP

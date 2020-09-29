@@ -35,6 +35,7 @@ Podfile.lock
 *.ipa
 *.xcworkspace
 *.xcscheme
+*.pbxproj
 
 # CocoaPods
 #
