@@ -35,6 +35,7 @@ class Copter {
     var ref_posX: Double = 0
     var ref_posY: Double = 0
     var ref_posZ: Double = 0
+    var ref_localYaw = 0.0
     var ref_yaw: Float = 0.0
     
     var ref_velX: Float = 0.0
@@ -72,6 +73,7 @@ class Copter {
     private let hPosKP: Float = 0.9     // Test KP 2!
     private let vPosKP: Float = 1
     private let vVelKD: Float = 0
+    private let yawKP: Float = 5
     
     
     // Init
@@ -447,7 +449,7 @@ class Copter {
         duttTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(fireDuttTimer), userInfo: nil, repeats: true)
        }
     
-    //***************************************************************************************************************
+    //******************************************************************************************************************
     // Send controller data (joystick). Called from fireTimer that send commands every x ms. Stop timer to stop commands.
     func sendControlData(velX: Float, velY: Float, velZ: Float, yawRate: Float) {
         //print("Sending x: \(velX), y: \(velY), z: \(velZ), yaw: \(yawRate)")
@@ -469,7 +471,7 @@ class Copter {
         let limitedVelX = factor * velX
         let limitedVelY = factor * velY
         let limitedVelZ = limitToMax(value: velZ, limit: zVelLimit/100)
-        let limitedYawRate = limitToMax(value: velX, limit: xyVelLimit/100)
+        let limitedYawRate: Float = limitToMax(value: yawRate, limit: yawRateLimit) // BUG! limitToMax(value: velX, limit: xyVelLimit/100)
                 
         // Construct the flight control data object. Roll axis is pointing forwards but we use velocities..
         var controlData = DJIVirtualStickFlightControlData()
@@ -538,6 +540,7 @@ class Copter {
                 guard withinLimit(value: subJson["x"].doubleValue, lowerLimit: missionGeoFenceX[0], upperLimit: missionGeoFenceX[1]) else {return (false, "GeofenceX")}
                 guard withinLimit(value: subJson["y"].doubleValue, lowerLimit: missionGeoFenceY[0], upperLimit: missionGeoFenceY[1]) else {return (false, "GeofenceY")}
                 guard withinLimit(value: subJson["z"].doubleValue, lowerLimit: missionGeoFenceZ[0], upperLimit: missionGeoFenceZ[1]) else {return (false, "GeofenceZ")}
+                guard withinLimit(value: subJson["local_yaw"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) else {return (false, "local_yaw out of bounds")}
                 // Check speed in mission thread
                 wpCnt += 1
                 continue
@@ -550,12 +553,13 @@ class Copter {
         return (true, "")
     }
     
-    func getWPXYZ(num: Int)->(Double, Double, Double){
+    func getWPXYZYaw(num: Int)->(Double, Double, Double, Double){
         let id = "id" + String(num)
         let x = self.mission[id]["x"].doubleValue
         let y = self.mission[id]["y"].doubleValue
         let z = self.mission[id]["z"].doubleValue
-        return(x, y, z)
+        let local_yaw = self.mission[id]["local_yaw"].doubleValue
+        return(x, y, z, local_yaw)
     }
 
     
@@ -581,8 +585,8 @@ class Copter {
             self.missionNextWp = startWp
             self.missionIsActive = true
             
-            let (x, y, z) = getWPXYZ(num: startWp)
-            gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
+            let (x, y, z, local_yaw) = getWPXYZYaw(num: startWp)
+            gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
             // Notify about going to startWP
             NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
             return true
@@ -595,7 +599,7 @@ class Copter {
     
     //**************************************************************************************
     // Function that sets reference position and executes the XYZ position controller timer.
-    private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double){
+    private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double, refLocalYaw: Double){
         // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
         // Function is private, only approved missions will be passed in here.
@@ -616,8 +620,10 @@ class Copter {
             print("Too low altitude for postion control, refPosZ: " + String(self.ref_posZ))
             return
         }
+        
+        self.ref_localYaw = refLocalYaw
 
-        print("gotoXYZ, new reference positoin, x:" + String(refPosX) + ", y: " + String(refPosY) + ", z: " + String(refPosZ))
+        print("gotoXYZ, new reference positoin, x:" + String(ref_posX) + ", y: " + String(ref_posY) + ", z: " + String(ref_posZ) + ", local_yaw: " + String(ref_localYaw))
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
         duttTimer?.invalidate()
         //loopCnt = 0
@@ -678,8 +684,8 @@ extension Copter{
                 print("Mission is active")
                 self.setMissionNextWp(num: self.missionNextWp + 1)
                 if self.missionNextWp != -1{
-                    let (x, y, z) = self.getWPXYZ(num: self.missionNextWp)
-                    self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z)
+                    let (x, y, z, local_yaw) = self.getWPXYZYaw(num: self.missionNextWp)
+                    self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
                 }
                 else{
                     print("id is -1")
@@ -699,17 +705,21 @@ extension Copter{
             
             guard let checkedHeading = self.getHeading() else {return}
             guard let checkedStartHeading = self.startHeadingXYZ else {return}
-            let alpha = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
+            let alphaRad = Float((checkedHeading - checkedStartHeading)/180*Double.pi)
 
-        
-            self.ref_velX =  (x_diff * cos(alpha) + y_diff * sin(alpha))*hPosKP
-            self.ref_velY = (-x_diff * sin(alpha) + y_diff * cos(alpha))*hPosKP
+            // Rotate coordinates, calc refvelx, refvely
+            self.ref_velX =  (x_diff * cos(alphaRad) + y_diff * sin(alphaRad))*hPosKP
+            self.ref_velY = (-x_diff * sin(alphaRad) + y_diff * cos(alphaRad))*hPosKP
             
+            // Calc refvelz
             self.ref_velZ = (z_diff) * vPosKP
             // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
             
-
-            sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: 0)
+            // Calc refyawrate
+            let ref_heading = checkedStartHeading + self.ref_localYaw
+            self.ref_yawRate = Float(ref_heading - checkedHeading)*yawKP
+            
+            sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: self.ref_yawRate)
         }
         
         // For safety during testing..

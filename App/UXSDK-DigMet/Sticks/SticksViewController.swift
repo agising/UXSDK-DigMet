@@ -27,7 +27,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var DJIgimbal: DJIGimbal?
     
     var server = serverClass() // For test. Could get a JSON from http server.
-    let hostIp = "25.22.96.189" // Use dict or something to store several ip adresses
+    let hostIp = "192.168.1.245"//25.22.96.189" // Use dict or something to store several ip adresses
     let hostUsername = "gising"
     let hostPath = "/Users/gising/temp/"
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
@@ -62,6 +62,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var lastImageData: Data = Data.init()
     var lastImageDataURL: URL?
     var lastImageDataFilename = ""
+    var metaDataURL: URL?
+    var metaDataFilename = ""
     
     //var helperView = myView(coder: NSObject)
 
@@ -176,6 +178,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 
         var jsonMeta = JSON()
         let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
+        print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
         jsonMeta["fileName"] = JSON("")
         jsonMeta["x"] = JSON(self.copter.posX)
         jsonMeta["y"] = JSON(self.copter.posY)
@@ -310,6 +313,23 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
+    //********************************************
+    // Save ImageData to app, set URL to the objet
+    func saveDataToApp(data: Data, filename: String){
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if let documentsURL = documentsURL {
+            let fileURL = documentsURL.appendingPathComponent(filename)
+            self.metaDataURL = fileURL
+            self.metaDataFilename = filename
+            do {
+                try data.write(to: fileURL, options: .atomicWrite)
+            } catch {
+                self.printSL("Could not write Data to App: " + String(describing: error))
+            }
+        }
+    }
+    
+    
     
     // Can be moved to separate file
     //*********************************************************
@@ -420,7 +440,19 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         break
                     }
                 }
-
+                
+                // Save metadata to app memory
+                do {
+                    let rawMetaData = try self.jsonMetaData.rawData()
+                    self.saveDataToApp(data: rawMetaData, filename: "metaData.json")
+                    print("metaData saved to app memory")
+                }
+                catch {
+                    print("Error \(error)")
+                }
+                
+                
+                
                 let index = files.count - 1
                 // Create a image container for this scope
                 var imageData: Data?
@@ -536,9 +568,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 
                 // Upload the file
                 session.channel.uploadFile(self.lastImageDataURL!.path, to: self.hostPath)
+                session.channel.uploadFile(self.metaDataURL!.path, to: self.hostPath)
+
                 info = fileNameUploading
                 if self.subscriptions.image_XYZ{
-                    _ = self.publish(topic: "image_XYZ", json: metaData)
+                    _ = self.publish(topic: "image_XYZ", json: metaData) // metadata for this picture
                 }
                 success = true
              }
@@ -682,7 +716,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         copter.takeOff()
                     }
                 case "data_stream":
-                    self.printSL("Received cmd data_stream: " + json_m["arg"]["attribute"].stringValue)
+                    self.printSL("Received cmd data_stream: " + json_m["arg"]["attribute"].stringValue + " - " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
                     switch json_m["arg"]["attribute"]{
                         case "XYZ":
@@ -746,7 +780,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 case "land":
                     self.printSL("Received cmd land")
                     json_r = createJsonAck("land")
-                    if copter.getIsFlying() ?? false{ // Default to flase to handle nil
+                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         json_r = createJsonAck("land")
                         copter.land()
                     }
@@ -792,8 +826,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     let velZ = Float(json_m["arg"]["vel_Z"].stringValue) ?? 0
                     let yawRate = Float(json_m["arg"]["yaw_rate"].stringValue) ?? 0
                     print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
-                    // Must dispatch to main for command to go through.
-                    print("Testing if copter is available from here in code TODO: " + String(describing: copter.ref_velX))
                     Dispatch.main{
                         self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
                         self.printSL("Dutt command sent from readSocket")
@@ -893,34 +925,35 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         previewImageView.image = nil
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-        var json = JSON()
-        json["id0"] = JSON()
-        json["id0"]["x"] = JSON(1)
-        json["id0"]["y"] = JSON(2)
-        json["id0"]["z"] = JSON(-13)
-        json["id0"]["local_yaw"] = JSON(0)
-
-        json["id1"] = JSON()
-        json["id1"]["x"] = JSON(0)
-        json["id1"]["y"] = JSON(0)
-        json["id1"]["z"] = JSON(-16)
-        json["id1"]["local_yaw"] = JSON(0)
-
-        json["id2"] = JSON()
-        json["id2"]["x"] = JSON(1)
-        json["id2"]["y"] = JSON(2)
-        json["id2"]["z"] = JSON(-13)
-        json["id2"]["local_yaw"] = JSON(0)
-
-        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-        if success{
-            _ = copter.gogoXYZ(startWp: 0)
-        }
-        else{
-            print("Mission failed to upload: " + arg!)
-        }
-        printJson(jsonObject: json)
+//        var json = JSON()
+//        json["id0"] = JSON()
+//        json["id0"]["x"] = JSON(1)
+//        json["id0"]["y"] = JSON(2)
+//        json["id0"]["z"] = JSON(-13)
+//        json["id0"]["local_yaw"] = JSON(0)
+//
+//        json["id1"] = JSON()
+//        json["id1"]["x"] = JSON(0)
+//        json["id1"]["y"] = JSON(0)
+//        json["id1"]["z"] = JSON(-16)
+//        json["id1"]["local_yaw"] = JSON(0)
+//
+//        json["id2"] = JSON()
+//        json["id2"]["x"] = JSON(1)
+//        json["id2"]["y"] = JSON(2)
+//        json["id2"]["z"] = JSON(-13)
+//        json["id2"]["local_yaw"] = JSON(0)
+//
+//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
+//        if success{
+//            _ = copter.gogoXYZ(startWp: 0)
+//        }
+//        else{
+//            print("Mission failed to upload: " + arg!)
+//        }
+//        printJson(jsonObject: json)
     
+        
         
 //        if self.subscriptions.image_XYZ{
 //            self.subscriptions.image_XYZ = false
@@ -997,7 +1030,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //            }
 //        }
         
-        copter.gogoXYZ(startWp: 0)
+        //copter.gogoXYZ(startWp: 0)
+        self.subscriptions.image_XYZ = true
         takePictureCMD()
         
 
@@ -1191,7 +1225,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             if let cam = product.camera {
                 self.camera = cam
                 self.image_index = self.camera?.index // Not used
-                // Should try to implement callback listener to progress image index.
+                self.camera?.setPhotoAspectRatio(DJICameraPhotoAspectRatio.ratio4_3, withCompletion: {(error) in
+                    if error != nil{
+                        self.printSL("Aspect ratio 4:3 could not be set")
+                    }
+                })
             }
             else{
                 setupOk = false
