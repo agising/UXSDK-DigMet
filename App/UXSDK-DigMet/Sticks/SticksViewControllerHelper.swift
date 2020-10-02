@@ -59,6 +59,27 @@ class serverClass: NSObject{
 
 
 
+// in getImage
+//                   else if isComplete { // No more data blocks to collect
+//                       if let imageData = imageData{
+//                           // let encodedImageData = imageData.base64EncodedData() https://github.com/DavidBolis261/Previous_Work/blob/master/Base64Encoding&Decoding.swift
+//
+//
+//                           // Convert image to base64 string and publish.
+////                           let base64ImageDataUtf8 = getBase64utf8(data: imageData)// base64ImageData.data(using: String.Encoding.utf8)
+//                           var json_pic = JSON()
+//                           json_pic["pic"].stringValue = getBase64utf8(data: imageData)
+//
+//                           _ = self.publish(topic: "pic", json: json_pic)
+//
+//
+//                           self.saveImageDataToApp(imageData: imageData, filename: files[index].fileName)
+//                           //let image = UIImage(data: imageData)
+//                           //self.lastImage = image!
+//                           //self.lastImageFilename = files[index].fileName
+//                           //self.printSL("UIImage saved to self, showing image preview. Filename:" + self.lastImageFilename)
+//                           completionHandler(true)
+//                           }
 
 
 

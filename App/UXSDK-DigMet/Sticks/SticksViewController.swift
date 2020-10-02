@@ -27,7 +27,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var DJIgimbal: DJIGimbal?
     
     var server = serverClass() // For test. Could get a JSON from http server.
-    let hostIp = "192.168.1.245"//25.22.96.189" // Use dict or something to store several ip adresses
+    let hostIp = "192.168.1.245" //"192.168.43.14"//"10.114.17.0" //192.168.1.245"//25.22.96.189" // Use dict or something to store several ip adresses
     let hostUsername = "gising"
     let hostPath = "/Users/gising/temp/"
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
@@ -197,7 +197,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // captureImage sets up the camera if needed and takes a photo.
     func captureImage(completion: @escaping (Bool)-> Void ) {
         // Make sure camera is in the correct mode
-        self.cameraSetMode(DJICameraMode.shootPhoto, 1, completionHandler: {(succsess: Bool) in
+        self.cameraSetMode(DJICameraMode.shootPhoto, 2, completionHandler: {(succsess: Bool) in
             if succsess{
                 // Make sure shootPhotoMode is single, if so, go ahead startShootPhoto
                 self.camera?.setShootPhotoMode(DJICameraShootPhotoMode.single, withCompletion: {(error: Error?) in
@@ -330,7 +330,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     
-    
     // Can be moved to separate file
     //*********************************************************
     // NOT USED Load an UIImage from memory using a path string
@@ -389,7 +388,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //**********************************************************************
      // Save photo from sdCardto app memory. Setup camera then call getImage
      func savePhoto(completionHandler: @escaping (Bool) -> Void){
-         cameraSetMode(DJICameraMode.mediaDownload, 1, completionHandler: {(success: Bool) in
+         cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(success: Bool) in
              if success {
 
                  self.getImage(completionHandler: {(new_success: Bool) in
@@ -466,12 +465,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                     else if isComplete { // No more data blocks to collect
                         if let imageData = imageData{
-                            // let encodedImageData = imageData.base64EncodedData() https://github.com/DavidBolis261/Previous_Work/blob/master/Base64Encoding&Decoding.swift
+                            var json_pic = JSON()
+                            json_pic["pic"].stringValue = getBase64utf8(data: imageData)
+                            _ = self.publish(topic: "pic", json: json_pic)
+                            
                             self.saveImageDataToApp(imageData: imageData, filename: files[index].fileName)
-                            //let image = UIImage(data: imageData)
-                            //self.lastImage = image!
-                            //self.lastImageFilename = files[index].fileName
-                            //self.printSL("UIImage saved to self, showing image preview. Filename:" + self.lastImageFilename)
                             completionHandler(true)
                             }
                         else{
@@ -652,16 +650,25 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
+    //****************************************************************
+    // ZMQ publish socket. Puspishes string and serialized json-object
     func publish(topic: String, json: JSON)->Bool{
-        let json_s = getJsonString(json: json)
+        // Create string with topic and json representation
+        let publishStr = getJsonStringAndTopic(topic: topic, json: json)
         do{
-            let publishStr = topic + " " + json_s
             try self.publisher?.send(string: publishStr)
-            print("Published: " + publishStr)
+            if topic != "pic"{
+                print("Published: " + publishStr)
+            }
             return true
         }
         catch{
-            print("Tried to publish, but failed: " + json_s)
+            if topic == "pic"{
+                print("Tried to publish pic, but failed.")
+            }
+            else{
+            print("Tried to publish, but failed: " + publishStr)
+            }
             return false
         }
     }
@@ -859,6 +866,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 if json_r["arg"].stringValue != "heart_beat"{
                     print("Reply:")
                     print(json_r)
+                    print(reply_str)
                 }
                 
                }
@@ -1066,7 +1074,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Download and preview the last image on sdCard
     @IBAction func previewPhotoButton(_ sender: Any) {
         // download a preview of last photo, dipsply preview
-        cameraSetMode(DJICameraMode.mediaDownload, 3, completionHandler: {(succsess: Bool) in
+        cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(succsess: Bool) in
             if succsess {
                 self.getPreview(completionHandler: {(success: Bool) in
                     if success{
@@ -1147,22 +1155,30 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //        }
     }
     
+    //*************************************************
+    // Update gui when nofication didposupdata happened
     @objc func onDidPosUpdate(_ notification: Notification){
         self.posXLabel.text = String(format: "%.1f", copter.posX)
         self.posYLabel.text = String(format: "%.1f", copter.posY)
         self.posZLabel.text = String(format: "%.1f", copter.posZ)
     }
-    
+
+    //*************************************************
+    // Update gui when nofication didvelupdata happened  TEST only
     @objc func onDidVelUpdate(_ notification: Notification){
         //self.posXLabel.text = String(format: "%.1f", copter.velX)
         //self.posYLabel.text = String(format: "%.1f", copter.velY)
         //self.posZLabel.text = String(format: "%.1f", copter.velZ)
     }
     
+    //******************************************************************************
+    // Prints notification to statuslabel. Notifications can be sent from everywhere
     @objc func onDidPrintThis(_ notification: Notification){
         self.printSL(String(describing: notification.userInfo!["printThis"]!))
     }
     
+    //*************************************************
+    // Update gui and publish when nofication didnextwp happened
     @objc func onDidNextWp(_ notification: Notification){
         if let data = notification.userInfo as? [String: String]{
             var json_o = JSON()
