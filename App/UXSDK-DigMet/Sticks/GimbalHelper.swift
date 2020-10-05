@@ -7,11 +7,12 @@
 //
 
 import Foundation
-import DJIUXSDK 
+import DJIUXSDK
 
-class Gimbal{
+class GimbalController: NSObject{
     var gimbal: DJIGimbal?
     var pitchRangeExtensionSet = false
+    var gimbalPitch: Float? = 0
     
 
     // *******************************************
@@ -76,8 +77,8 @@ class Gimbal{
 
     // ********************************************
     // Get gimbal pitch Attitude always returns nil
-    func getGimbalPitchAtt()->DJIGimbalAttitude?{
-        guard let gimbalStateKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
+    func getGimbalPitch()->DJIGimbalAttitude?{
+        guard let gimbalAttitudeKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
             NSLog("Couldn't create the key")
             return nil
         }
@@ -87,42 +88,19 @@ class Gimbal{
             return nil
         }
                 
-        if let gimbalStateValue = keyManager.getValueFor(gimbalStateKey){
-            if let attitude = gimbalStateValue.value as? DJIGimbalAttitude{
-                print("Attitude.pitch is: " + String(attitude.pitch))
-                return attitude
+        if let gimbalAttitudeValue: DJIKeyedValue = keyManager.getValueFor(gimbalAttitudeKey){
+            if let gimbalAttitude = gimbalAttitudeValue.value as? DJIGimbalAttitude{
+                print("Attitude.pitch is: " + String(gimbalAttitude.pitch))
+                return gimbalAttitude
             }
             else{
                 print("Error: getGimbalPitchCode ends up here")
             }
         }
         else{
-            _ = "Does not end up here"
+            print("Code does not end up here")
         }
         return nil
-    }
-
-
-
-
-    //
-    // Get gimbal pitch Rotate DOES NOT WORK
-    func getGimbalPitchRot()->DJIGimbalRotation?{
-        guard let gimbalRotateKey = DJIGimbalKey(param: DJIGimbalParamRotate) else {
-            NSLog("Couldn't create the key")
-            return nil
-        }
-
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return nil
-        }
-                
-        if let rotationValue = keyManager.getValueFor(gimbalRotateKey) {
-            let rotation = rotationValue.value as! DJIGimbalRotation
-            return rotation
-        }
-     return nil
     }
 
     
@@ -148,6 +126,15 @@ class Gimbal{
             }
         }
     }
-    
-    
 }
+
+
+extension GimbalController: DJIGimbalDelegate {
+  func gimbalUpdater(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
+    self.gimbalPitch = state.attitudeInDegrees.pitch
+  }
+}
+
+// let theGState = DJIGimbalState()
+// self.gimbalController.gimbalUpdater(self.gimbalController.gimbal!, didUpdate: theGState)
+// printSL("g pitch is: " + String(describing: self.gimbalController.gimbalPitch))

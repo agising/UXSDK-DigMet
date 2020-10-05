@@ -47,7 +47,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var cameraAllocator = Allocator(name: "camera")
     
     var copter = Copter()
-    var gimbal = Gimbal()
+    var gimbalController = GimbalController()
    
     var image: UIImage = UIImage.init() // Is this used?
     var image_index: UInt?
@@ -154,8 +154,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
+    //**********************************************************************************************
+    // Writes metadata to json. OriginXYZ is required to be set, if it is not, set ut to current pos
     func writeMetaDataXYZ()->Bool{
-        guard let gimbalYaw = self.gimbal.getYawRelativeToAircaftHeading() else {
+        guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
             print("Error: writeMetaData gimbal yaw")
             return false}
         guard let heading = self.copter.getHeading() else {
@@ -176,6 +178,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
         }
 
+        self.sessionIndex += 1
         var jsonMeta = JSON()
         let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
         print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
@@ -185,8 +188,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         jsonMeta["z"] = JSON(self.copter.posZ)
         jsonMeta["agl"] = JSON(-1)
         jsonMeta["local_yaw"] = JSON(localYaw)
+        jsonMeta["index"] = JSON(self.sessionIndex)
 
-        self.sessionIndex += 1
         self.jsonMetaData[String(self.sessionIndex)] = jsonMeta
         print(jsonMeta)
         return true
@@ -743,7 +746,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 case "gimbal_set":
                     self.printSL("Received cmd gimbal_set")
                     json_r = createJsonAck("gimbal_set")
-                    self.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
+                    self.gimbalController.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
                     
                 case "gogo_XYZ":
@@ -966,12 +969,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //        if self.subscriptions.image_XYZ{
 //            self.subscriptions.image_XYZ = false
 //            print("Subscription false")
-//            self.gimbal.setPitch(pitch: -90)
+//            self.gimbalController.setPitch(pitch: -90)
 //        }
 //        else{
 //            self.subscriptions.image_XYZ = true
 //            print("Subscription true")
-//            self.gimbal.setPitch(pitch: 12.2)
+//            self.gimbalController.setPitch(pitch: 12.2)
 //        }
     }
 
@@ -1041,8 +1044,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //copter.gogoXYZ(startWp: 0)
         self.subscriptions.image_XYZ = true
         takePictureCMD()
-        
-
     }
     
     //********************************************************
@@ -1253,8 +1254,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
             // Store the gimbal reference
             if let gimbalReference = self.aircraft?.gimbal {
-                self.gimbal.gimbal = gimbalReference
-                self.gimbal.initGimbal()
+                self.gimbalController.gimbal = gimbalReference
+                self.gimbalController.initGimbal()
             }
             else{
                 setupOk = false
