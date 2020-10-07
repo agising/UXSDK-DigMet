@@ -529,7 +529,7 @@ class Copter {
         return true
     }
     
-    func uploadMissionXYZ(mission: JSON)->(success: Bool, arg: String?){
+    func uploadMissionXYZ(mission: JSON)->(success: Bool, arg: String){
         // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
         var wpCnt = 0
         for (_,subJson):(String, JSON) in mission {
@@ -541,7 +541,14 @@ class Copter {
                 guard withinLimit(value: subJson["y"].doubleValue, lowerLimit: missionGeoFenceY[0], upperLimit: missionGeoFenceY[1]) else {return (false, "GeofenceY")}
                 guard withinLimit(value: subJson["z"].doubleValue, lowerLimit: missionGeoFenceZ[0], upperLimit: missionGeoFenceZ[1]) else {return (false, "GeofenceZ")}
                 guard withinLimit(value: subJson["local_yaw"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) else {return (false, "local_yaw out of bounds")}
+                if subJson["action"].exists() {
+                    if subJson["action"].stringValue != "take_photo"{
+                        return(false, "Faulty wp action")
+                    }
+                }
+
                 // Check speed in mission thread
+                
                 wpCnt += 1
                 continue
             }

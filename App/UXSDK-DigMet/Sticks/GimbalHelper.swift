@@ -129,11 +129,12 @@ class GimbalController: NSObject{
 }
 
 
-extension GimbalController: DJIGimbalDelegate {
-  func gimbalUpdater(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
-    self.gimbalPitch = state.attitudeInDegrees.pitch
-  }
-}
+//class GimbalController: NSObject, DJIGimbalDelegate {
+//    func gimbal(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
+//            print(state.attitudeInDegrees.pitch)
+//    }
+//}
+
 
 // let theGState = DJIGimbalState()
 // self.gimbalController.gimbalUpdater(self.gimbalController.gimbal!, didUpdate: theGState)

@@ -26,6 +26,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var camera: DJICamera?
     var DJIgimbal: DJIGimbal?
     
+    
+    var acks = 0
+    
+    
     var server = serverClass() // For test. Could get a JSON from http server.
     let hostIp = "192.168.1.245" //"192.168.43.14"//"10.114.17.0" //192.168.1.245"//25.22.96.189" // Use dict or something to store several ip adresses
     let hostUsername = "gising"
@@ -42,15 +46,14 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var nextGimbalPitch: Int = 0
     
     var gimbalcapability: [AnyHashable: Any]? = [:]
-    var cameraModeReference: DJICameraMode = DJICameraMode.playback
-    var cameraModeAcitve: DJICameraMode = DJICameraMode.shootPhoto
+    //var cameraModeReference: DJICameraMode = DJICameraMode.playback
+    var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
     
     var copter = Copter()
     var gimbalController = GimbalController()
    
-    var image: UIImage = UIImage.init() // Is this used?
-    var image_index: UInt?
+    var photo: UIImage = UIImage.init() // Is this used?
     var sessionIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
     var jsonMetaData: JSON = JSON()
@@ -59,9 +62,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var lastImagePreview: UIImage = UIImage.init()
     var lastImageFilename = ""
     var lastImageURL = ""
-    var lastImageData: Data = Data.init()
-    var lastImageDataURL: URL?
-    var lastImageDataFilename = ""
+    var lastPhotoData: Data = Data.init()
+    var lastPhotoDataURL: URL?
+    var lastPhotoDataFilename = ""
     var metaDataURL: URL?
     var metaDataFilename = ""
     
@@ -95,7 +98,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     // Just to test an init function
     required init?(coder aDecoder: NSCoder) {
-        self.image_index = 0
         super.init(coder: aDecoder)
     }
 
@@ -178,7 +180,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
         }
 
-        self.sessionIndex += 1
+
         var jsonMeta = JSON()
         let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
         print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
@@ -195,99 +197,116 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         return true
     }
     
+
+    
+    // Move this somewhere.. Also start monitoring mode camera mode changes
+    //***************************************
+    // Monitor when data is written to sdCard
+    func startListenToCamera(){
+        guard let locationKey = DJICameraKey(param: DJICameraParamIsStoringPhoto) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.startListeningForChanges(on: locationKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+            if let checkedNewValue = newValue{
+                self.cameraAllocator.setAuxOccopier(boolValue: checkedNewValue.boolValue)
+            }
+        })
+    }
+    
     
     //*************************************************************
-    // captureImage sets up the camera if needed and takes a photo.
-    func captureImage(completion: @escaping (Bool)-> Void ) {
+    // capturePhoto sets up the camera if needed and takes a photo.
+    func capturePhoto(completion: @escaping (Bool)-> Void ) {
         // Make sure camera is in the correct mode
-        self.cameraSetMode(DJICameraMode.shootPhoto, 2, completionHandler: {(succsess: Bool) in
-            if succsess{
+            self.cameraSetMode(DJICameraMode.shootPhoto, 2, completionHandler: {(succsess: Bool) in
+                if succsess{
                 // Make sure shootPhotoMode is single, if so, go ahead startShootPhoto
                 self.camera?.setShootPhotoMode(DJICameraShootPhotoMode.single, withCompletion: {(error: Error?) in
-                    // Take photo and save to sdCard
-                    self.camera?.startShootPhoto(completion: { (error) in
-                        // startShootPhoto returns before resource is available for next action, wait to be sure resource is available when code returns.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: {
+                    if error != nil{
+                        print("Error setting ShootPhotoMode to single")
+                        completion(false)
+                    }
+                    else{
+                        // Take photo and save to sdCard
+                        self.camera?.startShootPhoto(completion: { (error) in
+                            // Camera is wrinting to sdCard AFTER photo is completed!
                             if error != nil {
-                                NSLog("Shoot Photo Error: " + String(describing: error))
+                                print("Shoot Photo Error: " + String(describing: error))
                                 completion(false)
                             }
-                            else{ // Write metadata
-                                if self.subscriptions.image_XYZ{
-                                    if self.writeMetaDataXYZ(){
-                                        // Metadata was successfully written
-                                        _ = 1
-                                    }
-                                    else{
-                                        print("MetaData failed to write, initiating ")
-                                    }
-                                }
+                            else{
                                 completion(true)
                             }
                         })
-                    })
+                    }
                 })
             }
             else{
                 print("cameraSetMode failed")
                 completion(false)
             }
-        })
+       })
     }
     
     //*********************************************************
     //Function executed when a take_picture command is received
-    func takePictureCMD(){
-        Dispatch.background{
-            self.captureImage(completion: {(success) in
-                self.cameraAllocator.deallocate()
-                Dispatch.main{
-                    if success{
-                        self.printSL("Take Photo sucessfully completed")
-                        //self.cameraAllocator.deallocate()
+    func takePhotoCMD(){
+        self.capturePhoto(completion: {(success) in
+                if success{
+                    self.sessionIndex += 1
+                    if self.writeMetaDataXYZ(){
+                            // Metadata was successfully written
+                            print("Metadata written")
+                        }
+                        else{
+                            print("MetaData failed to write, initiating ")
+                        }
+                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Take Photo sucessfully completed"])
                     }
-                    else{
-                        self.printSL("Take Photo failed to complete")
-                        //lself.cameraAllocator.deallocate()
-                    }
+                else{
+                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Take Photo failed to complete"])
                 }
-            })
-            
-        }
-
+            // The camera has not starte writing to sdCard yet, but lock the resource for now to prevent allocator from releasing.
+            self.cameraAllocator.setAuxOccopier(boolValue: true)
+            self.cameraAllocator.deallocate()
+        })
     }
+    
     // ***********************************************************************************************************************************************
     // cameraSetMode checks if the newCamera mode is the active mode, and if not it tries to set the mode 'attempts' times. TODO - is attemtps needed?
     func cameraSetMode(_ newCameraMode: DJICameraMode,_ attempts: Int, completionHandler: @escaping (Bool) -> Void) {
-        if attempts <= 0{
-            self.printSL("CameraSetMode error: too many")
-            completionHandler(false)
-        }
-        self.cameraModeReference = newCameraMode
-        // Check if the wanted camera mode is already set
-        self.camera?.getModeWithCompletion( {(mode: DJICameraMode, error: Error?) in
-            if error != nil{
-                self.printSL("CameraGetMode Error: " + error.debugDescription)
-                completionHandler(false)
-            }
-            else{
-                self.cameraModeAcitve = mode
-                if self.cameraModeAcitve == self.cameraModeReference{
-                    print("Camera Mode is set")
-                    completionHandler(true)
-                }
-                else{
-                    self.camera?.setMode(newCameraMode, withCompletion: {(error) in
-                        self.cameraSetMode(newCameraMode, attempts - 1, completionHandler: {(succsess: Bool) in
-                            if succsess{
-                                completionHandler(true) // refers to inital completionHandler
-                            }
-                        })
-                    })
-                }
-            }
-        })
-    }
+     
+         // Don't loop for ever
+         if attempts <= 0{
+             NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Error: Camera set mode - too many"])
+             completionHandler(false)
+             return
+         }
+                     
+         // Cameramode seems to automatically be reset to single photo. We cannot use local variable to store the mode. Hence getting and setting the current mode should intefere equally, it is better to set directly than first getting, checking and then setting.
+         // Set mode to newCameraMode. If there is a fault call the function again.
+         self.camera?.setMode(newCameraMode, withCompletion: {(error: Error?) in
+             if error != nil {
+                 self.cameraSetMode(newCameraMode, attempts - 1 , completionHandler: {(success: Bool) in
+                 if success{
+                     completionHandler(true)
+                     }
+                 })
+             }
+             else{
+                 // Camera mode must be successfully set
+                 completionHandler(true)
+             }
+         })
+     }
+    
     
     
     // Function could be redefined to send a notification that updates the GUI
@@ -300,24 +319,170 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         print(str)
     }
     
+
+    
+    // Can be moved to separate file
+    //*********************************************************
+    // NOT USED Load an UIImage from memory using a path string
+    func loadUIImageFromMemory(path: String){
+        let photo = UIImage(contentsOfFile: path)
+        self.previewImageView.image = photo
+        print("Previewing photo from path")
+    }
+    
+    //
+    // Function executed when incoming command is download_picture
+    func downloadPictureCMD(){
+        // First download from sdCard
+        self.savePhoto(completionHandler: {(saveSuccess) in
+            self.cameraAllocator.deallocate()
+            if saveSuccess {
+                self.printSL("Image downloaded to App")
+                print("Publish photo on PUB-socket")
+                let photoData = self.lastPhotoData
+                var json_photo = JSON()
+                json_photo["photo"].stringValue = getBase64utf8(data: photoData)
+                json_photo["metadata"] = self.jsonMetaData[String(self.sessionIndex)]
+                print(self.jsonMetaData)
+                _ = self.publish(topic: "photo", json: json_photo)
+            }
+            else{
+                self.printSL("Download from sdCard Failed")
+            }
+        })
+    }
+
+    
+    //**********************************************************************
+     // Save photo from sdCardto app memory. Setup camera then call getImage
+     func savePhoto(completionHandler: @escaping (Bool) -> Void){
+         cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(success: Bool) in
+             if success {
+                 self.getImage(completionHandler: {(new_success: Bool) in
+                     if new_success{
+                         completionHandler(true)
+                     }
+                     else{
+                        completionHandler(false)
+                     }
+                 })
+             }
+             else{
+                 completionHandler(false)
+             }
+         })
+     }
+    
+    
+    //*****************************************************************************************
+    // Downloads an photoData from sdCard. Saves photoData to app. Can preview photo on screen
+    func getImage(completionHandler: @escaping (Bool) -> Void){
+        let manager = self.camera?.mediaManager
+        manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
+            print("Refreshing file list...")
+            if error != nil {
+                completionHandler(false)
+                self.printSL("Refresh file list Failed")
+                return
+            }
+            
+            // Get file references
+            guard let files = manager?.sdCardFileListSnapshot() else {
+                self.printSL("No photos on sdCard")
+                completionHandler(false)
+                return
+            }
+            
+            // Print number of files on sdCard and note the first photo of the session if not already done
+            self.printSL("Files on sdCard: " + String(describing: files.count))
+            if self.sdFirstIndex == -1 {
+                self.sdFirstIndex = files.count - self.sessionIndex
+                // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonMetaData[self.sessionIndex = 1]
+            }
+            
+            // Update Metadata with filename for the n last pictures without a filename added already
+            for i in stride(from: self.sessionIndex, to: 0, by: -1){
+                if files.count < self.sdFirstIndex + i{
+                    self.sessionIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but session index is increased. This 'fixes' this issue..
+                    print("Session index faulty. Some images were not saved on sdCard..")
+                }
+                if self.jsonMetaData[String(i)]["fileName"] == ""{
+                    self.jsonMetaData[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
+                    print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
+                }
+                else{
+                    // Picture n has a filename -> so does n+1, +2, +3 etc break!
+                    break
+                }
+            }
+            
+            // Save metadata to app memory // TODO is this used?
+//            do {
+//                let rawMetaData = try self.jsonMetaData.rawData()
+//                self.saveDataToApp(data: rawMetaData, filename: "metaData.json")
+//            }
+//            catch {
+//                print("Error \(error)")
+//            }
+            
+            let index = files.count - 1
+            
+            // Create a photo container for this scope
+            var photoData: Data?
+            var i: Int?
+            
+            // Download bachthwise, append data. Closure is called each time data is updated.
+            files[index].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
+                if error != nil{
+                    // THis happens if download is triggered to close to taking a picture. Is the allocator used?
+                    self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
+                    completionHandler(false)
+                }
+                else if isComplete {
+                    if let photoData = photoData{
+                        self.lastPhotoData = photoData
+                        self.savePhotoDataToApp(photoData: photoData, filename: files[index].fileName)
+                        completionHandler(true)
+                        }
+                    else{
+                        self.printSL("Fetch photo from sdCard Failed")
+                        completionHandler(false)
+                    }
+                }
+                else {
+                    // If photo has been initialized, append the updated data to it
+                    if let _ = photoData, let data = data {
+                        photoData?.append(data)
+                        i! += 1
+                        // TODO - progress bar
+                    }
+                    else {// initialize the photo data
+                        photoData = data
+                        i = 1
+                    }
+                }
+            })
+        })
+    }
+    
     //********************************************
-    // Save ImageData to app, set URL to the objet
-    func saveImageDataToApp(imageData: Data, filename: String){
+    // Save PhotoData to app, set URL to the objet
+    func savePhotoDataToApp(photoData: Data, filename: String){
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         if let documentsURL = documentsURL {
             let fileURL = documentsURL.appendingPathComponent(filename)
-            self.lastImageDataURL = fileURL
-            self.lastImageDataFilename = filename
+            self.lastPhotoDataURL = fileURL
+            self.lastPhotoDataFilename = filename
             do {
-                try imageData.write(to: fileURL, options: .atomicWrite)
+                try photoData.write(to: fileURL, options: .atomicWrite)
             } catch {
-                self.printSL("Could not write imageData to App: " + String(describing: error))
+                self.printSL("Could not write photoData to App: " + String(describing: error))
             }
         }
     }
     
     //********************************************
-    // Save ImageData to app, set URL to the objet
+    // Save PhotoData to app, set URL to the objet
     func saveDataToApp(data: Data, filename: String){
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         if let documentsURL = documentsURL {
@@ -334,174 +499,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     
     // Can be moved to separate file
-    //*********************************************************
-    // NOT USED Load an UIImage from memory using a path string
-    func loadUIImageFromMemory(path: String){
-        let image = UIImage(contentsOfFile: path)
-        self.previewImageView.image = image
-        print("Previewing image from path")
-    }
-    
-    //
-    // Function executed when incoming command is download_picture
-    func downloadPictureCMD(){
-    // Download picture code
-        Dispatch.background{
-            // First download from sdCard
-            self.savePhoto(completionHandler: {(saveSuccess) in
-                print("Deallocating cameraAllocator")
-                self.cameraAllocator.deallocate()
-                if saveSuccess {
-                    self.printSL("Image downloaded to App")
-                    
-                    Dispatch.superBackground{
-                        // Scp to server. Use ssh allocator
-                        if self.sshAllocator.allocate("download_picture", maxTime: 50){
-                            self.scpToServer(completion: {(scpSuccess, pending, info) in
-                                Dispatch.main{
-                                    if pending{
-                                        self.printSL(info)
-                                    }
-                                    else{
-                                        if scpSuccess{
-                                            self.printSL("Uploaded: " + info)
-                                            print("Scp to server ok")
-                                        }
-                                        else{
-                                            self.printSL("Scp failed: " + info)
-                                        }
-                                        self.sshAllocator.deallocate()
-                                    }
-                                }
-                            })
-                        }
-                        else{
-                            self.printSL("Ssh allocator busy")
-                        }
-                    }
-                }
-                else{
-                    self.printSL("Download from sdCard Failed")
-                }
-            })
-        }
-    }
-
-    
-    //**********************************************************************
-     // Save photo from sdCardto app memory. Setup camera then call getImage
-     func savePhoto(completionHandler: @escaping (Bool) -> Void){
-         cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(success: Bool) in
-             if success {
-
-                 self.getImage(completionHandler: {(new_success: Bool) in
-                     if new_success{
-                         //self.printSL("Photo downloaded and saved to App memory")
-                         completionHandler(true)
-                     }
-                     else{
-                        completionHandler(false)
-                     }
-                 })
-             }
-             else{
-                 completionHandler(false)
-             }
-         })
-     }
-     
-     
-    //*****************************************************************************************
-    // Downloads an imageData from sdCard. Saves imageData to app. Can previews image on screen
-    func getImage(completionHandler: @escaping (Bool) -> Void){
-        let manager = self.camera?.mediaManager
-        manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
-            print("Refreshing file list...")
-            if error != nil {
-                completionHandler(false)
-                self.printSL("Refresh file list Failed")
-            }
-            else{ // Get file references
-                guard let files = manager?.sdCardFileListSnapshot() else {
-                    self.printSL("No images on sdCard")
-                    completionHandler(false)
-                    return
-                }
-                self.printSL("Files on sdCard: " + String(describing: files.count))
-                if self.sdFirstIndex == -1 {
-                    self.sdFirstIndex = files.count - self.sessionIndex
-                    // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonMetaData[self.sessionIndex = 1]
-                }
-                // Update Metadata with filename for the n last pictures without a filename added already
-                for i in stride(from: self.sessionIndex, to: 0, by: -1){
-                    if self.jsonMetaData[String(i)]["fileName"] == ""{
-                        self.jsonMetaData[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
-                        print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
-                    }
-                    else{
-                        break
-                    }
-                }
-                
-                // Save metadata to app memory
-                do {
-                    let rawMetaData = try self.jsonMetaData.rawData()
-                    self.saveDataToApp(data: rawMetaData, filename: "metaData.json")
-                    print("metaData saved to app memory")
-                }
-                catch {
-                    print("Error \(error)")
-                }
-                
-                
-                
-                let index = files.count - 1
-                // Create a image container for this scope
-                var imageData: Data?
-                var i: Int?
-                // Download bachthwise, append data. Closure is called each time data is updated.
-                files[index].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
-                    if error != nil{
-                        // THis happens if download is triggered to close to taking a picture. Is the allocator used?
-                        self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
-                        completionHandler(false)
-                    }
-                    else if isComplete { // No more data blocks to collect
-                        if let imageData = imageData{
-                            var json_pic = JSON()
-                            json_pic["pic"].stringValue = getBase64utf8(data: imageData)
-                            _ = self.publish(topic: "pic", json: json_pic)
-                            
-                            self.saveImageDataToApp(imageData: imageData, filename: files[index].fileName)
-                            completionHandler(true)
-                            }
-                        else{
-                            self.printSL("Fetch image from sdCard Failed")
-                            completionHandler(false)
-                        }
-                    }
-                    else {
-                        // If image has been initialized, append the updated data to it
-                        if let _ = imageData, let data = data {
-                            imageData?.append(data)
-                            i! += 1
-                            // TODO - progress bar
-                            //self.printSL("Appending data to image" + String(describing: i))
-                        }
-                        // initialize the image data
-                        else {
-                            imageData = data
-                            i = 1
-                        }
-                    }
-                })
-            }
-        })
-    }
-    
-    // Can be moved to separate file
     // ******************************************************************
-    // Download the preview of the last image taken. Preview it on screen
+    // Download the preview of the last photo taken. Preview it on screen
     func getPreview(completionHandler: @escaping (Bool) -> Void){
         let manager = self.camera?.mediaManager
         manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
@@ -512,7 +511,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
             else{
                 guard let files = manager?.sdCardFileListSnapshot() else {
-                    self.printSL("No images on sdCard")
+                    self.printSL("No photos on sdCard")
                     completionHandler(true)
                     return
                 }
@@ -531,114 +530,17 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
         })
     }
-
-    // Scp image saved to app memory to host. Connect using RSA-keys. SFTP could be faster. Also increse buffer size could have impact. Approx 45s from photo to file on server over vpn, 12s over local network..
-    // generate rsa key using ssh-keygen -m PEM to get it the requred format! https://github.com/NMSSH/NMSSH/issues/265
-    func scpToServer(completion: @escaping (Bool, Bool, String) -> Void){
-        // OSX acitvate sftp server by enablign file sharing in system prefs
-        // sftp session muyst be silent.. add this to bashrc on server [[ $- == *i* ]] || return, found at https://unix.stackexchange.com/questions/61580/sftp-gives-an-error-received-message-too-long-and-what-is-the-reason
-        var success = false
-        var info = ""
-        var pending = true
-        // Pick up private key from file.
-        let urlPath = Bundle.main.url(forResource: "digmet_id_rsa", withExtension: "")
-
-        // Try privatekeysting
-        do{
-         let privatekeystring = try String(contentsOf: urlPath!, encoding: .utf8)
-         let ip = self.hostIp
-         let username = self.hostUsername
-         let session = NMSSHSession(host: ip, andUsername: username)
-        
-         completion(success, pending, "Connecting to server..")
-         session.connect()
-         if session.isConnected == true{
-             session.authenticateBy(inMemoryPublicKey: "", privateKey: privatekeystring, andPassword: nil)
-             if session.isAuthorized == true {
-                // Upload Data object
-                completion(success, pending, "Uploading " + self.lastImageDataFilename + "...")
-                let fileNameUploading = self.lastImageDataFilename // This can change during upload process..
-                
-                // Find the MetaData to attach when file is uploaded (if subscribed)
-                var metaData = JSON()
-                for i in stride(from: self.sessionIndex, to: 0, by: -1){
-                    if self.jsonMetaData[String(i)]["fileName"].stringValue == fileNameUploading{
-                        metaData = self.jsonMetaData[String(i)]
-                    }
-                }
-                
-                // Upload the file
-                session.channel.uploadFile(self.lastImageDataURL!.path, to: self.hostPath)
-                session.channel.uploadFile(self.metaDataURL!.path, to: self.hostPath)
-
-                info = fileNameUploading
-                if self.subscriptions.image_XYZ{
-                    _ = self.publish(topic: "image_XYZ", json: metaData) // metadata for this picture
-                }
-                success = true
-             }
-             else{
-                info = "Not authorized"
-                success = false
-             }
-             session.disconnect()
-         }
-         else{
-             info = "Could not connect to: " + String(describing: ip) + " Check ip refernce."
-             success = false
-         }
-        }
-       catch {
-        info = "Private keystring could not be loaded from file"
-        success = false
-        }
-    pending = false
-    completion(success, pending, info)
-    }
-
-       //**********************************************
-       // SSH into host, pwd and print result to screen
-    func pwdAtServer(completion: @escaping (Bool, String) -> Void ){
-        let urlPath = Bundle.main.url(forResource: "digmet_id_rsa", withExtension: "")
-        var success = false
-        var returnStr = ""
-            
-        // Try privatekeysting
-        do{
-            let privatekeystring = try String(contentsOf: urlPath!, encoding: .utf8)
-            let ip = self.hostIp
-            let username = self.hostUsername
-            let session = NMSSHSession(host: ip, andUsername: username)
     
-            
-            session.connect()
-            if session.isConnected == true{
-                session.authenticateBy(inMemoryPublicKey: "", privateKey: privatekeystring, andPassword: nil)
-                if session.isAuthorized == true {
-                    var error: NSError?
-                    let response: String = session.channel.execute("pwd", error: &error)
-                    let lines = response.components(separatedBy: "\n")
-                    returnStr = lines[0]
-                    success = true
-                }
-                else{
-                    success = false
-                    returnStr = "Authentication failed"
-                }
-                session.disconnect()
-            }
-            else{
-                success = false
-                returnStr = "Could not connect to: " + String(describing: ip) + " Check ip refernce."
-            }
-           }
-           catch{
-            success = false
-               returnStr = "Could not read rsa keyfile"
-           }
-        completion(success, returnStr)
-   }
-
+    
+    
+//    // Find the MetaData to attach when file is uploaded (if subscribed)
+//                  var metaData = JSON()
+//                  for i in stride(from: self.sessionIndex, to: 0, by: -1){
+//                      if self.jsonMetaData[String(i)]["fileName"].stringValue == fileNameUploading{
+//                          metaData = self.jsonMetaData[String(i)]
+//                      }
+//                  }
+    
        
     //**************************
     // Init the publisher socket
@@ -660,14 +562,18 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         let publishStr = getJsonStringAndTopic(topic: topic, json: json)
         do{
             try self.publisher?.send(string: publishStr)
-            if topic != "pic"{
+            if topic != "photo"{
                 print("Published: " + publishStr)
+            }
+            else{
+                print("Published photo with metadata: ")
+                print(json["metadata"])
             }
             return true
         }
         catch{
-            if topic == "pic"{
-                print("Tried to publish pic, but failed.")
+            if topic == "photo"{
+                print("Tried to publish photo, but failed.")
             }
             else{
             print("Tried to publish, but failed: " + publishStr)
@@ -730,10 +636,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     // Data stream code
                     switch json_m["arg"]["attribute"]{
                         case "XYZ":
-                            self.subscriptions.XYZ = json_m["arg"]["enable"].boolValue
+                            self.subscriptions.setXYZ(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
-                        case "image_XYZ":
-                            self.subscriptions.image_XYZ = json_m["arg"]["enable"].boolValue
+                        case "photo_XYZ":
+                            self.subscriptions.setPhotoXYZ(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
                         default:
                             json_r = createJsonNack("data_stream")
@@ -801,16 +707,17 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 switch json_m["arg"]["cmd"]{
                     case "take_picture":
                         self.printSL("Received cmd photo with arg take_picture")
+                        
                         if self.cameraAllocator.allocate("take_picture", maxTime: 3) {
                             json_r = createJsonAck("photo")
-                            takePictureCMD()
+                            takePhotoCMD()
                         }
                         else{ // camera resource busy
                             json_r = createJsonNack("photo")
                         }
                     case "download_picture":
                         self.printSL("Received cmd photo with arg download_picture")
-                        if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
+                        if self.cameraAllocator.allocate("download_picture", maxTime: 14) {
                             json_r = createJsonAck("photo")
                             downloadPictureCMD()
                         }
@@ -848,12 +755,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.printSL("Received cmd upload_mission_XYZ")
                     
                     let (success, arg) = copter.uploadMissionXYZ(mission: json_m["arg"])
-                     if success{
+                    if success{
                         json_r = createJsonAck("upload_mission_XYZ")
-                     }
-                     else{
+                    }
+                    else{
                         json_r = createJsonNack("upload_mission_XYZ")
-                        print("Mission upload failed: " + arg!)
+                        print("Mission upload failed: " + arg)
                     }
                 default:
                     json_r = createJsonNack("API call not recognized")
@@ -868,7 +775,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 }
                 if json_r["arg"].stringValue != "heart_beat"{
                     print("Reply:")
-                    print(json_r)
+                   // print(json_r)
                     print(reply_str)
                 }
                 
@@ -966,25 +873,26 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
         
         
-//        if self.subscriptions.image_XYZ{
-//            self.subscriptions.image_XYZ = false
+//        if self.subscriptions.photoXYZ{
+//            self.subscriptions.photo_XYZ = false
 //            print("Subscription false")
 //            self.gimbalController.setPitch(pitch: -90)
 //        }
 //        else{
-//            self.subscriptions.image_XYZ = true
+//            self.subscriptions.photoXYZ = true
 //            print("Subscription true")
 //            self.gimbalController.setPitch(pitch: 12.2)
 //        }
+        self.downloadPictureCMD()
     }
 
     //***************************************************************************************************************
     // Sends a command to go body left for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
-        // Load image from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
+        // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
         //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
-        //self.previewImageView.image = loadUIImageFromPhotoLibrary()
-        //saveImageDataToApp(imageData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
+        //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
+        //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
         
         previewImageView.image = nil
         // Set the control command
@@ -1042,8 +950,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //        }
         
         //copter.gogoXYZ(startWp: 0)
-        self.subscriptions.image_XYZ = true
-        takePictureCMD()
+        self.subscriptions.photoXYZ = true
+        takePhotoCMD()
     }
     
     //********************************************************
@@ -1051,16 +959,16 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     @IBAction func takePhotoButton(_ sender: Any) {
          //copter.gotoXYZ(refPosX: 0, refPosY: 0, refPosZ: -15)
 
-//        previewImageView.image = nil
-//        statusLabel.text = "Capture image button pressed, preview cleared"
+//        previewImageView.photo = nil
+//        statusLabel.text = "Capture photo button pressed, preview cleared"
 
 //        setGimbalPitch(pitch: self.nextGimbalPitch)
 //        updateGnextGimbalPitch()
 //
         copter.posCtrlTimer?.invalidate()
-        // Dispatch to wait in the pitch movement, then capture an image. TODO - use closure instead of stupid timer.
+        // Dispatch to wait in the pitch movement, then capture an photo. TODO - use closure instead of stupid timer.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
-            self.captureImage(completion: {(success) in
+            self.capturePhoto(completion: {(success) in
                 if success {
                     self.printSL("Photo successfully taken")
                 }
@@ -1072,7 +980,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     //**********************************************
-    // Download and preview the last image on sdCard
+    // Download and preview the last photo on sdCard
     @IBAction func previewPhotoButton(_ sender: Any) {
         // download a preview of last photo, dipsply preview
         cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(succsess: Bool) in
@@ -1093,7 +1001,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
 
     //*************************************************************************
-    // Download last imageData from sdCard and save to app memory. Save URL to self.
+    // Download last photoData from sdCard and save to app memory. Save URL to self.
     @IBAction func savePhotoButton(_ sender: Any) {
         savePhoto(){(success) in
             if success{
@@ -1106,25 +1014,25 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Test button. Uses ssh to 'pwd' on the host and prints the answer to screen
     @IBAction func getDataButton(_ sender: UIButton) {
         Dispatch.background{
-            self.pwdAtServer(completion: {(success, info) in
-                Dispatch.main{
-                    if success{
-                        self.printSL("PWD result: " + info)
-                    }
-                    else{
-                        // Do something more..?
-                        self.printSL("PWD fail: " + info)
-                    }
-                }
-            })
+//            self.pwdAtServer(completion: {(success, info) in
+//                Dispatch.main{
+//                    if success{
+//                        self.printSL("PWD result: " + info)
+//                    }
+//                    else{
+//                        // Do something more..?
+//                        self.printSL("PWD fail: " + info)
+//                    }
+//                }
+//            })
         }
     }
     
     //***********************************************
-    // Button to scp the last saved imageData to host
+    // Button to scp the last saved photoData to host
     @IBAction func putDatabutton(_ sender: UIButton) {
-        if self.lastImageDataURL == nil{
-            self.printSL("No image to upload")
+        if self.lastPhotoDataURL == nil{
+            self.printSL("No photo to upload")
             return
         }
         if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
@@ -1241,12 +1149,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             // Store the camera refence
             if let cam = product.camera {
                 self.camera = cam
-                self.image_index = self.camera?.index // Not used
                 self.camera?.setPhotoAspectRatio(DJICameraPhotoAspectRatio.ratio4_3, withCompletion: {(error) in
                     if error != nil{
                         self.printSL("Aspect ratio 4:3 could not be set")
                     }
                 })
+                self.startListenToCamera()
             }
             else{
                 setupOk = false

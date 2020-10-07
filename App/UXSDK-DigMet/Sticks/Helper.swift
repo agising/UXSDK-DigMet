@@ -19,35 +19,57 @@ class Allocator: NSObject{
     private var name = ""
     private var dateAllocated = Date()
     private var maxTime = Double(0)
+    private var auxOccupier = false // Monitor reading to sdCard, update auxOccupier. Allocator will not deallocate until auxOccupier is true.
     
     init(name: String){
         self.name = name
     }
     
+    // ******************************************************************************************************************************************
+    // Set additional lock prevent the lock from beeing released prior to all clients are using the resource. Specifically made for sdCard access
+    func setAuxOccopier(boolValue: Bool){
+        self.auxOccupier = boolValue
+        print("sdCard occupied: " + String(describing: boolValue))
+    }
+    
+    // *****************************************************************
+    // Allocate a resource, if it is available or if max-time has passed
     func allocate(_ owner: String, maxTime: Double)->Bool{
         // Check if it is rightfully allocated
         if self.allocated{
             if self.maxTime > self.timeAllocated(){
                 // Resource is rightfully allocated
-                let tempStr = self.name + "-Allocator : Resource occupied by " + self.owner + ", " + owner + "tried to occupy"
+                let tempStr = self.name + "Allocator : Resource occupied by " + self.owner + ", " + owner + "tried to occupy"
                 print(tempStr)
                 return false
             }
-            print(self.name + "-Allocator : Forcing allocation from " + self.owner)
+            print(self.name + "Allocator : Forcing allocation from " + self.owner)
         }
         // Resource is not rightfully allocated -> Allocate it!
         self.allocated = true
         self.owner = owner
         self.dateAllocated = Date()
         self.maxTime = maxTime
+        self.auxOccupier = false
         return true
     }
     
     
     func deallocate(){
-        print("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
-        self.allocated = false
-        self.owner = ""
+        if self.auxOccupier {
+            Dispatch.background{
+                do{
+                    print("Sleeping for 0.1s")
+                    usleep(100000)
+                }
+                self.deallocate()
+            }
+        }
+        else{
+            print("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
+            self.allocated = false
+            self.owner = ""
+        }
     }
 
     func timeAllocated()->Double{
@@ -63,7 +85,17 @@ class Allocator: NSObject{
 
 class Subscriptions: NSObject{
     var XYZ = false
-    var image_XYZ = false
+    var photoXYZ = false
+    
+    func setXYZ(bool: Bool){
+        XYZ = bool
+        print("Subscription XYZ set to: " + String(describing: bool))
+    }
+
+    func setPhotoXYZ(bool: Bool){
+        photoXYZ = bool
+        print("Subscription photoXYZ set to: " + String(describing: bool))
+    }
 }
 
 
@@ -104,5 +136,8 @@ func saveUIImageToPhotosAlbum(image: UIImage){
 }
 
 
+
+
+// To be a camera class
 
 
