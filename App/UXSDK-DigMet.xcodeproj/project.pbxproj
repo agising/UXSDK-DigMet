@@ -15,12 +15,12 @@
 		971DFA1D250B4B9900FD6185 /* zmqHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA1C250B4B9800FD6185 /* zmqHelper.swift */; };
 		971DFA1F250B4BBE00FD6185 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA1E250B4BBE00FD6185 /* Extensions.swift */; };
 		971DFA21250B738C00FD6185 /* AircraftHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA20250B738C00FD6185 /* AircraftHelper.swift */; };
+		9729962E252311F300749C9C /* GimbalHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9729962D252311F300749C9C /* GimbalHelper.swift */; };
 		9738BB3E24F9197B000275FA /* Retry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9738BB3D24F9197B000275FA /* Retry.swift */; };
 		9771889024FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */; };
 		9785CA1A251937250075F1A8 /* Helper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9785CA19251937250075F1A8 /* Helper.swift */; };
 		979B35DA24F0173100236AEE /* SticksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979B35D924F0173100236AEE /* SticksViewController.swift */; };
 		979B35DC24F0176B00236AEE /* Sticks.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 979B35DB24F0176B00236AEE /* Sticks.storyboard */; };
-		97C60830250BC5C2007B45AF /* digmet_id_rsa in Resources */ = {isa = PBXBuildFile; fileRef = 97C6082F250BC5C2007B45AF /* digmet_id_rsa */; };
 		A452DC382070D8CC00EFBA30 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A452DC252070D8CB00EFBA30 /* AppDelegate.swift */; };
 		A452DC392070D8CC00EFBA30 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A452DC262070D8CB00EFBA30 /* Assets.xcassets */; };
 		A452DC3A2070D8CC00EFBA30 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A452DC272070D8CB00EFBA30 /* LaunchScreen.storyboard */; };
@@ -66,12 +66,12 @@
 		971DFA1C250B4B9800FD6185 /* zmqHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = zmqHelper.swift; sourceTree = "<group>"; };
 		971DFA1E250B4BBE00FD6185 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		971DFA20250B738C00FD6185 /* AircraftHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftHelper.swift; sourceTree = "<group>"; };
+		9729962D252311F300749C9C /* GimbalHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GimbalHelper.swift; sourceTree = "<group>"; };
 		9738BB3D24F9197B000275FA /* Retry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Retry.swift; sourceTree = "<group>"; };
 		9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SticksViewControllerHelper.swift; sourceTree = "<group>"; };
 		9785CA19251937250075F1A8 /* Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helper.swift; sourceTree = "<group>"; };
 		979B35D924F0173100236AEE /* SticksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SticksViewController.swift; sourceTree = "<group>"; };
 		979B35DB24F0176B00236AEE /* Sticks.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Sticks.storyboard; sourceTree = "<group>"; };
-		97C6082F250BC5C2007B45AF /* digmet_id_rsa */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = digmet_id_rsa; path = ../../../../DIgMet/digmet_id_rsa; sourceTree = "<group>"; };
 		A452DC252070D8CB00EFBA30 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A452DC262070D8CB00EFBA30 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A452DC282070D8CB00EFBA30 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -224,6 +224,7 @@
 				9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */,
 				971DFA20250B738C00FD6185 /* AircraftHelper.swift */,
 				9785CA19251937250075F1A8 /* Helper.swift */,
+				9729962D252311F300749C9C /* GimbalHelper.swift */,
 			);
 			path = Sticks;
 			sourceTree = "<group>";
@@ -234,7 +235,6 @@
 				979B35D224F0165800236AEE /* Sticks */,
 				A452DC252070D8CB00EFBA30 /* AppDelegate.swift */,
 				A452DC262070D8CB00EFBA30 /* Assets.xcassets */,
-				97C6082F250BC5C2007B45AF /* digmet_id_rsa */,
 				A452DC272070D8CB00EFBA30 /* LaunchScreen.storyboard */,
 				A452DC2F2070D8CB00EFBA30 /* Info.plist */,
 				53EDD5F12346F384002E28AF /* ProductCommunication */,
@@ -317,7 +317,6 @@
 			files = (
 				A452DC3C2070D8CC00EFBA30 /* DefaultLayout.storyboard in Resources */,
 				A452DC3A2070D8CC00EFBA30 /* LaunchScreen.storyboard in Resources */,
-				97C60830250BC5C2007B45AF /* digmet_id_rsa in Resources */,
 				A452DC3B2070D8CC00EFBA30 /* Main.storyboard in Resources */,
 				A452DC3D2070D8CC00EFBA30 /* DefaultLayoutCustomization.storyboard in Resources */,
 				A452DC442070D8CC00EFBA30 /* PanelsCollections.storyboard in Resources */,
@@ -419,6 +418,7 @@
 				A452DC462070D8CC00EFBA30 /* ProductCommunicationService.swift in Sources */,
 				9738BB3E24F9197B000275FA /* Retry.swift in Sources */,
 				A452DC422070D8CC00EFBA30 /* MapWidgetViewController.swift in Sources */,
+				9729962E252311F300749C9C /* GimbalHelper.swift in Sources */,
 				A452DC3E2070D8CC00EFBA30 /* DefaultLayoutCustomizationViewController.swift in Sources */,
 				A452DC482070D8CC00EFBA30 /* WidgetsViewController.swift in Sources */,
 				A452DC432070D8CC00EFBA30 /* MyBatteryWidget.swift in Sources */,

@@ -23,6 +23,7 @@ class Copter {
     var missionNextWp = -1
     var missionNextWpId = "id-1"
     var missionIsActive = false
+    var wpActionExecuting = false
 
     var posX: Double = 0
     var posY: Double = 0
@@ -73,7 +74,7 @@ class Copter {
     private let hPosKP: Float = 0.9     // Test KP 2!
     private let vPosKP: Float = 1
     private let vVelKD: Float = 0
-    private let yawKP: Float = 5
+    private let yawKP: Float = 10
     
     
     // Init
@@ -560,6 +561,16 @@ class Copter {
         return (true, "")
     }
     
+    func getAction(num: Int)->String{
+        let id = "id" + String(num)
+        if self.mission[id]["action"].exists(){
+            return self.mission[id]["action"].stringValue
+        }
+        else{
+            return ""
+        }
+    }
+    
     func getWPXYZYaw(num: Int)->(Double, Double, Double, Double){
         let id = "id" + String(num)
         let x = self.mission[id]["x"].doubleValue
@@ -682,9 +693,20 @@ extension Copter{
     @objc func firePosCtrlTimer() {
         posCtrlLoopCnt += 1
         // If we arrived
-        
         if trackingWP(posLimit: trackingPosLimit, velLimit: trackingVelLimit){
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
+            
+            // Check for wp action
+            let action = getAction(num: self.missionNextWp)
+            if action == "take_photo"{
+                //self.wpActionExecuting = true
+                NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+            }
+//            // While while wpAction is being executed
+//            while self.wpActionExecuting{
+//                usleep(1000000/10)
+//                print("third")
+//            }
             
             // if we are on a mission
             if self.missionIsActive{

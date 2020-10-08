@@ -35,10 +35,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     let hostUsername = "gising"
     let hostPath = "/Users/gising/temp/"
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
-    var publisher: SwiftyZeroMQ.Socket?
+    var infoPublisher: SwiftyZeroMQ.Socket?
+    var dataPublisher: SwiftyZeroMQ.Socket?
     var replyEnable = false
     let replyEndpoint = "tcp://*:1234"
-    let publishEndPoint = "tcp://*:5558"
+    let infoPublishEndPoint = "tcp://*:5558"
+    let dataPublishEndPoint = "tcp://*:5559"
     var sshAllocator = Allocator(name: "ssh")
     var subscriptions = Subscriptions()
     
@@ -184,7 +186,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         var jsonMeta = JSON()
         let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
         print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
-        jsonMeta["fileName"] = JSON("")
+        jsonMeta["filename"] = JSON("")
         jsonMeta["x"] = JSON(self.copter.posX)
         jsonMeta["y"] = JSON(self.copter.posY)
         jsonMeta["z"] = JSON(self.copter.posZ)
@@ -193,7 +195,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         jsonMeta["index"] = JSON(self.sessionIndex)
 
         self.jsonMetaData[String(self.sessionIndex)] = jsonMeta
-        print(jsonMeta)
+        if self.subscriptions.photoXYZ{
+            _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: jsonMeta)
+        }
+        else{
+            print(jsonMeta)
+        }
         return true
     }
     
@@ -273,7 +280,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 else{
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Take Photo failed to complete"])
                 }
-            // The camera has not starte writing to sdCard yet, but lock the resource for now to prevent allocator from releasing.
+            // The camera has not started writing to sdCard yet, but lock the resource for now to prevent allocator from releasing.
             self.cameraAllocator.setAuxOccopier(boolValue: true)
             self.cameraAllocator.deallocate()
         })
@@ -344,7 +351,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 json_photo["photo"].stringValue = getBase64utf8(data: photoData)
                 json_photo["metadata"] = self.jsonMetaData[String(self.sessionIndex)]
                 print(self.jsonMetaData)
-                _ = self.publish(topic: "photo", json: json_photo)
+                _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
             }
             else{
                 self.printSL("Download from sdCard Failed")
@@ -406,8 +413,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.sessionIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but session index is increased. This 'fixes' this issue..
                     print("Session index faulty. Some images were not saved on sdCard..")
                 }
-                if self.jsonMetaData[String(i)]["fileName"] == ""{
-                    self.jsonMetaData[String(i)]["fileName"].stringValue = files[self.sdFirstIndex + i - 1].fileName
+                if self.jsonMetaData[String(i)]["filename"] == ""{
+                    self.jsonMetaData[String(i)]["filename"].stringValue = files[self.sdFirstIndex + i - 1].fileName
                     print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
                 }
                 else{
@@ -546,8 +553,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Init the publisher socket
     func initPublisher()->Bool{
         do{
-            self.publisher = try context.socket(.publish)
-            try self.publisher?.bind(self.publishEndPoint)
+            self.infoPublisher = try context.socket(.publish)
+            try self.infoPublisher?.bind(self.infoPublishEndPoint)
+            self.dataPublisher = try context.socket(.publish)
+            try self.dataPublisher?.bind(self.dataPublishEndPoint)
             return true
             }
         catch{
@@ -556,12 +565,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     //****************************************************************
-    // ZMQ publish socket. Puspishes string and serialized json-object
-    func publish(topic: String, json: JSON)->Bool{
+    // ZMQ publish socket. Publishes string and serialized json-object
+    func publish(socket: SwiftyZeroMQ.Socket?, topic: String, json: JSON)->Bool{
         // Create string with topic and json representation
         let publishStr = getJsonStringAndTopic(topic: topic, json: json)
         do{
-            try self.publisher?.send(string: publishStr)
+            try socket?.send(string: publishStr)
             if topic != "photo"{
                 print("Published: " + publishStr)
             }
@@ -615,8 +624,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 let _message: String? = try socket.recv()!
                 if self.replyEnable == false{ // Since code can halt on socket.recv(), check if input is still desired
                     return
-                }
-                
+                }   
+
                 // Parse and create an ack/nack
                 let json_m = getJsonObject(uglyString: _message!)
                 var json_r = JSON()
@@ -640,6 +649,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                             json_r = createJsonAck("data_stream")
                         case "photo_XYZ":
                             self.subscriptions.setPhotoXYZ(bool: json_m["arg"]["enable"].boolValue)
+                            json_r = createJsonAck("data_stream")
+                        case "WP_ID":
+                            self.subscriptions.setWpId(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
                         default:
                             json_r = createJsonNack("data_stream")
@@ -705,20 +717,24 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                 case "photo":
                 switch json_m["arg"]["cmd"]{
-                    case "take_picture":
-                        self.printSL("Received cmd photo with arg take_picture")
+                    case "take_photo":
+                        self.printSL("Received cmd photo with arg take_photo")
                         
-                        if self.cameraAllocator.allocate("take_picture", maxTime: 3) {
+                        if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
                             json_r = createJsonAck("photo")
+                            json_r["arg2"].stringValue = "take_photo"
                             takePhotoCMD()
                         }
                         else{ // camera resource busy
                             json_r = createJsonNack("photo")
                         }
-                    case "download_picture":
-                        self.printSL("Received cmd photo with arg download_picture")
-                        if self.cameraAllocator.allocate("download_picture", maxTime: 14) {
+                    case "download":
+                        self.printSL("Received cmd photo with arg download")
+                        if self.cameraAllocator.allocate("download", maxTime: 14) {
                             json_r = createJsonAck("photo")
+                            json_r["arg2"].stringValue = "download"
+                            let index = json_m["arg"]["index"]
+                            print("The download index argument: " + String(describing: index))
                             downloadPictureCMD()
                         }
                         else { // Camera resource busy
@@ -770,6 +786,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 // Create string from json and send reply
                 let reply_str = getJsonString(json: json_r)
                 try socket.send(string: reply_str)
+                                
                 if json_r["fcn"].stringValue == "nack"{
                     print(json_r)
                 }
@@ -814,7 +831,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         deactivateSticks()
         self.replyEnable = false
         
-        _ = try? self.publisher?.close()
+        _ = try? self.infoPublisher?.close()
+        _ = try? self.dataPublisher?.close()
         _ = try? self.context.close()
         _ = try? self.context.terminate()
         copter.stopListenToPos()
@@ -948,10 +966,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //                print("Aircraft not ready to set OriginXYZ")
 //            }
 //        }
-        
+        NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(1), "final_wp": String(2), "cmd": "gogo_XYZ"])
         //copter.gogoXYZ(startWp: 0)
-        self.subscriptions.photoXYZ = true
-        takePhotoCMD()
+//        self.subscriptions.photoXYZ = true
+//        takePhotoCMD()
     }
     
     //********************************************************
@@ -1028,41 +1046,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
-    //***********************************************
-    // Button to scp the last saved photoData to host
-    @IBAction func putDatabutton(_ sender: UIButton) {
-        if self.lastPhotoDataURL == nil{
-            self.printSL("No photo to upload")
-            return
-        }
-        if self.cameraAllocator.allocate("download_picture", maxTime: 12) {
-            downloadPictureCMD()
-        }
-        else{
-            self.printSL("Resource busy")
-        }
-        // If testing without drone, use this code instead of cameraAllocator.
-//        else{
-//            Dispatch.background{
-//                self.scpToServer(completion: {(success, pending, info) in
-//                    Dispatch.main{
-//                        if pending{
-//                            self.printSL(info)
-//                        }
-//                        else{
-//                            if success{
-//                                self.printSL("SCP ok: " + info)
-//                            }
-//                            else{
-//                                // Do something more..?
-//                                self.printSL("SCP fail: " + info)
-//                            }
-//                        }
-//                    }
-//                })
-//            }
-//        }
-    }
     
     //*************************************************
     // Update gui when nofication didposupdata happened
@@ -1070,6 +1053,30 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         self.posXLabel.text = String(format: "%.1f", copter.posX)
         self.posYLabel.text = String(format: "%.1f", copter.posY)
         self.posZLabel.text = String(format: "%.1f", copter.posZ)
+        
+        if subscriptions.XYZ{
+            guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
+                print("Error: Update XYZ gimbal yaw")
+                return}
+            guard let heading = self.copter.getHeading() else {
+                print("Error: Update XYZ copter heading")
+                return}
+            guard let startHeadingXYZ = self.copter.startHeadingXYZ else {
+                print("Start pos is not set")
+                // OriginXYZ is not yet set. Try to set it!
+                return
+                }
+            
+            let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
+            print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
+            var json = JSON()
+            json["x"].doubleValue = copter.posX
+            json["y"].doubleValue = copter.posX
+            json["z"].doubleValue = copter.posX
+            json["local_yaw"].doubleValue = localYaw
+
+            _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
+        }
     }
 
     //*************************************************
@@ -1094,8 +1101,37 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             for (key, value) in data{
                 json_o[key] = JSON(value)
             }
-            _ = self.publish(topic: "WP_ID", json:  json_o)
+            
+            // print to screen
             printSL("Going to WP " + json_o["next_wp"].stringValue)
+
+            // Publish if subscribed
+            if self.subscriptions.WpId {
+                _ = self.publish(socket: self.infoPublisher, topic: "WP_ID", json:  json_o)
+            }
+        }
+    }
+    
+    // ***************************************************************
+    // Execute a wp action. Signal wpActionExecuting = false when done
+    @objc func onDidWPAction(_ notification: Notification){
+        if let data = notification.userInfo as? [String: String]{
+            if data["wpAction"] == "take_photo"{
+                print("wp action take photo - Do it!")
+                //wait until camera is allocated
+//                Dispatch.background{
+//                    while !self.cameraAllocator.allocate("take_photo", maxTime: 3){
+//                        usleep(1000000/10)
+//                        print("first")
+//                    }
+//                    self.takePhotoCMD()
+//                    while self.cameraAllocator.allocated{
+//                        usleep(1000000/10)
+//                        print("second")
+//                    }
+//                    self.copter.wpActionExecuting = false
+//                }
+            }
         }
     }
     
@@ -1182,6 +1218,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(onDidVelUpdate(_:)), name: .didVelUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPrintThis(_:)), name: .didPrintThis, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onDidWPAction(_:)), name: .didWPAction, object: nil)
+        
 
         
 

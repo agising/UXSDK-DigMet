@@ -14,12 +14,12 @@ import DJIUXSDK
 //
 // Class to use for allocation of resources, like camera, gimbal, etc.
 class Allocator: NSObject{
-    private var allocated = false
-    private var owner = ""
-    private var name = ""
-    private var dateAllocated = Date()
-    private var maxTime = Double(0)
-    private var auxOccupier = false // Monitor reading to sdCard, update auxOccupier. Allocator will not deallocate until auxOccupier is true.
+    var allocated = false
+    var owner = ""
+    var name = ""
+    var dateAllocated = Date()
+    var maxTime = Double(0)
+    var auxOccupier = false // Monitor reading to sdCard, update auxOccupier. Allocator will not deallocate until auxOccupier is true.
     
     init(name: String){
         self.name = name
@@ -62,13 +62,14 @@ class Allocator: NSObject{
                     print("Sleeping for 0.1s")
                     usleep(100000)
                 }
-                self.deallocate()
+                _ = self.deallocate()
             }
         }
         else{
             print("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
             self.allocated = false
             self.owner = ""
+            
         }
     }
 
@@ -86,6 +87,7 @@ class Allocator: NSObject{
 class Subscriptions: NSObject{
     var XYZ = false
     var photoXYZ = false
+    var WpId = false
     
     func setXYZ(bool: Bool){
         XYZ = bool
@@ -96,6 +98,12 @@ class Subscriptions: NSObject{
         photoXYZ = bool
         print("Subscription photoXYZ set to: " + String(describing: bool))
     }
+    
+    func setWpId(bool: Bool){
+        WpId = bool
+        print("Subscription WP_ID set to: " + String(describing: bool))
+    }
+
 }
 
 

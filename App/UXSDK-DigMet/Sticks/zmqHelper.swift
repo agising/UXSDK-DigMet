@@ -43,8 +43,8 @@ func getJsonObject(uglyString: String) -> JSON {
 //**********************************************************************
 // Get ZMQ string consisting of the topic and the serialized json-object
 func getJsonStringAndTopic(topic: String, json: JSON) -> String{
-    let str1 = json.rawString(.utf8, options: .withoutEscapingSlashes)!
-    //let str2 = uglyfyString(string: str1)
+    var str1 = json.rawString(.utf8, options: .withoutEscapingSlashes)!
+    //str1 = uglyfyString(string: str1)
     let str3 = topic + " " + str1
     return str3
 }
