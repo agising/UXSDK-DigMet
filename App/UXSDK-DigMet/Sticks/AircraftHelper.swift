@@ -46,7 +46,7 @@ class Copter {
     
     var xyVelLimit: Float = 350 // cm/s horizontal speed
     var zVelLimit: Float = 150 // cm/s vertical speed
-    var yawRateLimit:Float = 30 // deg/s, defensive.
+    var yawRateLimit:Float = 50 // deg/s, defensive.
 
     var pos: CLLocation?
     var startHeading: Double?
@@ -74,7 +74,7 @@ class Copter {
     private let hPosKP: Float = 0.9     // Test KP 2!
     private let vPosKP: Float = 1
     private let vVelKD: Float = 0
-    private let yawKP: Float = 2
+    private let yawKP: Float = 3
     
     
     // Init
@@ -776,7 +776,12 @@ extension Copter{
             
             // Calc refyawrate
             let ref_heading = checkedStartHeading + self.ref_localYaw
-            self.ref_yawRate = Float(ref_heading - checkedHeading)*yawKP
+            var heading_error = Float(ref_heading - checkedHeading) // checked headsing [-180 180]
+            if heading_error > 180{
+                heading_error -= 360
+            }
+            
+            self.ref_yawRate = heading_error*yawKP
             
             print(self.ref_yawRate.description)
             
