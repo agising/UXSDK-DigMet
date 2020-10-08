@@ -46,7 +46,7 @@ class Copter {
     
     var xyVelLimit: Float = 350 // cm/s horizontal speed
     var zVelLimit: Float = 150 // cm/s vertical speed
-    var yawRateLimit:Float = 10 // deg/s, defensive.
+    var yawRateLimit:Float = 30 // deg/s, defensive.
 
     var pos: CLLocation?
     var startHeading: Double?
@@ -74,7 +74,7 @@ class Copter {
     private let hPosKP: Float = 0.9     // Test KP 2!
     private let vPosKP: Float = 1
     private let vVelKD: Float = 0
-    private let yawKP: Float = 10
+    private let yawKP: Float = 2
     
     
     // Init
@@ -303,6 +303,26 @@ class Copter {
             return flying
         }
         return nil
+    }
+
+    //***************************************************************************
+    // Get the areMotorsOn parameter from the DJI. Default to true, safest option
+    func getAreMotorsOn()->Bool{
+        guard let areMotorsOnKey = DJIFlightControllerKey(param: DJIFlightControllerParamAreMotorsOn) else {
+            NSLog("Couldn't create the key")
+            return true
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return true
+        }
+                
+        if let areMotorsOnValue = keyManager.getValueFor(areMotorsOnKey) {
+            let areMotorsOn = areMotorsOnValue.value as! Bool
+            return areMotorsOn
+        }
+        return true
     }
     
     //****************
@@ -628,14 +648,13 @@ class Copter {
     //**************************************************************************************
     // Function that sets reference position and executes the XYZ position controller timer.
     private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double, refLocalYaw: Double){
+        print("And x as refPosX is: " + String(describing: refPosX))
         // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
         // Function is private, only approved missions will be passed in here.
         //TODO hardconded geofence
-        if refPosY > -10 && refPosY < 10{
+        if refPosY > -10 && refPosY < 10 && refPosX > -10 && refPosX < 10{
             self.ref_posY = refPosY
-        }
-        else if refPosX > -10 && refPosX < 10{
             self.ref_posX = refPosX
         }
         else{
@@ -650,8 +669,8 @@ class Copter {
         }
         
         self.ref_localYaw = refLocalYaw
-
-        print("gotoXYZ, new reference positoin, x:" + String(ref_posX) + ", y: " + String(ref_posY) + ", z: " + String(ref_posZ) + ", local_yaw: " + String(ref_localYaw))
+        
+        print("gotoXYZ, new reference positoin, x:" + self.ref_posX.description + ", y: " + self.ref_posY.description + ", z: " + self.ref_posZ.description + ", local_yaw: " + self.ref_localYaw.description)
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
         duttTimer?.invalidate()
         //loopCnt = 0
@@ -758,6 +777,8 @@ extension Copter{
             // Calc refyawrate
             let ref_heading = checkedStartHeading + self.ref_localYaw
             self.ref_yawRate = Float(ref_heading - checkedHeading)*yawKP
+            
+            print(self.ref_yawRate.description)
             
             sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: self.ref_yawRate)
         }

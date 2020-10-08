@@ -68,7 +68,6 @@ class GimbalController: NSObject{
                 
         if let gimbalStateValue = keyManager.getValueFor(gimbalStateKey) {
             let yawRelativeToAircraftHeading = gimbalStateValue.value as? Double
-            print("gimbal relative yaw returning: " + String(describing: yawRelativeToAircraftHeading))
             return yawRelativeToAircraftHeading
         }
      return nil

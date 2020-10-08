@@ -695,14 +695,19 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.printSL("Received cmd info_request")
                     // Info request code
                     switch json_m["arg"]{
-                        case "operator":
-                            json_r["arg2"].stringValue = "operator"
-                            json_r["arg3"].stringValue = copter._operator
+                    case "operator":
+                        json_r["arg2"].stringValue = "operator"
+                        json_r["arg3"].stringValue = copter._operator
                     case "posD":
                         json_r["arg2"].stringValue = "posD"
                         json_r["arg3"] = JSON(copter.posZ)
-                        
-                        default:
+                    case "armed":
+                        json_r["arg2"].stringValue = "armed"
+                        json_r["arg3"].stringValue = self.copter.getAreMotorsOn().description
+                    case "current_wp":
+                        json_r["arg2"].stringValue = "current_wp"
+                        json_r["arg3"].stringValue = copter.missionNextWp.description
+                    default:
                         _ = 1
                     }
                 case "land":
@@ -914,7 +919,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         
         previewImageView.image = nil
         // Set the control command
-        //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
+        copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
         //copter.stopListenToPos() test functionality of stop listen
 
 //        var json = JSON()
@@ -966,7 +971,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //                print("Aircraft not ready to set OriginXYZ")
 //            }
 //        }
-        NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(1), "final_wp": String(2), "cmd": "gogo_XYZ"])
         //copter.gogoXYZ(startWp: 0)
 //        self.subscriptions.photoXYZ = true
 //        takePhotoCMD()

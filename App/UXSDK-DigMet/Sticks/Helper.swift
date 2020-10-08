@@ -59,7 +59,7 @@ class Allocator: NSObject{
         if self.auxOccupier {
             Dispatch.background{
                 do{
-                    print("Sleeping for 0.1s")
+                    //print("Sleeping for 0.1s")
                     usleep(100000)
                 }
                 _ = self.deallocate() // How to break endless loop? Include attemts: int?
