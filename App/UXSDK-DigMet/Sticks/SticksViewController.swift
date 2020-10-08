@@ -673,7 +673,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogoXYZ(startWp: next_wp)
+                                    _ = self.copter.gogoXYZ(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_XYZ")
                             }
@@ -1118,19 +1118,24 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         if let data = notification.userInfo as? [String: String]{
             if data["wpAction"] == "take_photo"{
                 print("wp action take photo - Do it!")
-                //wait until camera is allocated
-//                Dispatch.background{
-//                    while !self.cameraAllocator.allocate("take_photo", maxTime: 3){
-//                        usleep(1000000/10)
-//                        print("first")
-//                    }
-//                    self.takePhotoCMD()
-//                    while self.cameraAllocator.allocated{
-//                        usleep(1000000/10)
-//                        print("second")
-//                    }
-//                    self.copter.wpActionExecuting = false
-//                }
+                // Wait for allocator, allocate
+                // must be in background to not halt everything. will that work?
+                Dispatch.background {
+                    while !self.cameraAllocator.allocate("take_photo", maxTime: 3){
+                        usleep(300000)
+                        //print("WP action trying to allocate camera")
+                    }
+                    print("Camera allocator allocated by wpAction")
+                    self.takePhotoCMD()
+                    // takePhotoCMD will execute and deallocate
+                    while self.cameraAllocator.allocated{
+                        usleep(200000)
+                        //print("WP action waiting for takePhoto to complete")
+                    }
+                    Dispatch.main {
+                        _ = self.copter.gogoXYZ(startWp: 99, useCurrentMission: true) // startWP not used
+                    }
+                }
             }
         }
     }

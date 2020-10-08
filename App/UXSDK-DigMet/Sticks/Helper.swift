@@ -62,7 +62,7 @@ class Allocator: NSObject{
                     print("Sleeping for 0.1s")
                     usleep(100000)
                 }
-                _ = self.deallocate()
+                _ = self.deallocate() // How to break endless loop? Include attemts: int?
             }
         }
         else{

@@ -15,7 +15,7 @@ class Copter {
     var state: DJIFlightControllerState?
     
     var missionGeoFenceX: [Double] = [-5, 5]
-    var missionGeoFenceY: [Double] = [-5, 5]
+    var missionGeoFenceY: [Double] = [-10, 10]
     var missionGeoFenceZ: [Double] = [-20, -2]
     
     var pendingMission = JSON()
@@ -594,25 +594,35 @@ class Copter {
     
     //**********************************************************************************************
     // Starts the pending mission on startWp. returns false if startWp is not in the pending mission
-    func gogoXYZ(startWp: Int)->Bool{
-        if self.pendingMission["id" + String(startWp)].exists(){
-            
-            // invalidate and such..
-            
-            self.mission = self.pendingMission
-            self.missionNextWp = startWp
-            self.missionIsActive = true
-            
-            let (x, y, z, local_yaw) = getWPXYZYaw(num: startWp)
-            gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
-            // Notify about going to startWP
-            NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
-            return true
+    func gogoXYZ(startWp: Int, useCurrentMission: Bool)->Bool{
+        if useCurrentMission{
+            self.setMissionNextWp(num: self.missionNextWp + 1)
+            if self.missionNextWp == -1{
+                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
+                return true
+            }
+            else{
+                self.missionIsActive = true
+            }
         }
         else{
-            print("Error: gogoXYZ, no such wp id: id" + String(startWp))
-            return false
+            if self.pendingMission["id" + String(startWp)].exists(){
+                // invalidate and succh
+                self.mission = self.pendingMission
+                self.missionNextWp = startWp
+                self.missionIsActive = true
+            }
+            else{
+                print("Error: gogoXYZ, no such wp id: id" + String(startWp))
+                return false
+            }
         }
+            
+        let (x, y, z, local_yaw) = getWPXYZYaw(num: self.missionNextWp)
+        gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
+        // Notify about going to startWP
+        NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
+        return true
     }
     
     //**************************************************************************************
@@ -667,6 +677,7 @@ class Copter {
             trackingRecord = 0
         }
         if trackingRecord >= trackingRecordTarget{
+            trackingRecord = 0
             return true
         }
         else{
@@ -699,14 +710,14 @@ extension Copter{
             // Check for wp action
             let action = getAction(num: self.missionNextWp)
             if action == "take_photo"{
-                //self.wpActionExecuting = true
+                // Notify action to be executed
                 NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+                // Stop mission
+                self.missionIsActive = false
+                self.posCtrlTimer?.invalidate()
+                return
+                // gogoXYZ next wp is done from notifier function
             }
-//            // While while wpAction is being executed
-//            while self.wpActionExecuting{
-//                usleep(1000000/10)
-//                print("third")
-//            }
             
             // if we are on a mission
             if self.missionIsActive{
