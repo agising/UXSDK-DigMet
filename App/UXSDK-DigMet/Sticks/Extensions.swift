@@ -109,7 +109,7 @@ extension Dispatch {
 }
 
 extension Notification.Name {
-    static let didPosUpdate = Notification.Name("didPosUpdate")
+    static let didXYZUpdate = Notification.Name("didXYZUpdate")
     static let didVelUpdate = Notification.Name("didVelUpdate")
     static let didPrintThis = Notification.Name("didPrintThis")
     static let didNextWp = Notification.Name("didNextWp")

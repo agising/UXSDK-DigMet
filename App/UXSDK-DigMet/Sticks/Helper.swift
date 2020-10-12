@@ -144,6 +144,44 @@ func saveUIImageToPhotosAlbum(image: UIImage){
 }
 
 
+// *************************************
+// Returns Int angle in range [-180 180]
+func getIntWithinAngleRange(angle: Int)->Int{
+    var angle2 = angle % 360
+    if angle2 > 180 {
+        angle2 -= 360
+    }
+    if angle2 < -180 {
+        angle2 += 360
+    }
+    return angle2
+}
+
+// *************************************
+// Returns Int angle in range [-180 180]
+func getDoubleWithinAngleRange(angle: Double)->Double{
+    var angle2 = angle.truncatingRemainder(dividingBy: 360)
+    if angle2 > 180 {
+        angle2 -= 360
+    }
+    if angle2 < -180 {
+        angle2 += 360
+    }
+    return angle2
+}
+
+// ***************************************
+// Returns Float angle in range [-180 180]
+func getFloatWithinAngleRange(angle: Float)->Float{
+    var angle2 = angle.truncatingRemainder(dividingBy: 360)
+    if angle2 > 180 {
+        angle2 -= 360
+    }
+    if angle2 < -180 {
+        angle2 += 360
+    }
+    return angle2
+}
 
 
 // To be a camera class

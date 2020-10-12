@@ -735,7 +735,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         }
                     case "download":
                         self.printSL("Received cmd photo with arg download")
-                        if self.cameraAllocator.allocate("download", maxTime: 14) {
+                        if self.cameraAllocator.allocate("download", maxTime: 40) {
                             json_r = createJsonAck("photo")
                             json_r["arg2"].stringValue = "download"
                             let index = json_m["arg"]["index"]
@@ -1052,38 +1052,26 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     
     //*************************************************
-    // Update gui when nofication didposupdata happened
-    @objc func onDidPosUpdate(_ notification: Notification){
-        self.posXLabel.text = String(format: "%.1f", copter.posX)
-        self.posYLabel.text = String(format: "%.1f", copter.posY)
-        self.posZLabel.text = String(format: "%.1f", copter.posZ)
-        
-        if subscriptions.XYZ{
-            guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
-                print("Error: Update XYZ gimbal yaw")
-                return}
-            guard let heading = self.copter.getHeading() else {
-                print("Error: Update XYZ copter heading")
-                return}
-            guard let startHeadingXYZ = self.copter.startHeadingXYZ else {
-                print("Start pos is not set")
-                // OriginXYZ is not yet set. Try to set it!
-                return
-                }
+    // Update gui when nofication didposupdate happened
+        @objc func onDidXYZUpdate(_ notification: Notification){
+            self.posXLabel.text = String(format: "%.1f", copter.posX)
+            self.posYLabel.text = String(format: "%.1f", copter.posY)
+            self.posZLabel.text = String(format: "%.1f", copter.posZ)
             
-            let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
-            print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
-            var json = JSON()
-            json["x"].doubleValue = copter.posX
-            json["y"].doubleValue = copter.posX
-            json["z"].doubleValue = copter.posX
-            json["local_yaw"].doubleValue = localYaw
+            // If subscribed to XYZ updates, also get local_yaw and publish
+            if subscriptions.XYZ{
+                print("heading: ", self.copter.heading, ", localYaw: ", self.copter.localYaw, ", gimbalYaw: ", self.gimbalController.getYawRelativeToAircaftHeading()!, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
+                var json = JSON()
+                json["x"].doubleValue = round(100 * copter.posX) / 100
+                json["y"].doubleValue = round(100 * copter.posY) / 100
+                json["z"].doubleValue = round(100 * copter.posZ) / 100
+                json["local_yaw"].doubleValue = round(100 * copter.localYaw) / 100
 
-            _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
+                _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
+            }
         }
-    }
 
-    //*************************************************
+    //************************************************************
     // Update gui when nofication didvelupdata happened  TEST only
     @objc func onDidVelUpdate(_ notification: Notification){
         //self.posXLabel.text = String(format: "%.1f", copter.velX)
@@ -1209,6 +1197,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             if let gimbalReference = self.aircraft?.gimbal {
                 self.gimbalController.gimbal = gimbalReference
                 self.gimbalController.initGimbal()
+                // Copy gimbal controller to copter for gimbal access
+                self.copter.gimbalController = self.gimbalController
             }
             else{
                 setupOk = false
@@ -1223,7 +1213,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 
         // Test notification center,https://learnappmaking.com/notification-center-how-to-swift/
         //let posUpdateLabels = Notification.Name("posUpdateLabels")
-        NotificationCenter.default.addObserver(self, selector: #selector(onDidPosUpdate(_:)), name: .didPosUpdate, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onDidXYZUpdate(_:)), name: .didXYZUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidVelUpdate(_:)), name: .didVelUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPrintThis(_:)), name: .didPrintThis, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)
