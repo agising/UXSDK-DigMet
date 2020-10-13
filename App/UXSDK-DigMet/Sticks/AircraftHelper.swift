@@ -29,7 +29,9 @@ class Copter {
     var posX: Double = 0
     var posY: Double = 0
     var posZ: Double = 0
-    var localYaw: Double = 0
+    var gimbalYawXYZ: Double = 0
+    var gimbalYawToAC: Double = 0
+    var yawXYZ: Double = 0
     
     var velX: Double = 0
     var velY: Double = 0
@@ -38,7 +40,7 @@ class Copter {
     var ref_posX: Double = 0
     var ref_posY: Double = 0
     var ref_posZ: Double = 0
-    var ref_localYaw = 0.0
+    var ref_yawXYZ = 0.0
     var ref_yaw: Float = 0.0
     
     var ref_velX: Float = 0.0
@@ -50,13 +52,15 @@ class Copter {
     var zVelLimit: Float = 150 // cm/s vertical speed
     var yawRateLimit:Float = 50 // deg/s, defensive.
 
+    var toAlt: Double = -1
+    var toReference = ""
     var pos: CLLocation?
     var heading: Double = 0
     var startHeading: Double?
     var homeLocation: CLLocation?
     var dssHome: CLLocation?
     var dssHomeHeading: Double?
-    
+    var flightMode: String?
     var startHeadingXYZ: Double?
     var startLocationXYZ: CLLocation?
     
@@ -67,7 +71,7 @@ class Copter {
     var trackingRecord: Int = 0         // Consequtive loops on correct position
     let trackingRecordTarget: Int = 8  // Consequtive loops tracking target
     let trackingPosLimit: Double = 0.3          // Pos error requirement for tracking wp
-    let trackingYawLimit: Double = 2            // Yaw error requireemnt for tracking wp
+    let trackingYawLimit: Double = 4            // Yaw error requireemnt for tracking wp
     let trackingVelLimit: Double = 0.1          // Vel error requirement for tracking wp NOT USED
     let sampleTime: Double = 50         // Sample time in ms
     let controlPeriod: Double = 1500    // Number of millliseconds to send command
@@ -159,16 +163,52 @@ class Copter {
                 self.posY = -posN * sin(alpha) + posE * cos(alpha)
                 self.posZ = -alt_diff
                 
-                guard let gimbalYaw = self.gimbalController!.getYawRelativeToAircaftHeading() else {
+                guard let gimbalYawToAC = self.gimbalController!.getYawRelativeToAircaftHeading() else {
                                print("Error: Update XYZ gimbal yaw")
                                return}
                 guard let startHeadingXYZ = self.startHeadingXYZ else {
                                print("Start pos is not set")
                                return}
-                self.localYaw = heading - startHeadingXYZ + gimbalYaw
+                self.gimbalYawXYZ = heading - startHeadingXYZ + gimbalYawToAC
+                self.yawXYZ = heading - startHeadingXYZ
+                self.gimbalYawToAC = gimbalYawToAC
                 
                 NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
             }
+        })
+    }
+    
+    // ***************************
+    // Monitor flight mode changes
+    func startListenToFlightMode(){
+        guard let flightModeKey = DJIFlightControllerKey(param: DJIFlightControllerParamFlightModeString) else {
+            NSLog("Couldn't create the key")
+           return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.startListeningForChanges(on: flightModeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+                if let checkedNewValue = newValue{
+                    let flightMode = checkedNewValue.value as! String
+                    let printStr = "FlightMode: " + flightMode
+                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
+                    // Trigger completed take-off to climb to correct altitude
+                    if self.flightMode == "TakeOff" && flightMode == "GPS"{
+                        let toAlt = self.toAlt
+                        let toReference = self.toReference
+                        if toAlt != -1{
+                            Dispatch.main{
+                                self.setAlt(targetAlt: toAlt, reference: toReference)
+                            }
+                            self.toAlt = -1
+                        }
+                    }
+                    self.flightMode = flightMode
+                }
         })
     }
     
@@ -181,9 +221,9 @@ class Copter {
         }
         guard let pos = getCurrentLocation() else {return false}
         guard let heading = getHeading() else {return false}
-        //guard let gimbalYaw = gimbalObject.getYawRelativeToAircaftHeading() else {return false}
         self.startHeadingXYZ = heading + gimbalYaw
         self.startLocationXYZ = pos
+        print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", gimbalYaw: " + String(describing: gimbalYaw))
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here + gimbal yaw"])
         return true
     }
@@ -225,9 +265,10 @@ class Copter {
 
                 // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
                 if self.startHeadingXYZ == nil && self.getIsFlying() == true {
-                    print("The local XYZ is not set, setting loacl XYZ to home position and start heading")
+                    print("HomePosUpdated: The local XYZ is not set, setting loacl XYZ to home position and start heading")
                     self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
                     self.startHeadingXYZ = self.startHeading
+                    print("HomePosUpdated: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ))
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
 
                 }
@@ -241,27 +282,6 @@ class Copter {
         self.dssHome = getCurrentLocation()
     }
     
-//    //*************************************
-//    // Get home location as location object
-//    func getHomeLocation()->CLLocation?{
-//        // Start listen to home location instead
-//        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
-//            NSLog("Couldn't create the key")
-//            return nil
-//        }
-//
-//        guard let keyManager = DJISDKManager.keyManager() else {
-//            print("Couldn't get the keyManager, are you registered")
-//            return nil
-//        }
-//
-//        if let locationValue = keyManager.getValueFor(locationKey) {
-//            let homeLocation = locationValue.value as! CLLocation
-//            self.homeLocation = homeLocation
-//            return homeLocation
-//        }
-//     return nil
-//    }
     
     //*************************************
     // Get current location as location object
@@ -342,28 +362,6 @@ class Copter {
         return true
     }
     
-    
-    // TODO, is this used and/or still ok?
-//    func getPos(){
-//        guard let home = getHomeLocation() else {return}
-//        guard let curr = getCurrentLocation() else {return}
-//        guard let startHeading = self.startHeading else {return}
-//        _ = startHeading
-//
-//        let lat_diff = curr.coordinate.latitude - home.coordinate.latitude
-//        let lon_diff = curr.coordinate.longitude - home.coordinate.longitude
-//
-//        let posN = lat_diff * 1854 * 60
-//        let posE = lon_diff * 1854 * 60 * cos(home.coordinate.latitude)
-//        let posD = curr.altitude
-//
-//        let distance = curr.distance(from: home).magnitude
-//        print("posN: " + String(posN) + ", posE: " + String(posE), ", posD: " + String(posD) + ", Distance: " + String(describing: distance))
-//    }
-    
-
-
-    
     //************************
     // Set up reference frames
     func initFlightController(){
@@ -377,6 +375,7 @@ class Copter {
         // Activate listeners
         self.startListenToHomePosUpdated()
         self.startListenToPos()
+        self.startListenToFlightMode()
         // No reason to track velocities as for now. Uncomment to enable
         //self.startListenToVel()
 
@@ -521,17 +520,28 @@ class Copter {
         }
     }
     
+    
+    func setAlt(targetAlt: Double, reference: String){
+        switch reference{
+        case "HOME":
+            gotoXYZ(refPosX: self.posX, refPosY: self.posY, refPosZ: -targetAlt, refYawXYZ: self.yawXYZ)
+        
+        default:
+            print("altitude reference not known")
+        }
+    }
+    
     // ***************************************************
     // Take off function, does not have reference altitude
     func takeOff(){
+        print("TakeOff function")
         self.flightController?.startTakeoff(completion: {(error: Error?) in
             if error != nil{
                 print("Takeoff error: " + String(error.debugDescription))
             }
             else{
-                // _ = "Take off command accepted"
+                //print("TakeOff else clause")
             }
-            
         })
     }
     
@@ -641,9 +651,9 @@ class Copter {
             }
         }
             
-        let (x, y, z, local_yaw) = getWPXYZYaw(num: self.missionNextWp)
-        print("Going to: ", x,y,z,local_yaw)
-        gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
+        let (x, y, z, yaw) = getWPXYZYaw(num: self.missionNextWp)
+        print("Going to: ", x,y,z,yaw)
+        gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refYawXYZ: yaw)
         // Notify about going to startWP
         NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
         return true
@@ -651,7 +661,7 @@ class Copter {
     
     //**************************************************************************************
     // Function that sets reference position and executes the XYZ position controller timer.
-    private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double, refLocalYaw: Double){
+    private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double, refYawXYZ: Double){
         print("And x as refPosX is: " + String(describing: refPosX))
         // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
@@ -667,14 +677,14 @@ class Copter {
         }
         
         self.ref_posZ = refPosZ
-        if self.ref_posZ > -10{
+        if self.ref_posZ > -2{
             print("Too low altitude for postion control, refPosZ: " + String(self.ref_posZ))
             return
         }
         
-        self.ref_localYaw = refLocalYaw
+        self.ref_yawXYZ = refYawXYZ
         
-        print("gotoXYZ, new reference positoin, x:" + self.ref_posX.description + ", y: " + self.ref_posY.description + ", z: " + self.ref_posZ.description + ", local_yaw: " + self.ref_localYaw.description)
+        print("gotoXYZ, new reference positoin, x:" + self.ref_posX.description + ", y: " + self.ref_posY.description + ", z: " + self.ref_posZ.description + ", yawXYZ: " + self.ref_yawXYZ.description)
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
         duttTimer?.invalidate()
         //loopCnt = 0
@@ -693,8 +703,10 @@ class Copter {
         let y2 = pow(self.ref_posY - self.posY, 2)
         let z2 = pow(self.ref_posZ - self.posZ, 2)
         let posError = sqrt(x2 + y2 + z2)
-        let localYawError = abs(getDoubleWithinAngleRange(angle: self.ref_localYaw - self.localYaw))
-        if posError < posLimit && localYawError < yawLimit {
+        // tacking the gimbal yaw is not resonable, it cant be controlled.
+        let YawError = abs(getDoubleWithinAngleRange(angle: self.yawXYZ - self.ref_yawXYZ))
+        //print("Tracking errors: ", posError, YawError)
+        if posError < posLimit && YawError < yawLimit {
             trackingRecord += 1
         }
         else{
@@ -731,6 +743,7 @@ extension Copter{
         posCtrlLoopCnt += 1
         // If we arrived
         if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
+            print("wp is tracked")
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
             
             // Check for wp action
@@ -750,8 +763,8 @@ extension Copter{
                 print("Mission is active")
                 self.setMissionNextWp(num: self.missionNextWp + 1)
                 if self.missionNextWp != -1{
-                    let (x, y, z, local_yaw) = self.getWPXYZYaw(num: self.missionNextWp)
-                    self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refLocalYaw: local_yaw)
+                    let (x, y, z, yaw) = self.getWPXYZYaw(num: self.missionNextWp)
+                    self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refYawXYZ: yaw)
                 }
                 else{
                     print("id is -1")
@@ -759,6 +772,10 @@ extension Copter{
                     self.posCtrlTimer?.invalidate() // dont fire timer again
                 }
                 NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
+            }
+            else{
+                print("No mission is active")
+                posCtrlTimer?.invalidate()
             }
         }
             
@@ -780,11 +797,11 @@ extension Copter{
             
             // Calc refvelz
             self.ref_velZ = (z_diff) * vPosKP
-            print(self.ref_posZ, self.posZ, self.ref_velZ)
+            //print("XYZ Controller z: ", self.ref_posZ, self.posZ, self.ref_velZ)
             // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
 
-            //Do not chase the gimbal when controlling yaw, assume gimbal is straight forwards
-            let yawError = getFloatWithinAngleRange(angle: Float(self.heading - self.startHeadingXYZ! - self.ref_localYaw))
+            //Do not conncider gimbalYaw in yawControl
+            let yawError = getFloatWithinAngleRange(angle: Float(self.yawXYZ - self.ref_yawXYZ))
             self.ref_yawRate = -yawError*yawKP
             
             // Send control data, limits in velocities is handeled in sendControlData

@@ -161,37 +161,31 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //**********************************************************************************************
     // Writes metadata to json. OriginXYZ is required to be set, if it is not, set ut to current pos
     func writeMetaDataXYZ()->Bool{
-        guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
-            print("Error: writeMetaData gimbal yaw")
-            return false}
-        guard let heading = self.copter.getHeading() else {
-            print("Error: writeMetaData copter heading")
-            return false}
-        guard let startHeadingXYZ = self.copter.startHeadingXYZ else {
+        // Make sure originXYZ is set
+        guard let _ = self.copter.startHeadingXYZ else {
             // OriginXYZ is not yet set. Try to set it!
+            guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
+                print("Error: writeMetadata, cant get gimbal yaw")
+                return false}
             if copter.setOriginXYZ(gimbalYaw: gimbalYaw){
                 print("OriginXYZ set from writeMetadata")
-                // Go again!
                 _ = writeMetaDataXYZ()
                 // Return true because to problem is fixed and the func is called again.
                 return true
             }
             else{
-                self.printSL("Write metadata could not set OriginXYZ, aircraft ready?")
+                self.printSL("Write metadata could not set OriginXYZ, Aircraft ready?")
                 return false
             }
         }
 
-
         var jsonMeta = JSON()
-        let localYaw: Double = heading + gimbalYaw - startHeadingXYZ
-        print("heading: ", heading, "gimbalYaw: ", gimbalYaw, "startHeadingXYZ: ", startHeadingXYZ)
         jsonMeta["filename"] = JSON("")
         jsonMeta["x"] = JSON(self.copter.posX)
         jsonMeta["y"] = JSON(self.copter.posY)
         jsonMeta["z"] = JSON(self.copter.posZ)
         jsonMeta["agl"] = JSON(-1)
-        jsonMeta["local_yaw"] = JSON(localYaw)
+        jsonMeta["local_yaw"] = JSON(copter.gimbalYawXYZ)
         jsonMeta["index"] = JSON(self.sessionIndex)
 
         self.jsonMetaData[String(self.sessionIndex)] = jsonMeta
@@ -637,8 +631,16 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r = createJsonNack("arm_take_off")
                     }
                     else{
-                        json_r = createJsonAck("arm_take_off")
-                        copter.takeOff()
+                        let toAlt = json_m["arg"]["height"].doubleValue
+                        if toAlt >= 2 && toAlt <= 40{
+                            json_r = createJsonAck("arm_take_off")
+                            copter.toAlt = toAlt
+                            copter.toReference = json_m["arg"]["reference"].stringValue
+                            copter.takeOff()
+                        }
+                        else{
+                            json_r = createJsonNack("arm_take_off")
+                        }
                     }
                 case "data_stream":
                     self.printSL("Received cmd data_stream: " + json_m["arg"]["attribute"].stringValue + " - " + json_m["arg"]["enable"].stringValue)
@@ -917,9 +919,21 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
         //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
         
+        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
+            print(mode.self)
+        })
+        
+        if let mode = self.copter.flightMode{
+            print("flightMode: ", mode)
+        }
+        else{
+            print("Could not get fligth mode")
+        }
+
+        
         previewImageView.image = nil
         // Set the control command
-        copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
+        //copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
         //copter.stopListenToPos() test functionality of stop listen
 
 //        var json = JSON()
@@ -1060,12 +1074,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             
             // If subscribed to XYZ updates, also get local_yaw and publish
             if subscriptions.XYZ{
-                print("heading: ", self.copter.heading, ", localYaw: ", self.copter.localYaw, ", gimbalYaw: ", self.gimbalController.getYawRelativeToAircaftHeading()!, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
+                print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.copter.gimbalYawToAC, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
                 var json = JSON()
                 json["x"].doubleValue = round(100 * copter.posX) / 100
                 json["y"].doubleValue = round(100 * copter.posY) / 100
                 json["z"].doubleValue = round(100 * copter.posZ) / 100
-                json["local_yaw"].doubleValue = round(100 * copter.localYaw) / 100
+                json["local_yaw"].doubleValue = round(100 * copter.gimbalYawXYZ) / 100
 
                 _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
             }
@@ -1082,7 +1096,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //******************************************************************************
     // Prints notification to statuslabel. Notifications can be sent from everywhere
     @objc func onDidPrintThis(_ notification: Notification){
-        self.printSL(String(describing: notification.userInfo!["printThis"]!))
+        let strToPrint = String(describing: notification.userInfo!["printThis"]!)
+        self.printSL(strToPrint)
     }
     
     //*************************************************
