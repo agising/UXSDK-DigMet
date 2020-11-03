@@ -569,7 +569,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 print("Published: " + publishStr)
             }
             else{
-                print("Published photo with metadata: ")
+                print("Published photo with topic: " + topic + " and metadata: ")
                 print(json["metadata"])
             }
             return true
@@ -635,7 +635,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         if toAlt >= 2 && toAlt <= 40{
                             json_r = createJsonAck("arm_take_off")
                             copter.toAlt = toAlt
-                            copter.toReference = json_m["arg"]["reference"].stringValue
+                            copter.toReference = "HOME"
                             copter.takeOff()
                         }
                         else{
@@ -709,6 +709,20 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     case "current_wp":
                         json_r["arg2"].stringValue = "current_wp"
                         json_r["arg3"].stringValue = copter.missionNextWp.description
+                    case "metadata":
+                        json_r["arg2"].stringValue = "metadata"
+                        let index = json_m["arg2"].intValue
+                        if  index == -1{
+                            json_r["arg3"] = self.jsonMetaData
+                        }
+                        else{
+                            if self.jsonMetaData[String(describing: index)].exists(){
+                                json_r["arg3"] = self.jsonMetaData[String(describing: index)]
+                            }
+                            else{
+                                json_r = createJsonNack("No such index for metadata")
+                            }
+                        }
                     default:
                         _ = 1
                     }

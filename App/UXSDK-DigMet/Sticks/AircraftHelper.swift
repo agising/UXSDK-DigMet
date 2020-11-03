@@ -74,7 +74,7 @@ class Copter {
     let trackingYawLimit: Double = 4            // Yaw error requireemnt for tracking wp
     let trackingVelLimit: Double = 0.1          // Vel error requirement for tracking wp NOT USED
     let sampleTime: Double = 50         // Sample time in ms
-    let controlPeriod: Double = 1500    // Number of millliseconds to send command
+    let controlPeriod: Double = 750 // 1500    // Number of millliseconds to send command
     var loopCnt: Int = 0
     var loopTarget: Int = 0
     var posCtrlLoopCnt: Int = 0
@@ -221,6 +221,9 @@ class Copter {
         }
         guard let pos = getCurrentLocation() else {return false}
         guard let heading = getHeading() else {return false}
+        if heading == 0 {
+            print("setOriginXYZ: Start heading is exactly 0, CAUTION!")
+        }
         self.startHeadingXYZ = heading + gimbalYaw
         self.startLocationXYZ = pos
         print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", gimbalYaw: " + String(describing: gimbalYaw))
