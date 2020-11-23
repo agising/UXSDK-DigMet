@@ -14,7 +14,6 @@ class GimbalController: NSObject{
     var pitchRangeExtensionSet = false
     var gimbalPitch: Float? = 0
     
-
     // *******************************************
     // Init the gimbal, set pitch range extension.
     func initGimbal(){

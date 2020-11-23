@@ -1142,3 +1142,6 @@ class serverClass: NSObject{
 //                      }
 
 
+
+
+// Livestream via rmtp server https://www.youtube.com/watch?v=Llv18AdtTho

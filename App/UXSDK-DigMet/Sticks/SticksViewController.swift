@@ -19,6 +19,7 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 // Background process https://stackoverflow.com/questions/24056205/how-to-use-background-thread-in-swift
 // Related issue https://stackoverflow.com/questions/49204713/zeromq-swift-code-with-swiftyzeromq-recv-still-blocks-gui-text-update-even-a
 
+
 public class SticksViewController: DUXDefaultLayoutViewController {
     //**********************
     // Variable declarations
@@ -56,9 +57,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var gimbalController = GimbalController()
    
     var photo: UIImage = UIImage.init() // Is this used?
-    var sessionIndex: Int = 0 // Picture index of this session
+    var sessionLastIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
+    var transferring: Bool = false
     var jsonMetaData: JSON = JSON()
+    var jsonPhotos: JSON = JSON()
     
     var lastImage: UIImage = UIImage.init()
     var lastImagePreview: UIImage = UIImage.init()
@@ -186,9 +189,15 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         jsonMeta["z"] = JSON(self.copter.posZ)
         jsonMeta["agl"] = JSON(-1)
         jsonMeta["local_yaw"] = JSON(copter.gimbalYawXYZ)
-        jsonMeta["index"] = JSON(self.sessionIndex)
+        jsonMeta["index"] = JSON(self.sessionLastIndex)
 
-        self.jsonMetaData[String(self.sessionIndex)] = jsonMeta
+        var jsonPhoto = JSON()
+        jsonPhoto["filename"] = JSON("")
+        jsonPhoto["stored"].boolValue = false
+        
+        self.jsonMetaData[String(self.sessionLastIndex)] = jsonMeta
+        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
+        
         if self.subscriptions.photoXYZ{
             _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: jsonMeta)
         }
@@ -261,7 +270,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     func takePhotoCMD(){
         self.capturePhoto(completion: {(success) in
                 if success{
-                    self.sessionIndex += 1
+                    self.sessionLastIndex += 1
                     if self.writeMetaDataXYZ(){
                             // Metadata was successfully written
                             print("Metadata written")
@@ -333,9 +342,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     //
     // Function executed when incoming command is download_picture
-    func downloadPictureCMD(){
+    func downloadPictureCMD(sessionIndex: Int){
         // First download from sdCard
-        self.savePhoto(completionHandler: {(saveSuccess) in
+        self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
             self.cameraAllocator.deallocate()
             if saveSuccess {
                 self.printSL("Image downloaded to App")
@@ -343,7 +352,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 let photoData = self.lastPhotoData
                 var json_photo = JSON()
                 json_photo["photo"].stringValue = getBase64utf8(data: photoData)
-                json_photo["metadata"] = self.jsonMetaData[String(self.sessionIndex)]
+                json_photo["metadata"] = self.jsonMetaData[String(self.sessionLastIndex)]
                 print(self.jsonMetaData)
                 _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
             }
@@ -356,10 +365,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     //**********************************************************************
      // Save photo from sdCardto app memory. Setup camera then call getImage
-     func savePhoto(completionHandler: @escaping (Bool) -> Void){
+    func savePhoto(sessionIndex: Int, completionHandler: @escaping (Bool) -> Void){
          cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: {(success: Bool) in
              if success {
-                 self.getImage(completionHandler: {(new_success: Bool) in
+                self.getImage(sessionIndex: sessionIndex, completionHandler: {(new_success: Bool) in
                      if new_success{
                          completionHandler(true)
                      }
@@ -377,7 +386,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     //*****************************************************************************************
     // Downloads an photoData from sdCard. Saves photoData to app. Can preview photo on screen
-    func getImage(completionHandler: @escaping (Bool) -> Void){
+    func getImage(sessionIndex: Int, completionHandler: @escaping (Bool) -> Void){
         let manager = self.camera?.mediaManager
         manager?.refreshFileList(of: DJICameraStorageLocation.sdCard, withCompletion: {(error: Error?) in
             print("Refreshing file list...")
@@ -397,19 +406,21 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             // Print number of files on sdCard and note the first photo of the session if not already done
             self.printSL("Files on sdCard: " + String(describing: files.count))
             if self.sdFirstIndex == -1 {
-                self.sdFirstIndex = files.count - self.sessionIndex
-                // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonMetaData[self.sessionIndex = 1]
+                self.sdFirstIndex = files.count - self.sessionLastIndex
+                print("sessionIndex 1 mapped to cameraIndex: ", self.sdFirstIndex)
+                // The files[self.sdFirstIndex] is the first photo of this photosession, it maps to self.jsonMetaData[self.sessionLastIndex = 1]
             }
             
             // Update Metadata with filename for the n last pictures without a filename added already
-            for i in stride(from: self.sessionIndex, to: 0, by: -1){
+            for i in stride(from: self.sessionLastIndex, to: 0, by: -1){
                 if files.count < self.sdFirstIndex + i{
-                    self.sessionIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but session index is increased. This 'fixes' this issue..
-                    print("Session index faulty. Some images were not saved on sdCard..")
+                    self.sessionLastIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but sessionLastIndex is increased. This 'fixes' this issue..
+                    print("SessionIndex faulty. Some images were not saved on sdCard..")
                 }
                 if self.jsonMetaData[String(i)]["filename"] == ""{
                     self.jsonMetaData[String(i)]["filename"].stringValue = files[self.sdFirstIndex + i - 1].fileName
-                    print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + "To session index: " + String(i))
+                    self.jsonPhotos[String(i)]["filename"].stringValue = files[self.sdFirstIndex + i - 1].fileName
+                    print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + " to sessionIndex: " + String(i))
                 }
                 else{
                     // Picture n has a filename -> so does n+1, +2, +3 etc break!
@@ -426,14 +437,33 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //                print("Error \(error)")
 //            }
             
-            let index = files.count - 1
-            
+            // Init cameraIndex
+            // TODO move sessionIndex logic up the chain
+            var cameraIndex = 0
+            var theSessionIndex = 0
+            // Take last photo or specific sessionIndex
+            if sessionIndex == -1 {
+                print("All photos not supported yet! You get the last instead..")
+                theSessionIndex = self.sessionLastIndex
+               // cameraIndex = files.count - 1
+            }
+            // Last image
+            else if sessionIndex == 0 {
+                cameraIndex = files.count - 1
+                theSessionIndex = self.sessionLastIndex
+            }
+            else{
+                cameraIndex = sessionIndex + self.sdFirstIndex - 1
+                theSessionIndex = sessionIndex
+            }
+
+            print("temp output: CameraIndex: ", cameraIndex)
             // Create a photo container for this scope
             var photoData: Data?
             var i: Int?
             
-            // Download bachthwise, append data. Closure is called each time data is updated.
-            files[index].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
+            // Download batchhwise, append data. Closure is called each time data is updated.
+            files[cameraIndex].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
                 if error != nil{
                     // THis happens if download is triggered to close to taking a picture. Is the allocator used?
                     self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
@@ -442,7 +472,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 else if isComplete {
                     if let photoData = photoData{
                         self.lastPhotoData = photoData
-                        self.savePhotoDataToApp(photoData: photoData, filename: files[index].fileName)
+                        self.savePhotoDataToApp(photoData: photoData, filename: files[cameraIndex].fileName, sessionIndex: theSessionIndex)
                         completionHandler(true)
                         }
                     else{
@@ -467,36 +497,133 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
     
     //********************************************
-    // Save PhotoData to app, set URL to the objet
-    func savePhotoDataToApp(photoData: Data, filename: String){
+    // Save PhotoData to app, set URL to the object
+    func savePhotoDataToApp(photoData: Data, filename: String, sessionIndex: Int){
+        // Translate the sdCardIndex index to theSessionIndex numbering starting at 1.
+        //let theSessionIndex = index - self.sdFirstIndex + 1
+        let theSessionIndex = sessionIndex
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         if let documentsURL = documentsURL {
             let fileURL = documentsURL.appendingPathComponent(filename)
-            self.lastPhotoDataURL = fileURL
-            self.lastPhotoDataFilename = filename
             do {
                 try photoData.write(to: fileURL, options: .atomicWrite)
+                self.lastPhotoDataURL = fileURL
+                self.lastPhotoDataFilename = filename
+                self.jsonPhotos[String(theSessionIndex)]["stored"].boolValue = true
+                print("Did print stored = true to jsonPhotos index: ", theSessionIndex)
+                print("The write fileURL points at: ", fileURL)
             } catch {
                 self.printSL("Could not write photoData to App: " + String(describing: error))
             }
         }
     }
     
-    //********************************************
-    // Save PhotoData to app, set URL to the objet
-    func saveDataToApp(data: Data, filename: String){
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        if let documentsURL = documentsURL {
-            let fileURL = documentsURL.appendingPathComponent(filename)
-            self.metaDataURL = fileURL
-            self.metaDataFilename = filename
-            do {
-                try data.write(to: fileURL, options: .atomicWrite)
-            } catch {
-                self.printSL("Could not write Data to App: " + String(describing: error))
+    // ******************************************************************
+    // Transfers (publishes) all photos, downloads from sdCard if needed.
+    func transferAll(){
+        self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1)
+    }
+    // Interative nested calls, allows three download attempts per index.
+    func transferAllHelper(sessionIndex: Int, attempt: Int){
+        if attempt > 3{
+            print("Difficulties downloading index: ", sessionIndex, " Skipping.")
+            self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1)
+        }
+        self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success) in
+            if success{
+                if sessionIndex == 1{
+                    print("All photos transferred") // First photo is index 1
+                }
+                else{
+                //print("transferAllHelpter: Following index has been transferred: ", sessionIndex)
+                self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1)
+                }
+            }
+            else{
+                print("transferAllHelpter: Following index failed to transfer: ", sessionIndex)
+                self.transferAllHelper(sessionIndex: sessionIndex, attempt: attempt + 1)
+            }
+        })
+    }
+    
+    //*************************************************
+    // Transfer a photo with sessionIndex [1,2...n].
+    func transferIndex(sessionIndex: Int, completionHandler: @escaping (Bool) -> Void){
+        //print("transferIndex: jsonPhotos: ", self.jsonPhotos)
+        printSL("Transfer index: " + String(sessionIndex))
+        if self.jsonPhotos[String(sessionIndex)].exists(){
+            if jsonPhotos[String(sessionIndex)]["stored"] == false{
+                printSL("transferIndex: Download photo: " + String(sessionIndex))
+                if self.cameraAllocator.allocate("transferIndex", maxTime: 40){
+                    self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
+                        self.cameraAllocator.deallocate()
+                        if saveSuccess {
+                            self.printSL("transferIndex: Photo " + String(sessionIndex) + " downloaded to App")
+                            self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success: Bool) in
+                                // Completion handler on first call depends on the second call, child process.
+                                if success{
+                                    completionHandler(true)
+                                }
+                                else{
+                                    completionHandler(false)
+                                }
+                            })
+                        }
+                        else{
+                            print("transferIndex Error: Could not download the photo from sdCard")
+                            completionHandler(false)
+                        }
+                    })
+                }
+                else {
+                    print("transferIndex: Error, could not allocate cameraAllocator")
+                    completionHandler(false)
+                }
+            }
+            // Photo is locally stored, load and transfer it!
+            else{
+                // Build up the full URLpath, then load photo and transfer
+                if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    let filename = self.jsonPhotos[String(sessionIndex)]["filename"].stringValue
+                    let fileURL = documentsURL.appendingPathComponent(filename)
+                    do{
+                        //print("The read fileURL points at: ", fileURL)
+                        let photoData = try Data(contentsOf: fileURL)
+                        self.printSL("transferIndex: Publish photo on PUB-socket")
+                        var json_photo = JSON()
+                        json_photo["photo"].stringValue = getBase64utf8(data: photoData)
+                        json_photo["metadata"] = self.jsonMetaData[String(sessionIndex)]
+                        _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
+                        completionHandler(true)
+                    }
+                    catch{
+                        print("transferIndex could not load data: ", filename)
+                        completionHandler(false)
+                    }
+                }
             }
         }
+        else{
+            self.printSL("The index has not been produced yet. No such index in jsonPhotos: " + String(sessionIndex))
+            completionHandler(false)
+        }
     }
+    
+    //********************************************
+    // Save PhotoData to app, set URL to the objet
+//    func saveDataToApp(data: Data, filename: String){
+//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+//        if let documentsURL = documentsURL {
+//            let fileURL = documentsURL.appendingPathComponent(filename)
+//            self.metaDataURL = fileURL
+//            self.metaDataFilename = filename
+//            do {
+//                try data.write(to: fileURL, options: .atomicWrite)
+//            } catch {
+//                self.printSL("Could not write Data to App: " + String(describing: error))
+//            }
+//        }
+//    }
     
     
     // Can be moved to separate file
@@ -516,14 +643,14 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     completionHandler(true)
                     return
                 }
-                let index = files.count - 1
-                files[index].fetchThumbnail(completion: {(error) in
+                let cameraIndex = files.count - 1
+                files[cameraIndex].fetchThumbnail(completion: {(error) in
                     if error != nil{
                         self.printSL("Error downloading thumbnail")
                         completionHandler(false)
                     }
                     else{
-                        self.previewImageView.image = files[index].thumbnail
+                        self.previewImageView.image = files[cameraIndex].thumbnail
                         print("Thumbnail for preview")
                         completionHandler(true)
                     }
@@ -536,7 +663,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
 //    // Find the MetaData to attach when file is uploaded (if subscribed)
 //                  var metaData = JSON()
-//                  for i in stride(from: self.sessionIndex, to: 0, by: -1){
+//                  for i in stride(from: self.sessionLastIndex, to: 0, by: -1){
 //                      if self.jsonMetaData[String(i)]["fileName"].stringValue == fileNameUploading{
 //                          metaData = self.jsonMetaData[String(i)]
 //                      }
@@ -711,13 +838,13 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r["arg3"].stringValue = copter.missionNextWp.description
                     case "metadata":
                         json_r["arg2"].stringValue = "metadata"
-                        let index = json_m["arg2"].intValue
-                        if  index == -1{
+                        let sessionIndex = json_m["arg2"].intValue
+                        if  sessionIndex == -1{
                             json_r["arg3"] = self.jsonMetaData
                         }
                         else{
-                            if self.jsonMetaData[String(describing: index)].exists(){
-                                json_r["arg3"] = self.jsonMetaData[String(describing: index)]
+                            if self.jsonMetaData[String(describing: sessionIndex)].exists(){
+                                json_r["arg3"] = self.jsonMetaData[String(describing: sessionIndex)]
                             }
                             else{
                                 json_r = createJsonNack("No such index for metadata")
@@ -754,9 +881,13 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         if self.cameraAllocator.allocate("download", maxTime: 40) {
                             json_r = createJsonAck("photo")
                             json_r["arg2"].stringValue = "download"
-                            let index = json_m["arg"]["index"]
-                            print("The download index argument: " + String(describing: index))
-                            downloadPictureCMD()
+                            var sessionIndex = json_m["arg"]["index"].intValue
+                            // Help user to find the last index
+                            if sessionIndex == -1 {
+                                sessionIndex = self.sessionLastIndex
+                            }
+                            print("The download index argument: " + String(describing: sessionIndex))
+                            downloadPictureCMD(sessionIndex: sessionIndex)
                         }
                         else { // Camera resource busy
                             json_r = createJsonNack("photo")
@@ -880,6 +1011,15 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     @IBAction func DuttRightPressed(_ sender: UIButton) {
         // Clear screen, lets fly!
         previewImageView.image = nil
+        transferIndex(sessionIndex: 2, completionHandler: {(success) in
+            if success{
+                print("Photo transferred")
+            }
+            else{
+                print("Photo failed to transfer")
+            }
+        })
+        
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
 //        var json = JSON()
@@ -922,7 +1062,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //            print("Subscription true")
 //            self.gimbalController.setPitch(pitch: 12.2)
 //        }
-        self.downloadPictureCMD()
+        //self.downloadPictureCMD()
     }
 
     //***************************************************************************************************************
@@ -932,6 +1072,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
         //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
         //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
+        self.transferAll()
         
         self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
             print(mode.self)
@@ -1053,7 +1194,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //*************************************************************************
     // Download last photoData from sdCard and save to app memory. Save URL to self.
     @IBAction func savePhotoButton(_ sender: Any) {
-        savePhoto(){(success) in
+        savePhoto(sessionIndex: -1){(success) in
             if success{
                 self.printSL("Photo saved to app memory")
             }
