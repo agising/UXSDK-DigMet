@@ -53,8 +53,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
     
-    var copter = Copter()
-    var gimbalController = GimbalController()
+    var copter = CopterController()
+    var gimbal = GimbalController()
    
     var photo: UIImage = UIImage.init() // Is this used?
     var sessionLastIndex: Int = 0 // Picture index of this session
@@ -167,17 +167,14 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         // Make sure originXYZ is set
         guard let _ = self.copter.startHeadingXYZ else {
             // OriginXYZ is not yet set. Try to set it!
-            guard let gimbalYaw = self.gimbalController.getYawRelativeToAircaftHeading() else {
-                print("Error: writeMetadata, cant get gimbal yaw")
-                return false}
-            if copter.setOriginXYZ(gimbalYaw: gimbalYaw){
-                print("OriginXYZ set from writeMetadata")
+            if copter.setOriginXYZ(){
+                print("writeMetaData: OriginXYZ set from here")
                 _ = writeMetaDataXYZ()
                 // Return true because to problem is fixed and the func is called again.
                 return true
             }
             else{
-                self.printSL("Write metadata could not set OriginXYZ, Aircraft ready?")
+                self.printSL("writeMetaData: Could not set OriginXYZ, Aircraft ready?")
                 return false
             }
         }
@@ -521,18 +518,22 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // ******************************************************************
     // Transfers (publishes) all photos, downloads from sdCard if needed.
     func transferAll(){
+        if self.sessionLastIndex == 0 {
+            print("transferAll: No photos to transfer")
+            return
+        }
         self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1)
     }
     // Interative nested calls, allows three download attempts per index.
     func transferAllHelper(sessionIndex: Int, attempt: Int){
         if attempt > 3{
-            print("Difficulties downloading index: ", sessionIndex, " Skipping.")
+            print("transferAllHelper: Difficulties downloading index: ", sessionIndex, " Skipping.")
             self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1)
         }
         self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success) in
             if success{
                 if sessionIndex == 1{
-                    print("All photos transferred") // First photo is index 1
+                    print("transferAllHelper: All photos transferred") // First photo is index 1
                 }
                 else{
                 //print("transferAllHelpter: Following index has been transferred: ", sessionIndex)
@@ -540,7 +541,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 }
             }
             else{
-                print("transferAllHelpter: Following index failed to transfer: ", sessionIndex)
+                print("transferAllHelper:  Following index failed to transfer: ", sessionIndex)
                 self.transferAllHelper(sessionIndex: sessionIndex, attempt: attempt + 1)
             }
         })
@@ -793,7 +794,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 case "gimbal_set":
                     self.printSL("Received cmd gimbal_set")
                     json_r = createJsonAck("gimbal_set")
-                    self.gimbalController.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
+                    self.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
                     
                 case "gogo_XYZ":
@@ -832,7 +833,14 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r["arg3"] = JSON(copter.posZ)
                     case "armed":
                         json_r["arg2"].stringValue = "armed"
-                        json_r["arg3"].stringValue = self.copter.getAreMotorsOn().description
+                        json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
+                    
+                    
+                    case "idle":
+                        json_r["arg2"].stringValue = "idle"
+                        json_r["arg3"].boolValue = false   //TODO
+
+                    
                     case "current_wp":
                         json_r["arg2"].stringValue = "current_wp"
                         json_r["arg3"].stringValue = copter.missionNextWp.description
@@ -1055,12 +1063,12 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //        if self.subscriptions.photoXYZ{
 //            self.subscriptions.photo_XYZ = false
 //            print("Subscription false")
-//            self.gimbalController.setPitch(pitch: -90)
+//            self.gimbal.setPitch(pitch: -90)
 //        }
 //        else{
 //            self.subscriptions.photoXYZ = true
 //            print("Subscription true")
-//            self.gimbalController.setPitch(pitch: 12.2)
+//            self.gimbal.setPitch(pitch: 12.2)
 //        }
         //self.downloadPictureCMD()
     }
@@ -1222,23 +1230,23 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     //*************************************************
     // Update gui when nofication didposupdate happened
-        @objc func onDidXYZUpdate(_ notification: Notification){
-            self.posXLabel.text = String(format: "%.1f", copter.posX)
-            self.posYLabel.text = String(format: "%.1f", copter.posY)
-            self.posZLabel.text = String(format: "%.1f", copter.posZ)
-            
-            // If subscribed to XYZ updates, also get local_yaw and publish
-            if subscriptions.XYZ{
-                print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.copter.gimbalYawToAC, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
-                var json = JSON()
-                json["x"].doubleValue = round(100 * copter.posX) / 100
-                json["y"].doubleValue = round(100 * copter.posY) / 100
-                json["z"].doubleValue = round(100 * copter.posZ) / 100
-                json["local_yaw"].doubleValue = round(100 * copter.gimbalYawXYZ) / 100
+    @objc func onDidXYZUpdate(_ notification: Notification){
+        self.posXLabel.text = String(format: "%.1f", copter.posX)
+        self.posYLabel.text = String(format: "%.1f", copter.posY)
+        self.posZLabel.text = String(format: "%.1f", copter.posZ)
+        
+        // If subscribed to XYZ updates, also get local_yaw and publish
+        if subscriptions.XYZ{
+            print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.gimbal.yawRelativeToAircraftHeading, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
+            var json = JSON()
+            json["x"].doubleValue = round(100 * copter.posX) / 100
+            json["y"].doubleValue = round(100 * copter.posY) / 100
+            json["z"].doubleValue = round(100 * copter.posZ) / 100
+            json["local_yaw"].doubleValue = round(100 * copter.gimbalYawXYZ) / 100
 
-                _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
-            }
+            _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
+    }
 
     //************************************************************
     // Update gui when nofication didvelupdata happened  TEST only
@@ -1365,10 +1373,10 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             }
             // Store the gimbal reference
             if let gimbalReference = self.aircraft?.gimbal {
-                self.gimbalController.gimbal = gimbalReference
-                self.gimbalController.initGimbal()
+                self.gimbal.gimbal = gimbalReference
+                self.gimbal.initGimbal()
                 // Copy gimbal controller to copter for gimbal access
-                self.copter.gimbalController = self.gimbalController
+                self.copter.gimbal = self.gimbal
             }
             else{
                 setupOk = false

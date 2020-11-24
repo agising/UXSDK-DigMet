@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>DSS</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>DJISDKAppKey</key>
-	<string>63dd486031c2b5d344056d16</string>
+	<string>dabc36a779843555e2e578be</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -44,7 +44,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Need permission to save photos to photo library</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>To load photos from library and preview them</string>
+	<string>DSS will access your Gallery to save files and import files to editor</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

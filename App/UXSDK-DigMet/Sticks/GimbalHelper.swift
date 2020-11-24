@@ -9,11 +9,13 @@
 import Foundation
 import DJIUXSDK
 
-class GimbalController: NSObject{
+class GimbalController: NSObject, DJIGimbalDelegate{
     var gimbal: DJIGimbal?
     var pitchRangeExtensionSet = false
-    var gimbalPitch: Float? = 0
     
+    var gimbalPitch: Float? = nil
+    var yawRelativeToAircraftHeading: Double? = nil
+
     // *******************************************
     // Init the gimbal, set pitch range extension.
     func initGimbal(){
@@ -30,8 +32,20 @@ class GimbalController: NSObject{
             })
         })
         
+        
+        gimbal!.delegate = self
+                
         // Should check of gimbal can be controlled aka selftest. getYawRelativeToAircaftHeading() returns nil of the init of gimbal fails (motor blocked?)
     }
+    
+    
+    //**************************************************
+    // The gimbal delegate function
+    func gimbal(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
+        gimbalPitch = state.attitudeInDegrees.pitch
+        yawRelativeToAircraftHeading = state.yawRelativeToAircraftHeading
+    }
+
     
     //***************************
     // Set the gimbal pitch value
@@ -52,9 +66,10 @@ class GimbalController: NSObject{
         })
     }
     
-    // **********************************************************
-    // Get the gimbal yaw relative to aircraft heading. Tested ok
-    func getYawRelativeToAircaftHeading()->Double?{
+    
+    // **************************************************************************************************
+    // Get the gimbal yaw relative to aircraft heading. Tested ok. Handeled by the delegate funciton now.
+    func getYawRelativeToAircraftHeading()->Double?{
         guard let gimbalStateKey = DJIGimbalKey(param: DJIGimbalParamAttitudeYawRelativeToAircraft) else {
             NSLog("Couldn't create the key")
             return nil
@@ -73,8 +88,8 @@ class GimbalController: NSObject{
     }
 
 
-    // ********************************************
-    // Get gimbal pitch Attitude always returns nil
+    // ************************************************************************************
+    // Get gimbal pitch Attitude always returns nil. Handeled by the delegate function now.
     func getGimbalPitch()->DJIGimbalAttitude?{
         guard let gimbalAttitudeKey = DJIGimbalKey(param: DJIGimbalParamAttitudeInDegrees) else {
             NSLog("Couldn't create the key")
@@ -125,15 +140,3 @@ class GimbalController: NSObject{
         }
     }
 }
-
-
-//class GimbalController: NSObject, DJIGimbalDelegate {
-//    func gimbal(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
-//            print(state.attitudeInDegrees.pitch)
-//    }
-//}
-
-
-// let theGState = DJIGimbalState()
-// self.gimbalController.gimbalUpdater(self.gimbalController.gimbal!, didUpdate: theGState)
-// printSL("g pitch is: " + String(describing: self.gimbalController.gimbalPitch))

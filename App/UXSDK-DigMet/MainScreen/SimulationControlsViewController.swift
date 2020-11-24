@@ -50,7 +50,7 @@ class SimulatorControlsViewController: UIViewController {
         
         let latitudeTextField = UITextField()
         latitudeTextField.translatesAutoresizingMaskIntoConstraints = false
-        latitudeTextField.attributedPlaceholder = NSAttributedString(string: "Enter Latitude Here", attributes: [NSAttributedString.Key.foregroundColor : UIColor.lightText])
+        latitudeTextField.attributedPlaceholder = NSAttributedString(string: "Latitude decimal degrees using ','", attributes: [NSAttributedString.Key.foregroundColor : UIColor.lightText])
         latitudeTextField.textColor = UIColor.white
         latitudeTextField.textAlignment = .center
         latitudeTextField.font = UIFont.systemFont(ofSize: 32.0)
@@ -67,7 +67,7 @@ class SimulatorControlsViewController: UIViewController {
         
         let longitudeTextField = UITextField()
         longitudeTextField.translatesAutoresizingMaskIntoConstraints = false
-        longitudeTextField.attributedPlaceholder = NSAttributedString(string: "Enter Longitude Here", attributes: [NSAttributedString.Key.foregroundColor : UIColor.lightText])
+        longitudeTextField.attributedPlaceholder = NSAttributedString(string: "Longitude decimal degrees using ','", attributes: [NSAttributedString.Key.foregroundColor : UIColor.lightText])
         longitudeTextField.textColor = UIColor.white
         longitudeTextField.textAlignment = .center
         longitudeTextField.font = UIFont.systemFont(ofSize: 32.0)

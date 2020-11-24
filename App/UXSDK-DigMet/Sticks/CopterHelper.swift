@@ -10,9 +10,10 @@ import Foundation
 import DJIUXSDK
 import SwiftyJSON
 
-class Copter {
+class CopterController: NSObject, DJIFlightControllerDelegate {
     var flightController: DJIFlightController?
-    var gimbalController: GimbalController?
+    var gimbal: GimbalController?
+    
     var state: DJIFlightControllerState?
     
     var missionGeoFenceX: [Double] = [-5, 5]
@@ -30,7 +31,6 @@ class Copter {
     var posY: Double = 0
     var posZ: Double = 0
     var gimbalYawXYZ: Double = 0
-    var gimbalYawToAC: Double = 0
     var yawXYZ: Double = 0
     
     var velX: Double = 0
@@ -56,11 +56,11 @@ class Copter {
     var toReference = ""
     var pos: CLLocation?
     var heading: Double = 0
-    var startHeading: Double?
-    var homeLocation: CLLocation?
-    var dssHome: CLLocation?
-    var dssHomeHeading: Double?
-    var flightMode: String?
+    var homeHeading: Double?                // Heading of last updated homewaypoint
+    var homeLocation: CLLocation?           // Location of last updated homewaypoint
+    var dssHome: CLLocation?                // Home waypoint of DSS
+    var dssHomeHeading: Double?             // Home heading of DSS
+    var flightMode: String?                 // the flight mode as a string
     var startHeadingXYZ: Double?
     var startLocationXYZ: CLLocation?
     
@@ -85,14 +85,18 @@ class Copter {
     private let yawKP: Float = 3
     
     
-    // Init
-    //init(controlPeriod: Double, sampleTime: Double){
-    init(){
+    override init(){
     // Calc number of loops for dutt cycle
         loopTarget = Int(controlPeriod / sampleTime)
-        self.state = DJIFlightControllerState()
     }
 
+    // ***********************************
+    // Flight controller delegate function. Might consume battery, don't implement without using it
+    //func flightController(_ fc: DJIFlightController, didUpdate state: DJIFlightControllerState) {
+    //    self.state = state
+    //    print("Delegate function printing flight mode: ", state.flightModeString)
+    // }
+    
         //*************************************
     // Start listening for position updates
     func startListenToVel(){
@@ -140,14 +144,18 @@ class Copter {
             if let checkedNewValue = newValue{
                 self.pos = (checkedNewValue.value as! CLLocation)
                 guard let heading = self.getHeading() else {
-                               print("Error: Update XYZ copter heading")
-                               return}
+                   print("PosListener: Error updating heading")
+                   return}
                 self.heading = heading
-                // Uppdate different frames depending on subscription. Only implementet XYZ-frame.
-
+                
+                // Todo: Uppdate different frames depending on subscription. Only implementet XYZ-frame.
                 // Update the XYZ coordinates relative to the XYZ frame. XYZ if XYZ is not set prior to takeoff, the homelocation updated at takeoff will be set as XYZ origin.
-                guard let home = self.startLocationXYZ else {return}
-                guard let checkedStartHeading = self.startHeadingXYZ else {return}
+                guard let home = self.startLocationXYZ else {
+                    print("PosListener: No start location XYZ")
+                    return}
+                guard let checkedStartHeading = self.startHeadingXYZ else {
+                    print("PosListener: No start headingXYZ")
+                    return}
                 
                 let lat_diff = self.pos!.coordinate.latitude - home.coordinate.latitude
                 let lon_diff = self.pos!.coordinate.longitude - home.coordinate.longitude
@@ -163,15 +171,11 @@ class Copter {
                 self.posY = -posN * sin(alpha) + posE * cos(alpha)
                 self.posZ = -alt_diff
                 
-                guard let gimbalYawToAC = self.gimbalController!.getYawRelativeToAircaftHeading() else {
-                               print("Error: Update XYZ gimbal yaw")
+                guard let yawRelativeToAircraftHeading = self.gimbal!.yawRelativeToAircraftHeading else {
+                               print("PosListener: Error: no gimbal relative to aircraft heading")
                                return}
-                guard let startHeadingXYZ = self.startHeadingXYZ else {
-                               print("Start pos is not set")
-                               return}
-                self.gimbalYawXYZ = heading - startHeadingXYZ + gimbalYawToAC
-                self.yawXYZ = heading - startHeadingXYZ
-                self.gimbalYawToAC = gimbalYawToAC
+                self.gimbalYawXYZ = heading - checkedStartHeading + yawRelativeToAircraftHeading
+                self.yawXYZ = heading - checkedStartHeading
                 
                 NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
             }
@@ -196,7 +200,7 @@ class Copter {
                     let flightMode = checkedNewValue.value as! String
                     let printStr = "FlightMode: " + flightMode
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
-                    // Trigger completed take-off to climb to correct altitude
+                    // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
                         let toAlt = self.toAlt
                         let toReference = self.toReference
@@ -204,7 +208,7 @@ class Copter {
                             Dispatch.main{
                                 self.setAlt(targetAlt: toAlt, reference: toReference)
                             }
-                            self.toAlt = -1
+                            self.toAlt = -1  // Reset to default value
                         }
                     }
                     self.flightMode = flightMode
@@ -214,19 +218,27 @@ class Copter {
     
     // ******************************************************************************************
     // Set the origin and orientation for XYZ coordinate system. Can only be set once for safety!
-    func setOriginXYZ(gimbalYaw: Double)->Bool{
+    func setOriginXYZ()->Bool{
         if let _ = self.startHeadingXYZ {
             print("Caution: XYZ coordinate system already set!")
             return false
         }
-        guard let pos = getCurrentLocation() else {return false}
-        guard let heading = getHeading() else {return false}
+        guard let pos = getCurrentLocation() else {
+            print("setOriginXYZ: Can't get current location")
+            return false}
+        guard let heading = getHeading() else {
+            print("setOriginXYZ: Can't get current heading")
+            return false}
+        guard let gimbalYaw = self.gimbal?.yawRelativeToAircraftHeading else {
+            print("setOriginXYZ: Cant get gimbalYaw")
+            return false}
+        
         if heading == 0 {
             print("setOriginXYZ: Start heading is exactly 0, CAUTION!")
         }
         self.startHeadingXYZ = heading + gimbalYaw
         self.startLocationXYZ = pos
-        print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", gimbalYaw: " + String(describing: gimbalYaw))
+        print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", of which gimbalYaw is: " + String(describing: gimbalYaw))
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here + gimbal yaw"])
         return true
     }
@@ -245,7 +257,6 @@ class Copter {
         }
         
         keyManager.stopListening(on: locationKey, ofListener: self)
-    
     }
     
     //**************************************
@@ -263,19 +274,21 @@ class Copter {
         
         keyManager.startListeningForChanges(on: homeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
             if let checkedNewValue = newValue{
-                self.startHeading = self.getHeading()
+                self.homeHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
 
                 // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
                 if self.startHeadingXYZ == nil && self.getIsFlying() == true {
-                    print("HomePosUpdated: The local XYZ is not set, setting loacl XYZ to home position and start heading")
+                    print("HomePosListener: The local XYZ is not set, setting local XYZ to home position and start heading")
                     self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
-                    self.startHeadingXYZ = self.startHeading
-                    print("HomePosUpdated: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ))
-                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
-
+                    self.startHeadingXYZ = self.homeHeading
+                    print("HomePosListener: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ))
+//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
+                    print("HomePosListener: Home pos was updated. XYZ origin was automatically set")
                 }
-                print("Home location has been updated, caught by listener")
+                else{
+                    print("HomePosListener: Home pos was updated.")
+                }
             }
         })
     }
@@ -372,7 +385,7 @@ class Copter {
         self.flightController?.rollPitchCoordinateSystem = DJIVirtualStickFlightCoordinateSystem.body
         self.flightController?.yawControlMode = DJIVirtualStickYawControlMode.angularVelocity // Auto reset to angle if controller reconnects
         self.flightController?.rollPitchControlMode = DJIVirtualStickRollPitchControlMode.velocity
-        self.state = DJIFlightControllerState()
+   //     self.state = DJIFlightControllerState()
         //self.flightController?.delegate?.flightController?(self.flightController!, didUpdate: self.state!)
         
         // Activate listeners
@@ -381,7 +394,9 @@ class Copter {
         self.startListenToFlightMode()
         // No reason to track velocities as for now. Uncomment to enable
         //self.startListenToVel()
-
+        
+        // If flight controller delegate is needed. Also activate delegate function flightcontroller row ~95
+        // flightController!.delegate = self
     }
         
     //***************************************************
@@ -399,6 +414,8 @@ class Copter {
         }
     }
     
+    //***************************************
+    // Limit a value to lower and upper limit
     func withinLimit(value: Double, lowerLimit: Double, upperLimit: Double)->Bool{
         if value > upperLimit {
             //print(value, upperLimit, lowerLimit)
@@ -458,6 +475,8 @@ class Copter {
         })
     }
     
+    //******************************************************************************
+    // Sned a velocity command for a short time, dutts the aircraft in x, y, z, yaw.
     func dutt(x: Float, y: Float, z: Float, yawRate: Float){
         // limit to max
         self.ref_velX = limitToMax(value: x, limit: xyVelLimit/100)
@@ -473,7 +492,7 @@ class Copter {
        }
     
     //******************************************************************************************************************
-    // Send controller data (joystick). Called from fireTimer that send commands every x ms. Stop timer to stop commands.
+    // Send controller data. Called from Timer that send commands every x ms. Stop timer to stop commands.
     func sendControlData(velX: Float, velY: Float, velZ: Float, yawRate: Float) {
         //print("Sending x: \(velX), y: \(velY), z: \(velZ), yaw: \(yawRate)")
        
@@ -482,7 +501,7 @@ class Copter {
 //        controlData.pitch = velY
 //        controlData.yaw = yawRate
       
-        // Check horizontal spped and calculate same reduction factor to x and y to maintain direction
+        // Check horizontal speed and calculate same reduction factor to x and y to maintain direction
         let horizontalVel = sqrt(velX*velX + velY*velY)
         let limitedHorizontalVel = limitToMax(value: horizontalVel, limit: xyVelLimit/100)
         var factor: Float = 1
@@ -562,10 +581,14 @@ class Copter {
         })
     }
     
+    //*************************************************************************************
+    // Check if a wp is within the geofence. TODO? - handeled in uploadMissionXYZ already..
     func wpFence(wp: JSON)->Bool{
         return true
     }
     
+    //*************************************************************************************************
+    // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
     func uploadMissionXYZ(mission: JSON)->(success: Bool, arg: String){
         // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
         var wpCnt = 0
@@ -578,6 +601,7 @@ class Copter {
                 guard withinLimit(value: subJson["y"].doubleValue, lowerLimit: missionGeoFenceY[0], upperLimit: missionGeoFenceY[1]) else {return (false, "GeofenceY")}
                 guard withinLimit(value: subJson["z"].doubleValue, lowerLimit: missionGeoFenceZ[0], upperLimit: missionGeoFenceZ[1]) else {return (false, "GeofenceZ")}
                 guard withinLimit(value: subJson["local_yaw"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) else {return (false, "local_yaw out of bounds")}
+                // Check if any wp-action is supported, otherwise reject.
                 if subJson["action"].exists() {
                     if subJson["action"].stringValue != "take_photo"{
                         return(false, "Faulty wp action")
@@ -597,8 +621,10 @@ class Copter {
         return (true, "")
     }
     
-    func getAction(num: Int)->String{
-        let id = "id" + String(num)
+    //**********************************
+    // Returns the wp action of wp idNum
+    func getAction(idNum: Int)->String{
+        let id = "id" + String(idNum)
         if self.mission[id]["action"].exists(){
             return self.mission[id]["action"].stringValue
         }
@@ -607,8 +633,10 @@ class Copter {
         }
     }
     
-    func getWPXYZYaw(num: Int)->(Double, Double, Double, Double){
-        let id = "id" + String(num)
+    //***********************************************
+    // Extract the wp x, y, z, yaw from wp with idNum
+    func getWPXYZYaw(idNum: Int)->(Double, Double, Double, Double){
+        let id = "id" + String(idNum)
         let x = self.mission[id]["x"].doubleValue
         let y = self.mission[id]["y"].doubleValue
         let z = self.mission[id]["z"].doubleValue
@@ -616,7 +644,8 @@ class Copter {
         return(x, y, z, local_yaw)
     }
 
-    
+    //******************************************************************************************
+    // Step up mission next wp if it exists, otherwise report -1 to indicate mission is complete
     func setMissionNextWp(num: Int){
         if mission["id" + String(num)].exists(){
             self.missionNextWp = num
@@ -654,7 +683,7 @@ class Copter {
             }
         }
             
-        let (x, y, z, yaw) = getWPXYZYaw(num: self.missionNextWp)
+        let (x, y, z, yaw) = getWPXYZYaw(idNum: self.missionNextWp)
         print("Going to: ", x,y,z,yaw)
         gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refYawXYZ: yaw)
         // Notify about going to startWP
@@ -666,7 +695,6 @@ class Copter {
     // Function that sets reference position and executes the XYZ position controller timer.
     private func gotoXYZ(refPosX: Double, refPosY: Double, refPosZ: Double, refYawXYZ: Double){
         print("And x as refPosX is: " + String(describing: refPosX))
-        // start in Y only
         // Check if horixzontal positions are within geofence  (should X be max 1m?)
         // Function is private, only approved missions will be passed in here.
         //TODO hardconded geofence
@@ -690,7 +718,6 @@ class Copter {
         print("gotoXYZ, new reference positoin, x:" + self.ref_posX.description + ", y: " + self.ref_posY.description + ", z: " + self.ref_posZ.description + ", yawXYZ: " + self.ref_yawXYZ.description)
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. Timer will execute control commands for a period of time
         duttTimer?.invalidate()
-        //loopCnt = 0
         
         posCtrlTimer?.invalidate()
         posCtrlLoopCnt = 0
@@ -700,6 +727,7 @@ class Copter {
     
     //********************************************************************************************
     // Algorithm for determining of a wp is tracked or not. When tracked the mission can continue.
+    // Algorithm requires position and yaw to be tracked trackingRecordTarget times
     func trackingWP(posLimit: Double, yawLimit: Double, velLimit: Double)->Bool{
         
         let x2 = pow(self.ref_posX - self.posX, 2)
@@ -723,14 +751,10 @@ class Copter {
             return false
         }
     }
-}
 
-
-
-extension Copter{
+    
     //************************************************************************************************************
     // Timer function that loops every x ms until timer is invalidated. Each loop control data (joystick) is sent.
-   
     @objc func fireDuttTimer() {
         loopCnt += 1
         if loopCnt >= loopTarget {
@@ -749,8 +773,8 @@ extension Copter{
             print("wp is tracked")
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
             
-            // Check for wp action
-            let action = getAction(num: self.missionNextWp)
+            // Check for wp action, TODO, should only excute if on mission?
+            let action = getAction(idNum: self.missionNextWp)
             if action == "take_photo"{
                 // Notify action to be executed
                 NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
@@ -758,15 +782,15 @@ extension Copter{
                 self.missionIsActive = false
                 self.posCtrlTimer?.invalidate()
                 return
-                // gogoXYZ next wp is done from notifier function
+                // Notifier function will re-activate the mission and send gogoXYZ with next wp as reference
             }
             
-            // if we are on a mission
+            // If we are on a mission
             if self.missionIsActive{
                 print("Mission is active")
                 self.setMissionNextWp(num: self.missionNextWp + 1)
                 if self.missionNextWp != -1{
-                    let (x, y, z, yaw) = self.getWPXYZYaw(num: self.missionNextWp)
+                    let (x, y, z, yaw) = self.getWPXYZYaw(idNum: self.missionNextWp)
                     self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, refYawXYZ: yaw)
                 }
                 else{
@@ -803,15 +827,15 @@ extension Copter{
             //print("XYZ Controller z: ", self.ref_posZ, self.posZ, self.ref_velZ)
             // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
 
-            //Do not conncider gimbalYaw in yawControl
+            //Do not concider gimbalYaw in yawControl
             let yawError = getFloatWithinAngleRange(angle: Float(self.yawXYZ - self.ref_yawXYZ))
             self.ref_yawRate = -yawError*yawKP
             
-            // Send control data, limits in velocities is handeled in sendControlData
+            // Send control data, limits in velocity are handeled in sendControlData
             sendControlData(velX: self.ref_velX, velY: self.ref_velY, velZ: self.ref_velZ, yawRate: self.ref_yawRate)
         }
         
-        // For safety during testing..
+        // For safety during testing.. Maxtime for flying to wp
         if posCtrlLoopCnt >= posCtrlLoopTarget{
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0)
 

@@ -14,7 +14,7 @@
 		939BB577A9E6EE7C5C2406C1 /* Pods_UXSDK_DigMet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 32A6398AEE1992AF762BA1AA /* Pods_UXSDK_DigMet.framework */; };
 		971DFA1D250B4B9900FD6185 /* zmqHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA1C250B4B9800FD6185 /* zmqHelper.swift */; };
 		971DFA1F250B4BBE00FD6185 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA1E250B4BBE00FD6185 /* Extensions.swift */; };
-		971DFA21250B738C00FD6185 /* AircraftHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA20250B738C00FD6185 /* AircraftHelper.swift */; };
+		971DFA21250B738C00FD6185 /* CopterHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971DFA20250B738C00FD6185 /* CopterHelper.swift */; };
 		9729962E252311F300749C9C /* GimbalHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9729962D252311F300749C9C /* GimbalHelper.swift */; };
 		9738BB3E24F9197B000275FA /* Retry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9738BB3D24F9197B000275FA /* Retry.swift */; };
 		9771889024FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */; };
@@ -23,7 +23,6 @@
 		979B35DC24F0176B00236AEE /* Sticks.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 979B35DB24F0176B00236AEE /* Sticks.storyboard */; };
 		A452DC382070D8CC00EFBA30 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A452DC252070D8CB00EFBA30 /* AppDelegate.swift */; };
 		A452DC392070D8CC00EFBA30 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A452DC262070D8CB00EFBA30 /* Assets.xcassets */; };
-		A452DC3A2070D8CC00EFBA30 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A452DC272070D8CB00EFBA30 /* LaunchScreen.storyboard */; };
 		A452DC3B2070D8CC00EFBA30 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A452DC292070D8CB00EFBA30 /* Main.storyboard */; };
 		A452DC3C2070D8CC00EFBA30 /* DefaultLayout.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A452DC2B2070D8CB00EFBA30 /* DefaultLayout.storyboard */; };
 		A452DC3D2070D8CC00EFBA30 /* DefaultLayoutCustomization.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A452DC2C2070D8CB00EFBA30 /* DefaultLayoutCustomization.storyboard */; };
@@ -65,7 +64,7 @@
 		868A4ED01E01FA53006FEE33 /* UXSDK-DigMet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "UXSDK-DigMet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		971DFA1C250B4B9800FD6185 /* zmqHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = zmqHelper.swift; sourceTree = "<group>"; };
 		971DFA1E250B4BBE00FD6185 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
-		971DFA20250B738C00FD6185 /* AircraftHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftHelper.swift; sourceTree = "<group>"; };
+		971DFA20250B738C00FD6185 /* CopterHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopterHelper.swift; sourceTree = "<group>"; };
 		9729962D252311F300749C9C /* GimbalHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GimbalHelper.swift; sourceTree = "<group>"; };
 		9738BB3D24F9197B000275FA /* Retry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Retry.swift; sourceTree = "<group>"; };
 		9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SticksViewControllerHelper.swift; sourceTree = "<group>"; };
@@ -74,7 +73,6 @@
 		979B35DB24F0176B00236AEE /* Sticks.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Sticks.storyboard; sourceTree = "<group>"; };
 		A452DC252070D8CB00EFBA30 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A452DC262070D8CB00EFBA30 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A452DC282070D8CB00EFBA30 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A452DC2A2070D8CB00EFBA30 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		A452DC2B2070D8CB00EFBA30 /* DefaultLayout.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = DefaultLayout.storyboard; sourceTree = "<group>"; };
 		A452DC2C2070D8CB00EFBA30 /* DefaultLayoutCustomization.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = DefaultLayoutCustomization.storyboard; sourceTree = "<group>"; };
@@ -217,14 +215,14 @@
 			isa = PBXGroup;
 			children = (
 				979B35D924F0173100236AEE /* SticksViewController.swift */,
+				9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */,
 				971DFA1E250B4BBE00FD6185 /* Extensions.swift */,
 				971DFA1C250B4B9800FD6185 /* zmqHelper.swift */,
+				971DFA20250B738C00FD6185 /* CopterHelper.swift */,
+				9729962D252311F300749C9C /* GimbalHelper.swift */,
+				9785CA19251937250075F1A8 /* Helper.swift */,
 				9738BB3D24F9197B000275FA /* Retry.swift */,
 				979B35DB24F0176B00236AEE /* Sticks.storyboard */,
-				9771888F24FCDB1A00F9ACA6 /* SticksViewControllerHelper.swift */,
-				971DFA20250B738C00FD6185 /* AircraftHelper.swift */,
-				9785CA19251937250075F1A8 /* Helper.swift */,
-				9729962D252311F300749C9C /* GimbalHelper.swift */,
 			);
 			path = Sticks;
 			sourceTree = "<group>";
@@ -235,7 +233,6 @@
 				979B35D224F0165800236AEE /* Sticks */,
 				A452DC252070D8CB00EFBA30 /* AppDelegate.swift */,
 				A452DC262070D8CB00EFBA30 /* Assets.xcassets */,
-				A452DC272070D8CB00EFBA30 /* LaunchScreen.storyboard */,
 				A452DC2F2070D8CB00EFBA30 /* Info.plist */,
 				53EDD5F12346F384002E28AF /* ProductCommunication */,
 				53ECE276233DB88300E278CD /* Helpers */,
@@ -316,7 +313,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				A452DC3C2070D8CC00EFBA30 /* DefaultLayout.storyboard in Resources */,
-				A452DC3A2070D8CC00EFBA30 /* LaunchScreen.storyboard in Resources */,
 				A452DC3B2070D8CC00EFBA30 /* Main.storyboard in Resources */,
 				A452DC3D2070D8CC00EFBA30 /* DefaultLayoutCustomization.storyboard in Resources */,
 				A452DC442070D8CC00EFBA30 /* PanelsCollections.storyboard in Resources */,
@@ -426,7 +422,7 @@
 				53ECE278233DB8B500E278CD /* Helpers.swift in Sources */,
 				A452DC382070D8CC00EFBA30 /* AppDelegate.swift in Sources */,
 				971DFA1F250B4BBE00FD6185 /* Extensions.swift in Sources */,
-				971DFA21250B738C00FD6185 /* AircraftHelper.swift in Sources */,
+				971DFA21250B738C00FD6185 /* CopterHelper.swift in Sources */,
 				A452DC3F2070D8CC00EFBA30 /* DefaultLayoutViewController.swift in Sources */,
 				979B35DA24F0173100236AEE /* SticksViewController.swift in Sources */,
 			);
@@ -435,14 +431,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		A452DC272070D8CB00EFBA30 /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				A452DC282070D8CB00EFBA30 /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
 		A452DC292070D8CB00EFBA30 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -568,7 +556,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/lib",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.rise.digmet.ux;
+				PRODUCT_BUNDLE_IDENTIFIER = com.RISE.IOS.DSS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -597,7 +585,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/lib",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.rise.digmet.ux;
+				PRODUCT_BUNDLE_IDENTIFIER = com.RISE.IOS.DSS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
