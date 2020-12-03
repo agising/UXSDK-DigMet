@@ -19,6 +19,8 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 // Background process https://stackoverflow.com/questions/24056205/how-to-use-background-thread-in-swift
 // Related issue https://stackoverflow.com/questions/49204713/zeromq-swift-code-with-swiftyzeromq-recv-still-blocks-gui-text-update-even-a
 
+// Generate App icons: https://appicon.co/
+
 
 public class SticksViewController: DUXDefaultLayoutViewController {
     //**********************
@@ -29,17 +31,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     
     var acks = 0
-    
-    
-    var server = serverClass() // For test. Could get a JSON from http server.
-    let hostIp = "192.168.1.245" //"192.168.43.14"//"10.114.17.0" //192.168.1.245"//25.22.96.189" // Use dict or something to store several ip adresses
-    let hostUsername = "gising"
-    let hostPath = "/Users/gising/temp/"
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
     var infoPublisher: SwiftyZeroMQ.Socket?
     var dataPublisher: SwiftyZeroMQ.Socket?
     var replyEnable = false
-    let replyEndpoint = "tcp://*:1234"
+    let replyEndpoint = "tcp://*:5557"
     let infoPublishEndPoint = "tcp://*:5558"
     let dataPublishEndPoint = "tcp://*:5559"
     var sshAllocator = Allocator(name: "ssh")
@@ -49,7 +45,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var nextGimbalPitch: Int = 0
     
     var gimbalcapability: [AnyHashable: Any]? = [:]
-    //var cameraModeReference: DJICameraMode = DJICameraMode.playback
     var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
     
@@ -72,6 +67,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     var lastPhotoDataFilename = ""
     var metaDataURL: URL?
     var metaDataFilename = ""
+    
+    var idle: Bool = true                   // For future implementation of task que
+    
     
     //var helperView = myView(coder: NSObject)
 
@@ -754,7 +752,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
             
                 switch json_m["fcn"]{
                 case "arm_take_off":
-                    self.printSL("Received cmd arm_take_off")
+                    self.printSL("Received cmd: arm_take_off")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         json_r = createJsonNack("arm_take_off")
                     }
@@ -771,7 +769,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         }
                     }
                 case "data_stream":
-                    self.printSL("Received cmd data_stream: " + json_m["arg"]["attribute"].stringValue + " - " + json_m["arg"]["enable"].stringValue)
+                    self.printSL("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
                     switch json_m["arg"]["attribute"]{
                         case "XYZ":
@@ -788,17 +786,17 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     }
                 case "disconnect":
                     json_r = createJsonAck("disconnect")
-                    self.printSL("Received cmd disconnect")
+                    self.printSL("Received cmd: disconnect")
                     // Disconnect code
                     return
                 case "gimbal_set":
-                    self.printSL("Received cmd gimbal_set")
+                    self.printSL("Received cmd: gimbal_set")
                     json_r = createJsonAck("gimbal_set")
                     self.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
                     
                 case "gogo_XYZ":
-                    self.printSL("Received cmd gogo_XYZ")
+                    self.printSL("Received cmd: gogo_XYZ")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
@@ -822,7 +820,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     
                 case "info_request":
                     json_r = createJsonAck("info_request")
-                    self.printSL("Received cmd info_request")
+                    // print("Received cmd: info_request", json_m["arg"])
                     // Info request code
                     switch json_m["arg"]{
                     case "operator":
@@ -834,13 +832,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     case "armed":
                         json_r["arg2"].stringValue = "armed"
                         json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
-                    
-                    
                     case "idle":
                         json_r["arg2"].stringValue = "idle"
-                        json_r["arg3"].boolValue = false   //TODO
-
-                    
+                        json_r["arg3"].boolValue = self.idle
                     case "current_wp":
                         json_r["arg2"].stringValue = "current_wp"
                         json_r["arg3"].stringValue = copter.missionNextWp.description
@@ -859,10 +853,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                             }
                         }
                     default:
-                        _ = 1
+                        json_r = createJsonNack("info_request")
+                        json_r["arg2"].stringValue = "Attribute not supported: " + json_m["arg"].stringValue
                     }
                 case "land":
-                    self.printSL("Received cmd land")
+                    self.printSL("Received cmd: land")
                     json_r = createJsonAck("land")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         json_r = createJsonAck("land")
@@ -872,44 +867,80 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         json_r = createJsonNack("land")
                     }
                 case "photo":
-                switch json_m["arg"]["cmd"]{
-                    case "take_photo":
-                        self.printSL("Received cmd photo with arg take_photo")
-                        
-                        if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
-                            json_r = createJsonAck("photo")
-                            json_r["arg2"].stringValue = "take_photo"
-                            takePhotoCMD()
-                        }
-                        else{ // camera resource busy
-                            json_r = createJsonNack("photo")
-                        }
-                    case "download":
-                        self.printSL("Received cmd photo with arg download")
-                        if self.cameraAllocator.allocate("download", maxTime: 40) {
-                            json_r = createJsonAck("photo")
-                            json_r["arg2"].stringValue = "download"
-                            var sessionIndex = json_m["arg"]["index"].intValue
-                            // Help user to find the last index
-                            if sessionIndex == -1 {
-                                sessionIndex = self.sessionLastIndex
+                    switch json_m["arg"]["cmd"]{
+                        case "take_photo":
+                            self.printSL("Received cmd: photo, with arg take_photo")
+                            
+                            if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
+                                json_r = createJsonAck("photo")
+                                json_r["arg2"].stringValue = "take_photo"
+                                takePhotoCMD()
                             }
-                            print("The download index argument: " + String(describing: sessionIndex))
-                            downloadPictureCMD(sessionIndex: sessionIndex)
-                        }
-                        else { // Camera resource busy
+                            else{ // camera resource busy
+                                json_r = createJsonNack("photo")
+                            }
+                        case "download":
+                            self.printSL("Received cmd: photo, with arg download")
+                            if self.cameraAllocator.allocate("download", maxTime: 40) {
+                                json_r = createJsonAck("photo")
+                                json_r["arg2"].stringValue = "download"
+                                var sessionIndex = json_m["arg"]["index"].intValue
+                                // Help user to find the last index
+                                if sessionIndex == -1 {
+                                    sessionIndex = self.sessionLastIndex
+                                }
+                                print("The download index argument: " + String(describing: sessionIndex))
+                                downloadPictureCMD(sessionIndex: sessionIndex)
+                            }
+                            else { // Camera resource busy
+                                json_r = createJsonNack("photo")
+                            }
+                        default:
+                            self.printSL("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
                             json_r = createJsonNack("photo")
                         }
-                    default:
-                        self.printSL("Received cmd photo with unknow arg: " + json_m["arg"]["cmd"].stringValue)
-                        json_r = createJsonNack("photo")
+                case "rtl":
+                    self.printSL("Received cmd: rtl")
+                    // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
+                    // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
+                    copter.rtl()
+                    // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
+                    var max_attempts = 8
+                    while copter.flightMode != "GPS" && copter.flightMode != "Landing" {
+                        if max_attempts > 0{
+                            max_attempts -= 1
+                            // Sleep 0.1s
+                            print("ReadSocket: Waiting for rtl to go through before replying.")
+                            usleep(50000)
+                        }
+                        else {
+                            // We tried many times, it must have failed somehow -> nack
+                            print("ReadSocket: RTL ERROR, this should not happen. Debug.")
+                            json_r = createJsonNack("rtl")
+                            break
+                        }
                     }
-                case "save_home_position":
-                    self.printSL("Received cmd save_home_position")
-                    json_r = createJsonAck("save_home_position")
-                    copter.saveCurrentPosAsDSSHome()
+                    if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
+                        json_r = createJsonAck("rtl")
+                    }
+                case "dss_srtl":
+                    // Once activated it should be possible to interfere TODO
+                    self.printSL("Received comd: dss srtl")
+                    json_r = createJsonAck("dss_srtl")
+                    copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    
+                case "save_dss_home_position":
+                    // Function saves dss smart rtl home position
+                    self.printSL("Received cmd: save_dss_home_position")
+                    if copter.saveCurrentPosAsDSSHome(){
+                        json_r = createJsonAck("save_dss_home_position")
+                    }
+                    else {
+                        json_r = createJsonNack("save_dss_home_position")
+                        json_r["arg2"].stringValue = "Position not available"
+                    }
                 case "set_vel_body":
-                    self.printSL("Received cmd set_vel_body")
+                    self.printSL("Received cmd: set_vel_body")
                     json_r = createJsonAck("set_vel_body")
 
                     // Set velocity code
@@ -924,11 +955,11 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                         self.printSL("Dutt command sent from readSocket")
                     }
                 case "set_yaw":
-                    self.printSL("Received cmd set_yaw")
+                    self.printSL("Received cmd: set_yaw")
                     json_r = createJsonAck("set_yaw")
                     // Set yaw code TODO
                 case "upload_mission_XYZ":
-                    self.printSL("Received cmd upload_mission_XYZ")
+                    self.printSL("Received cmd: upload_mission_XYZ")
                     
                     let (success, arg) = copter.uploadMissionXYZ(mission: json_m["arg"])
                     if success{
@@ -950,7 +981,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                 if json_r["fcn"].stringValue == "nack"{
                     print(json_r)
                 }
-                if json_r["arg"].stringValue != "heart_beat"{
+                if json_r["arg"].stringValue != "heart_beat" && json_r["arg"].stringValue != "info_request"{
                     print("Reply:")
                    // print(json_r)
                     print(reply_str)
@@ -1092,7 +1123,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         else{
             print("Could not get fligth mode")
         }
-
+        
+        copter.dssSrtl(hoverTime: 5)
         
         previewImageView.image = nil
         // Set the control command
@@ -1237,7 +1269,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         
         // If subscribed to XYZ updates, also get local_yaw and publish
         if subscriptions.XYZ{
-            print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.gimbal.yawRelativeToAircraftHeading, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
+            print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.gimbal.yawRelativeToAircraftHeading ?? 0, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
             var json = JSON()
             json["x"].doubleValue = round(100 * copter.posX) / 100
             json["y"].doubleValue = round(100 * copter.posY) / 100

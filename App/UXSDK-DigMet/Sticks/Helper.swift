@@ -183,7 +183,18 @@ func getFloatWithinAngleRange(angle: Float)->Float{
     return angle2
 }
 
+// Struct for declared conformance for squence and following iterator protocol. Returns sequence n, n-1, ... 0
+struct Countdown: Sequence, IteratorProtocol {
+    var count: Int
 
-// To be a camera class
+    mutating func next() -> Int? {
+        if count == -1 {
+            return nil
+        } else {
+            defer { count -= 1 }  // defer: Fancy way of reducing counter after count has been returned, can be used to guarantee things are not forgotten. Google it :)
+            return count
+        }
+    }
+}
 
 

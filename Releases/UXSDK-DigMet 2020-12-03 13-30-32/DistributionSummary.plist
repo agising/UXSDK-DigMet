@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UXSDK-DigMet.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+				<key>dateExpires</key>
+				<string>2021-12-02</string>
+				<key>type</key>
+				<string>Apple Distribution</string>
+			</dict>
+			<key>embeddedBinaries</key>
+			<array>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>DJISDK.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>DJIUXSDK.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>DJIWidget.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>FFmpeg.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>NMSSH.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>SwiftyJSON.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>SwiftyZeroMQ.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+				<dict>
+					<key>architectures</key>
+					<array>
+						<string>arm64</string>
+					</array>
+					<key>certificate</key>
+					<dict>
+						<key>SHA1</key>
+						<string>F9B6EACBA184C9DED1472411262A1A64CA1AD9BE</string>
+						<key>dateExpires</key>
+						<string>2021-12-02</string>
+						<key>type</key>
+						<string>Apple Distribution</string>
+					</dict>
+					<key>name</key>
+					<string>iOS_Color_Picker.framework</string>
+					<key>team</key>
+					<dict>
+						<key>id</key>
+						<string>NXX4YWHU78</string>
+						<key>name</key>
+						<string>Andreas Gising</string>
+					</dict>
+				</dict>
+			</array>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>NXX4YWHU78.com.RISE.IOS.DSS</string>
+				<key>com.apple.developer.team-identifier</key>
+				<string>NXX4YWHU78</string>
+				<key>get-task-allow</key>
+				<false/>
+				<key>keychain-access-groups</key>
+				<array>
+					<string>NXX4YWHU78.com.RISE.IOS.DSS</string>
+				</array>
+			</dict>
+			<key>name</key>
+			<string>UXSDK-DigMet.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>5b8830e7-dffd-4749-b7f4-f66a7fa7f4e6</string>
+				<key>name</key>
+				<string>Andreas Gising AdHoc provisioning profile</string>
+			</dict>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>NXX4YWHU78</string>
+				<key>name</key>
+				<string>Andreas Gising</string>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

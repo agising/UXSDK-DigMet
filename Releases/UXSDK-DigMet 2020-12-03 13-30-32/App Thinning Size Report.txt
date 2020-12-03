@@ -1,0 +1,57 @@
+
+App Thinning Size Report for All Variants of UXSDK-DigMet
+
+Variant: UXSDK-DigMet-01D3478C-F923-46A7-A1C5-0FA4E8FF55FC.ipa
+Supported variant descriptors: [device: iPhone8,4, os-version: 13.0], [device: iPod9,1, os-version: 13.0], [device: iPhone8,1, os-version: 13.0], [device: iPhone8,4, os-version: 14.0], [device: iPod9,1, os-version: 14.0], and [device: iPhone8,1, os-version: 14.0]
+App + On Demand Resources size: 68,1 MB compressed, 104,6 MB uncompressed
+App size: 68,1 MB compressed, 104,6 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-29F073CD-A8CC-4051-9688-CFE955D96632.ipa
+Supported variant descriptors: [device: iPhone13,2, os-version: 14.0], [device: iPhone13,1, os-version: 14.0], [device: iPhone9,2, os-version: 14.0], [device: iPhone12,3, os-version: 13.0], [device: iPhone10,3, os-version: 13.0], [device: iPhone11,4, os-version: 14.0], [device: iPhone10,2, os-version: 14.0], [device: iPhone10,5, os-version: 14.0], [device: iPhone10,5, os-version: 13.0], [device: iPhone12,5, os-version: 14.0], [device: iPhone12,5, os-version: 13.0], [device: iPhone9,4, os-version: 14.0], [device: iPhone12,3, os-version: 14.0], [device: iPhone10,3, os-version: 14.0], [device: iPhone11,6, os-version: 14.0], [device: iPhone13,4, os-version: 14.0], [device: iPhone10,6, os-version: 13.0], [device: iPhone9,4, os-version: 13.0], [device: iPhone11,2, os-version: 13.0], [device: iPhone10,6, os-version: 14.0], [device: iPhone11,2, os-version: 14.0], [device: iPhone10,2, os-version: 13.0], [device: iPhone13,3, os-version: 14.0], [device: iPhone9,2, os-version: 13.0], [device: iPhone11,4, os-version: 13.0], and [device: iPhone11,6, os-version: 13.0]
+App + On Demand Resources size: 68,8 MB compressed, 105,2 MB uncompressed
+App size: 68,8 MB compressed, 105,2 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-3032A9B1-84B2-4FC8-87F9-A17F018AD7A0.ipa
+Supported variant descriptors: [device: iPad11,4, os-version: 14.0], [device: iPad11,1, os-version: 13.0], [device: iPad13,1, os-version: 14.0], [device: iPad8,11, os-version: 13.0], [device: iPad7,1, os-version: 14.0], [device: iPad11,2, os-version: 14.0], [device: iPad7,4, os-version: 13.0], [device: iPad6,3, os-version: 14.0], [device: iPad13,2, os-version: 14.0], [device: iPad6,3, os-version: 13.0], [device: iPad7,3, os-version: 14.0], [device: iPad7,3, os-version: 13.0], [device: iPad8,10, os-version: 13.0], [device: iPad7,2, os-version: 13.0], [device: iPad8,6, os-version: 13.0], [device: iPad8,2, os-version: 14.0], [device: iPad8,12, os-version: 14.0], [device: iPad7,4, os-version: 14.0], [device: iPad11,3, os-version: 13.0], [device: iPad8,1, os-version: 13.0], [device: iPad8,3, os-version: 14.0], [device: iPad8,8, os-version: 14.0], [device: iPad8,9, os-version: 14.0], [device: iPad8,11, os-version: 14.0], [device: iPad8,7, os-version: 14.0], [device: iPad8,12, os-version: 13.0], [device: iPad8,5, os-version: 14.0], [device: iPad8,10, os-version: 14.0], [device: iPad8,6, os-version: 14.0], [device: iPad8,4, os-version: 14.0], [device: iPad8,8, os-version: 13.0], [device: iPad11,4, os-version: 13.0], [device: iPad8,4, os-version: 13.0], [device: iPad8,1, os-version: 14.0], [device: MacFamily20,1, os-version: 14.0], [device: iPad8,7, os-version: 13.0], [device: iPad11,1, os-version: 14.0], [device: iPad6,4, os-version: 14.0], [device: iPad7,2, os-version: 14.0], [device: iPad11,3, os-version: 14.0], [device: iPad8,2, os-version: 13.0], [device: iPad7,1, os-version: 13.0], [device: iPad8,5, os-version: 13.0], [device: iPad11,2, os-version: 13.0], [device: iPad8,3, os-version: 13.0], [device: iPad6,4, os-version: 13.0], and [device: iPad8,9, os-version: 13.0]
+App + On Demand Resources size: 68,3 MB compressed, 104,7 MB uncompressed
+App size: 68,3 MB compressed, 104,7 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-45205B10-25BD-4C81-9040-E3EFC008DF3D.ipa
+Supported variant descriptors: [device: iPhone12,1, os-version: 13.0], [device: iPhone11,8, os-version: 13.0], [device: iPhone12,1, os-version: 14.0], and [device: iPhone11,8, os-version: 14.0]
+App + On Demand Resources size: 68,2 MB compressed, 104,7 MB uncompressed
+App size: 68,2 MB compressed, 104,7 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-53B8F388-7F1C-4116-BDFC-06A258E54277.ipa
+Supported variant descriptors: [device: iPhone10,1, os-version: 14.0], [device: iPhone12,8, os-version: 14.0], [device: iPhone10,4, os-version: 13.0], [device: iPhone9,1, os-version: 14.0], [device: iPhone12,8, os-version: 13.0], [device: iPhone9,3, os-version: 14.0], [device: iPhone9,3, os-version: 13.0], [device: iPhone10,4, os-version: 14.0], [device: iPhone9,1, os-version: 13.0], and [device: iPhone10,1, os-version: 13.0]
+App + On Demand Resources size: 68,1 MB compressed, 104,6 MB uncompressed
+App size: 68,1 MB compressed, 104,6 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-70D51939-64EC-4D05-8A77-A683FB1F4D74.ipa
+Supported variant descriptors: [device: iPad7,12, os-version: 14.0], [device: iPad5,2, os-version: 14.0], [device: iPad5,1, os-version: 14.0], [device: iPad7,6, os-version: 13.0], [device: iPad6,8, os-version: 13.0], [device: iPad11,7, os-version: 14.0], [device: iPad6,7, os-version: 13.0], [device: iPad6,11, os-version: 14.0], [device: iPad11,6, os-version: 14.0], [device: iPad5,3, os-version: 14.0], [device: iPad7,5, os-version: 14.0], [device: iPad5,3, os-version: 13.0], [device: iPad7,11, os-version: 14.0], [device: iPad6,11, os-version: 13.0], [device: iPad6,12, os-version: 14.0], [device: iPad5,1, os-version: 13.0], [device: iPad7,11, os-version: 13.0], [device: iPad6,8, os-version: 14.0], [device: iPad5,2, os-version: 13.0], [device: iPad5,4, os-version: 13.0], [device: iPad6,12, os-version: 13.0], [device: iPad6,7, os-version: 14.0], [device: iPad7,6, os-version: 14.0], [device: iPad7,5, os-version: 13.0], [device: iPad7,12, os-version: 13.0], and [device: iPad5,4, os-version: 14.0]
+App + On Demand Resources size: 68,3 MB compressed, 104,7 MB uncompressed
+App size: 68,3 MB compressed, 104,7 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet-7A27C766-8560-4D2D-85AA-99976CCC163D.ipa
+Supported variant descriptors: [device: iPhone8,2, os-version: 14.0] and [device: iPhone8,2, os-version: 13.0]
+App + On Demand Resources size: 68,8 MB compressed, 105,2 MB uncompressed
+App size: 68,8 MB compressed, 105,2 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
+
+
+Variant: UXSDK-DigMet.ipa
+Supported variant descriptors: Universal
+App + On Demand Resources size: 78,3 MB compressed, 116,1 MB uncompressed
+App size: 78,3 MB compressed, 116,1 MB uncompressed
+On Demand Resources size: Zero KB compressed, Zero KB uncompressed
