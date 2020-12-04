@@ -929,7 +929,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     // Once activated it should be possible to interfere TODO
                     self.printSL("Received comd: dss srtl")
                     json_r = createJsonAck("dss_srtl")
-                    copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    //copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
                     
                 case "save_dss_home_position":
                     // Function saves dss smart rtl home position
