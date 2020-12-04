@@ -9,7 +9,6 @@
 import UIKit
 import DJIUXSDK
 import DJIWidget
-import NMSSH
 import SwiftyZeroMQ // https://github.com/azawawi/SwiftyZeroMQ  good examples in readme
 import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in readme
 
@@ -1022,8 +1021,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         deactivateSticks()
         self.replyEnable = false
         
-        _ = try? self.infoPublisher?.close()
-        _ = try? self.dataPublisher?.close()
+        _ = ((try? self.infoPublisher?.close()) as ()??)
+        _ = ((try? self.dataPublisher?.close()) as ()??)
         _ = try? self.context.close()
         _ = try? self.context.terminate()
         copter.stopListenToPos()
