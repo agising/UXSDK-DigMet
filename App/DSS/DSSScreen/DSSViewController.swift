@@ -6,6 +6,9 @@
 //  Copyright © 2020 DJI. All rights reserved.
 //
 
+// header serach path "$(SRCROOT)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/include"/**
+// $(inherited) $(PROJECT_DIR)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/lib
+
 import UIKit
 import DJIUXSDK
 import DJIWidget
