@@ -130,7 +130,7 @@ class GimbalController: NSObject, DJIGimbalDelegate{
                     print("Gimbal feature is not available: ", key)
                 }
                 else{
-                    print("Gimbal feature is available: ", key, ", min: ", minMax.min, ", max: ", minMax.max)
+                    print("Gimbal feature is available: ", key, ", min: ", minMax.min.description, ", max: ", minMax.max.description)
                 }
             }
             if theType == DJIParamCapability.self{
