@@ -190,6 +190,22 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         })
     }
     
+    //************************************
+    // Stop listening for position updates
+    func stopListenToPos(){
+        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.stopListening(on: locationKey, ofListener: self)
+    }
+    
     // ***************************
     // Monitor flight mode changes
     func startListenToFlightMode(){
@@ -206,7 +222,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         keyManager.startListeningForChanges(on: flightModeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
                 if let checkedNewValue = newValue{
                     let flightMode = checkedNewValue.value as! String
-                    let printStr = "FlightMode: " + flightMode
+                    let printStr = "listenToFlightMode: New Flight mode: " + flightMode
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
@@ -251,21 +267,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         return true
     }
 
-    //************************************
-    // Stop listening for position updates
-    func stopListenToPos(){
-        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
-            NSLog("Couldn't create the key")
-            return
-        }
 
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return
-        }
-        
-        keyManager.stopListening(on: locationKey, ofListener: self)
-    }
     
     //**************************************
     // Start listen to home position updates

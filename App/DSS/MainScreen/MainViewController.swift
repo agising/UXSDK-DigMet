@@ -51,9 +51,7 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     @IBOutlet weak var register: UIButton!
     @IBOutlet weak var connected: UILabel!
     @IBOutlet weak var connect: UIButton!
-    
-    @IBAction func defaultLayoutButtonPressed(_ sender: UIButton) {
-    }
+    @IBOutlet weak var startDSSButton: UIButton!
     
     
     // Bridge Mode Controls
@@ -72,6 +70,14 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        // Set up layout of the DSS Button
+        let radius: CGFloat = 5
+        // Set corner radiuses to buttons
+        startDSSButton.layer.cornerRadius = radius
+        startDSSButton.backgroundColor = UIColor.lightGray
+        startDSSButton.isEnabled = false
+        
         
         NotificationCenter.default.addObserver(self, selector: #selector(productCommunicationDidChange), name: Notification.Name(rawValue: ProductCommunicationServiceStateDidChange), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleFlightControllerSimulatorDidStart), name: Notification.Name(rawValue: FligntControllerSimulatorDidStart), object: nil)
@@ -139,7 +145,6 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     }
     
     @objc func productCommunicationDidChange() {
-        
         // If this demo is used in China, it's required to login to your DJI account to activate the application.
         // Also you need to use DJI Go app to bind the aircraft to your DJI account. For more details, please check this demo's tutorial.
         self.updateUserAccountStatus()
@@ -155,9 +160,14 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         if ProductCommunicationService.shared.connected {
             self.connected.text = "YES"
             self.connect.isHidden = true
+            startDSSButton.backgroundColor = UIColor.systemOrange
+            startDSSButton.setTitleColor(UIColor.white, for: .normal)
+            startDSSButton.isEnabled = true
         } else {
             self.connected.text = "NO"
             self.connect.isHidden = false
+            startDSSButton.backgroundColor = UIColor.lightGray
+            startDSSButton.isEnabled = false
         }
     }
     
@@ -188,10 +198,18 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
 
     @objc func handleFlightControllerSimulatorDidStart() {
         self.updateSimulatorControls(isSimulatorActive: true)
+        startDSSButton.backgroundColor = UIColor.systemGreen
+        startDSSButton.setTitleColor(UIColor.white, for: .normal)
+        startDSSButton.setTitle("SIMULATE", for: .normal)
+        startDSSButton.isEnabled = true
     }
     
     @objc func handleFlightControllerSimulatorDidStop() {
         self.updateSimulatorControls(isSimulatorActive: false)
+        startDSSButton.backgroundColor = UIColor.systemOrange
+        startDSSButton.setTitleColor(UIColor.white, for: .normal)
+        startDSSButton.setTitle("Start DSS", for: .normal)
+        startDSSButton.isEnabled = true
     }
     
     @objc func updateSimulatorControls(isSimulatorActive:Bool) {

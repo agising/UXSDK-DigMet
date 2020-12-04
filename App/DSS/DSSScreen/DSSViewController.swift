@@ -9,6 +9,9 @@
 // header serach path "$(SRCROOT)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/include"/**
 // $(inherited) $(PROJECT_DIR)/Frameworks/VideoPreviewer/VideoPreviewer/ffmpeg/lib
 
+
+// framework search paht debug : $(inherited) $(PROJECT_DIR)/Frameworks $(PROJECT_DIR)/../DJIWidget/**
+// feamework search path release : $(inherited) $(PROJECT_DIR)/Frameworks $(PROJECT_DIR)/../DJIWidget/**
 import UIKit
 import DJIUXSDK
 import DJIWidget
@@ -929,7 +932,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     // Once activated it should be possible to interfere TODO
                     self.printSL("Received comd: dss srtl")
                     json_r = createJsonAck("dss_srtl")
-                    //copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
                     
                 case "save_dss_home_position":
                     // Function saves dss smart rtl home position
