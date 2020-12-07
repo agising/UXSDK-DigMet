@@ -52,8 +52,8 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     @IBOutlet weak var connected: UILabel!
     @IBOutlet weak var connect: UIButton!
     @IBOutlet weak var startDSSButton: UIButton!
-    
-    
+    //@IBAction func myUnwindAction(unwindSegue: UIStoryboardSegue) {}
+
     // Bridge Mode Controls
     @IBOutlet weak var bridgeModeSwitch: UISwitch!
     @IBOutlet weak var bridgeModeIPField: UITextField!
@@ -78,6 +78,7 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         startDSSButton.backgroundColor = UIColor.lightGray
         startDSSButton.isEnabled = false
         
+
         
         NotificationCenter.default.addObserver(self, selector: #selector(productCommunicationDidChange), name: Notification.Name(rawValue: ProductCommunicationServiceStateDidChange), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleFlightControllerSimulatorDidStart), name: Notification.Name(rawValue: FligntControllerSimulatorDidStart), object: nil)

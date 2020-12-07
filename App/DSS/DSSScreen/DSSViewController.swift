@@ -104,6 +104,8 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     @IBOutlet weak var DuttRightButton: UIButton!
     @IBOutlet weak var savePhotoButton: UIButton!
     
+
+    
     // Just to test an init function
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -933,7 +935,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     self.printSL("Received comd: dss srtl")
                     json_r = createJsonAck("dss_srtl")
                     copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
-                    
                 case "save_dss_home_position":
                     // Function saves dss smart rtl home position
                     self.printSL("Received cmd: save_dss_home_position")
@@ -1022,16 +1023,33 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     }
        
     //*******************************************************************************************************
-    // Exit view, but first deactivate Sticks (which invalidates fireTimer-timer to stop any joystick command
-    @IBAction func xclose(_ sender: UIButton) {
-        deactivateSticks()
-        self.replyEnable = false
+    // Exit view, but first deactivate Sticks (which invalidates fireTimer-timer to stop any joystick command)
+ 
+    @IBAction func xClose(_ sender: UIButton) {
+        print("xclose: Closing view an related tasks")
         
+        deactivateSticks()
+        print("xClose: Sticks deactivated")
+        
+        // Stop the receiving thread
+        self.replyEnable = false
+        print("xClose: Rep-Req thread stopped")
+
+        // Stop the publisher threads
         _ = ((try? self.infoPublisher?.close()) as ()??)
         _ = ((try? self.dataPublisher?.close()) as ()??)
         _ = try? self.context.close()
         _ = try? self.context.terminate()
-        copter.stopListenToPos()
+        print("xClose: Info-link and data-link closed. Context terminated")
+
+        
+        // Stop listener prenumerations
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamVelocity)
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamFlightModeString)
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamAircraftLocation)
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamHomeLocation)
+        print("xClose: Sopped listening to velocity-, flight mode-, position- and home location updates")
+
         self.dismiss(animated: true, completion: nil)
     }
     
@@ -1054,15 +1072,16 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
         // Clear screen, lets fly!
-        previewImageView.image = nil
-        transferIndex(sessionIndex: 2, completionHandler: {(success) in
-            if success{
-                print("Photo transferred")
-            }
-            else{
-                print("Photo failed to transfer")
-            }
-        })
+
+        //        previewImageView.image = nil
+//        transferIndex(sessionIndex: 2, completionHandler: {(success) in
+//            if success{
+//                print("Photo transferred")
+//            }
+//            else{
+//                print("Photo failed to transfer")
+//            }
+//        })
         
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
@@ -1116,22 +1135,29 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
         //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
         //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
-        self.transferAll()
+     
         
-        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
-            print(mode.self)
-        })
+        copter.startListenToFlightMode()
+        print("started listeing to flight mode")
+//        self.transferAll()
+//
+//        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
+//            print(mode.self)
+//        })
+//
+//        if let mode = self.copter.flightMode{
+//            print("flightMode: ", mode)
+//        }
+//        else{
+//            print("Could not get fligth mode")
+//        }
+//
+//        copter.dssSrtl(hoverTime: 5)
+//
+//        previewImageView.image = nil
         
-        if let mode = self.copter.flightMode{
-            print("flightMode: ", mode)
-        }
-        else{
-            print("Could not get fligth mode")
-        }
         
-        copter.dssSrtl(hoverTime: 5)
         
-        previewImageView.image = nil
         // Set the control command
         //copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
         //copter.stopListenToPos() test functionality of stop listen

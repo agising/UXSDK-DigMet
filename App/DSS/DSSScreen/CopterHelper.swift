@@ -108,7 +108,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         //*************************************
     // Start listening for position updates
     func startListenToVel(){
-        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamVelocity) else {
+        guard let key = DJIFlightControllerKey(param: DJIFlightControllerParamVelocity) else {
             NSLog("Couldn't create the key")
             return
         }
@@ -118,7 +118,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             return
         }
 
-        keyManager.startListeningForChanges(on: locationKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+        keyManager.startListeningForChanges(on: key, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
             if let checkedNewValue = newValue{
                 let vel = checkedNewValue.value as! DJISDKVector3D
                 // Velocities are in NED coordinate system !
@@ -133,7 +133,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             }
         })
     }
-
     
     //*************************************
     // Start listening for position updates
@@ -190,22 +189,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         })
     }
     
-    //************************************
-    // Stop listening for position updates
-    func stopListenToPos(){
-        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
-            NSLog("Couldn't create the key")
-            return
-        }
-
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return
-        }
-        
-        keyManager.stopListening(on: locationKey, ofListener: self)
-    }
-    
     // ***************************
     // Monitor flight mode changes
     func startListenToFlightMode(){
@@ -240,6 +223,55 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         })
     }
     
+    //**************************************
+    // Start listen to home position updates
+    func startListenToHomePosUpdated(){
+        guard let homeKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.startListeningForChanges(on: homeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+            if let checkedNewValue = newValue{
+                self.homeHeading = self.getHeading()
+                self.homeLocation = (checkedNewValue.value as! CLLocation)
+
+                // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
+                if self.startHeadingXYZ == nil && self.getIsFlying() == true {
+                    print("HomePosListener: The local XYZ is not set, setting local XYZ to home position and start heading")
+                    self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
+                    self.startHeadingXYZ = self.homeHeading
+                    print("HomePosListener: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ))
+                    //NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
+                    print("HomePosListener: Home pos was updated. XYZ origin was automatically set")
+                }
+                else{
+                    print("HomePosListener: Home pos was updated.")
+                }
+            }
+        })
+    }
+    
+    //*************************************************************************************
+    // Generic func to stop listening for updates. Stop all listeners at exit (func xClose)
+    func stopListenToParam(DJIFlightControllerKeyString: String){
+        guard let key = DJIFlightControllerKey(param: DJIFlightControllerKeyString) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        keyManager.stopListening(on: key, ofListener: self)
+    }
+    
     // ******************************************************************************************
     // Set the origin and orientation for XYZ coordinate system. Can only be set once for safety!
     func setOriginXYZ()->Bool{
@@ -269,39 +301,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
 
     
-    //**************************************
-    // Start listen to home position updates
-    func startListenToHomePosUpdated(){
-        guard let homeKey = DJIFlightControllerKey(param: DJIFlightControllerParamHomeLocation) else {
-            NSLog("Couldn't create the key")
-            return
-        }
 
-        guard let keyManager = DJISDKManager.keyManager() else {
-            print("Couldn't get the keyManager, are you registered")
-            return
-        }
-        
-        keyManager.startListeningForChanges(on: homeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
-            if let checkedNewValue = newValue{
-                self.homeHeading = self.getHeading()
-                self.homeLocation = (checkedNewValue.value as! CLLocation)
-
-                // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
-                if self.startHeadingXYZ == nil && self.getIsFlying() == true {
-                    print("HomePosListener: The local XYZ is not set, setting local XYZ to home position and start heading")
-                    self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
-                    self.startHeadingXYZ = self.homeHeading
-                    print("HomePosListener: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ))
-//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
-                    print("HomePosListener: Home pos was updated. XYZ origin was automatically set")
-                }
-                else{
-                    print("HomePosListener: Home pos was updated.")
-                }
-            }
-        })
-    }
     
     //**************************************************************************************************
     // Clears the DSS smart rtl list and adds current location as DSS home location, also saves heading.
