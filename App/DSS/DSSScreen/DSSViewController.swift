@@ -27,7 +27,7 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 // Generate App icons: https://appicon.co/
 
 
-public class SticksViewController: DUXDefaultLayoutViewController {
+public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewController {
     //**********************
     // Variable declarations
     var aircraft: DJIAircraft?
@@ -45,6 +45,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     let dataPublishEndPoint = "tcp://*:5559"
     var sshAllocator = Allocator(name: "ssh")
     var subscriptions = Subscriptions()
+    var inControls = "USER"
     
     var pitchRangeExtension_set: Bool = false
     var nextGimbalPitch: Int = 0
@@ -75,7 +76,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     
     var idle: Bool = true                   // For future implementation of task que
     
-    
     //var helperView = myView(coder: NSObject)
 
     //*********************
@@ -97,14 +97,20 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     @IBOutlet weak var controlPeriodStackView: UIStackView!
     
     // Buttons
-    @IBOutlet weak var DeactivateSticksButton: UIButton!
-    @IBOutlet weak var ActivateSticksButton: UIButton!
+    //@IBOutlet weak var DeactivateSticksButton: UIButton!
+    //@IBOutlet weak var ActivateSticksButton: UIButton!
+    @IBOutlet weak var controlsButton: UIButton!
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var DuttLeftButton: UIButton!
     @IBOutlet weak var DuttRightButton: UIButton!
-    @IBOutlet weak var savePhotoButton: UIButton!
+    @IBOutlet weak var getDataButton: UIButton!
+    @IBOutlet weak var putDataButton: UIButton!
     
+    @IBOutlet weak var takePhotoButton: UIButton!
+    @IBOutlet weak var previewButton: UIButton!
+    @IBOutlet weak var savePhotoButton: UIButton!
 
+    
     
     // Just to test an init function
     required init?(coder aDecoder: NSCoder) {
@@ -128,15 +134,17 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Enable button and change colormode
     func enableButton(_ button: UIButton!){
         button.isEnabled = true
-        button.backgroundColor = UIColor.systemBlue
+        button.backgroundColor = UIColor.systemOrange
     }
 
     //***********************************************
     // Deactivate the sticks and disable dutt buttons
     func deactivateSticks(){
         //GUI handling
-        DeactivateSticksButton.backgroundColor = UIColor.lightGray
-        ActivateSticksButton.backgroundColor = UIColor.systemBlue
+        
+        //DeactivateSticksButton.backgroundColor = UIColor.lightGray
+        //ActivateSticksButton.backgroundColor = UIColor.systemBlue
+        controlsButton.backgroundColor = UIColor.systemOrange
         disableButton(DuttLeftButton)
         disableButton(DuttRightButton)
         
@@ -148,8 +156,9 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     // Activate sticks and dutt buttons, reset any velocity references
     func activateSticks(){
         //GUI handling
-        ActivateSticksButton.backgroundColor = UIColor.lightGray
-        DeactivateSticksButton.backgroundColor = UIColor.systemRed
+        //ActivateSticksButton.backgroundColor = UIColor.lightGray
+        //DeactivateSticksButton.backgroundColor = UIColor.systemRed
+        controlsButton.backgroundColor = UIColor.systemGreen
         enableButton(DuttLeftButton)
         enableButton(DuttRightButton)
         
@@ -832,7 +841,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
                     switch json_m["arg"]{
                     case "operator":
                         json_r["arg2"].stringValue = "operator"
-                        json_r["arg3"].stringValue = copter._operator
+                        json_r["arg3"].stringValue = self.inControls
                     case "posD":
                         json_r["arg2"].stringValue = "posD"
                         json_r["arg3"] = JSON(copter.posZ)
@@ -1053,27 +1062,44 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         self.dismiss(animated: true, completion: nil)
     }
     
-    //**************************************************************************************************
-    // DeactivateSticks: Touch down action, deactivate immidiately and reset ActivateSticks button color
-    @IBAction func DeactivateSticksPressed(_ sender: UIButton) {
-        copter.stop()
-        deactivateSticks()
-        copter._operator = "USER" // Reject application control
-    }
+//    //**************************************************************************************************
+//    // DeactivateSticks: Touch down action, deactivate immidiately and reset ActivateSticks button color
+//    @IBAction func DeactivateSticksPressed(_ sender: UIButton) {
+//        copter.stop()
+//        deactivateSticks()
+//        copter._operator = "USER" // Reject application control
+//    }
 
     //************************************************************************************
     // ActivateSticks: Touch down up inside action, ativate when ready (release of button)
     @IBAction func ActivateSticksPressed(_ sender: UIButton) {
-        activateSticks()
-        copter._operator = "CLIENT" // Allow application control
+        if inControls == "USER"{
+            // GIVE the controls to client
+            inControls = "CLIENT"
+            controlsButton.setTitle("TAKE Controls", for: .normal)
+            activateSticks()
+        }
+        else{
+            // TAKE back the controls
+            deactivateSticks()
+            inControls = "USER"
+            controlsButton.setTitle("GIVE Controls", for: .normal)
+        }
+        
+        // TODO, remove commented code.
+        //activateSticks()
+        //copter._operator = "CLIENT" // Allow application control
     }
 
     //***************************************************************************************************************
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
-        // Clear screen, lets fly!
+        // Set the control command
+        copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
 
-        //        previewImageView.image = nil
+
+        // Clear screen, lets fly!
+        // previewImageView.image = nil
 //        transferIndex(sessionIndex: 2, completionHandler: {(success) in
 //            if success{
 //                print("Photo transferred")
@@ -1083,8 +1109,7 @@ public class SticksViewController: DUXDefaultLayoutViewController {
 //            }
 //        })
         
-        // Set the control command
-        //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
+     
 //        var json = JSON()
 //        json["id0"] = JSON()
 //        json["id0"]["x"] = JSON(1)
@@ -1131,36 +1156,26 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //***************************************************************************************************************
     // Sends a command to go body left for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
+        // Set the control command
+        copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
+
+
         // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
         //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
         //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
         //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
-     
         
-        copter.startListenToFlightMode()
-        print("started listeing to flight mode")
+
 //        self.transferAll()
 //
 //        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
 //            print(mode.self)
 //        })
-//
-//        if let mode = self.copter.flightMode{
-//            print("flightMode: ", mode)
-//        }
-//        else{
-//            print("Could not get fligth mode")
-//        }
-//
+
 //        copter.dssSrtl(hoverTime: 5)
 //
 //        previewImageView.image = nil
         
-        
-        
-        // Set the control command
-        //copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
-        //copter.stopListenToPos() test functionality of stop listen
 
 //        var json = JSON()
 //        json["id0"] = JSON()
@@ -1272,24 +1287,6 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         }
     }
     
-    //***************************************************************************
-    // Test button. Uses ssh to 'pwd' on the host and prints the answer to screen
-    @IBAction func getDataButton(_ sender: UIButton) {
-        Dispatch.background{
-//            self.pwdAtServer(completion: {(success, info) in
-//                Dispatch.main{
-//                    if success{
-//                        self.printSL("PWD result: " + info)
-//                    }
-//                    else{
-//                        // Do something more..?
-//                        self.printSL("PWD fail: " + info)
-//                    }
-//                }
-//            })
-        }
-    }
-    
     
     //*************************************************
     // Update gui when nofication didposupdate happened
@@ -1376,10 +1373,31 @@ public class SticksViewController: DUXDefaultLayoutViewController {
     //*************************************************************************
     //*************************************************************************
     
+//    public override var contentViewController: DUXFPVView {
+//
+//        var newContentViewController = DUXFPVViewController()
+//        newContentViewController.fpvView?.showCameraDisplayNam
+//        self.contentViewController = newContentViewController
+//    }
+
+    
     // ************
     // viewDidLoad
     override public func viewDidLoad() {
-        super.viewDidLoad()
+        super.viewDidLoad()  // run the viDidoad of the superclass
+
+        // Trying to get rid of the mavic mini camera - label. The property is withon the DUXFPVViewController - fpvView.showCameraDisplayName
+        // DUXFPVViewController is a SUBclass of DUXContentViewController. DUXContentViewContrller is a container for Vider and stuff and is a subclass of UIViweController.
+        // https://forum.dji.com/thread-224097-1-1.html
+        // https://github.com/dji-sdk/Mobile-UXSDK-iOS/blob/master/Sample%20Code/SwiftSampleCode/UXSDKSwiftSample/DefaultLayout/DefaultLayoutCustomizationViewController.swift
+        // https://developer.dji.com/api-reference/ios-uilib-api/Widgets/DUXFPVView.html#duxfpvview_showcameradisplayname_inline
+        //
+        //        var modViewController: DUXFPVViewController = DUXFPVViewController()
+        //        print("Flag is now: ", modViewController.fpvView?.showCameraDisplayName.description)
+        //        modViewController.fpvView?.showCameraDisplayName.toggle()
+        //        print("Flag is now: ", modViewController.fpvView?.showCameraDisplayName.description)
+        //        self.contentViewController = modViewController
+        
         // Init steppers
         controlPeriodStepperButton.value = copter.controlPeriod
         controlPeriodLabel.text = String(copter.controlPeriod/1000)
@@ -1391,16 +1409,26 @@ public class SticksViewController: DUXDefaultLayoutViewController {
         // Set up layout
         let radius: CGFloat = 5
         // Set corner radiuses to buttons
-        DeactivateSticksButton.layer.cornerRadius = radius
-        ActivateSticksButton.layer.cornerRadius = radius
+        //DeactivateSticksButton.layer.cornerRadius = radius
+        //ActivateSticksButton.layer.cornerRadius = radius
+        controlsButton.layer.cornerRadius = radius
         DuttLeftButton.layer.cornerRadius = radius
         DuttRightButton.layer.cornerRadius = radius
         
         // Disable some buttons
-        DeactivateSticksButton.backgroundColor = UIColor.lightGray
+        //DeactivateSticksButton.backgroundColor = UIColor.lightGray
         disableButton(DuttLeftButton)
         disableButton(DuttRightButton)
-
+        
+        // Hide some buttons. TODO remove of not used..
+        takePhotoButton.isHidden = true
+        previewButton.isHidden = true
+        savePhotoButton.isHidden = true
+        getDataButton.isHidden = true
+        putDataButton.isHidden = true
+        //DeactivateSticksButton.isHidden = true
+        
+        
         printSL("Setting up aircraft")
         //DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: {
         

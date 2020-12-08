@@ -53,7 +53,13 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     @IBOutlet weak var connect: UIButton!
     @IBOutlet weak var startDSSButton: UIButton!
     //@IBAction func myUnwindAction(unwindSegue: UIStoryboardSegue) {}
-
+    
+    // Buttons for layout
+    
+    @IBOutlet weak var greenSafeButton: UIButton!
+    @IBOutlet weak var orangeThinkButton: UIButton!
+    @IBOutlet weak var greyDisabledButton: UIButton!
+    
     // Bridge Mode Controls
     @IBOutlet weak var bridgeModeSwitch: UISwitch!
     @IBOutlet weak var bridgeModeIPField: UITextField!
@@ -77,6 +83,17 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         startDSSButton.layer.cornerRadius = radius
         startDSSButton.backgroundColor = UIColor.lightGray
         startDSSButton.isEnabled = false
+        
+        greenSafeButton.layer.cornerRadius = radius
+        orangeThinkButton.layer.cornerRadius = radius
+        greyDisabledButton.layer.cornerRadius = radius
+        
+        greenSafeButton.isEnabled = false
+        orangeThinkButton.isEnabled = false
+        greyDisabledButton.isEnabled = false
+        
+        
+        
         
 
         

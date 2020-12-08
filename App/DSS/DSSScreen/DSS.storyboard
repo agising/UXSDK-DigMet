@@ -9,10 +9,10 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
-        <!--Sticks-->
+        <!--DSS-->
         <scene sceneID="eZM-uE-AwX">
             <objects>
-                <viewController title="Sticks" id="1m5-5v-g5t" customClass="SticksViewController" customModule="DSS_APP" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController title="Sticks" id="1m5-5v-g5t" userLabel="DSS" customClass="DSSViewController" customModule="DSS_APP" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="Ca7-cF-Tls">
                         <rect key="frame" x="0.0" y="0.0" width="667" height="375"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -27,13 +27,23 @@
                                 </connections>
                             </button>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="4" translatesAutoresizingMaskIntoConstraints="NO" id="wmX-bV-6D7">
-                                <rect key="frame" x="208.5" y="30" width="250" height="78"/>
+                                <rect key="frame" x="208.5" y="48" width="250" height="42"/>
                                 <subviews>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" lineBreakMode="wordWrap" numberOfLines="4" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YnT-Iq-vJj" userLabel="StatusLabel">
+                                        <rect key="frame" x="0.0" y="0.0" width="250" height="0.0"/>
+                                        <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <color key="tintColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                        <color key="textColor" systemColor="systemBackgroundColor"/>
+                                        <nil key="highlightedColor"/>
+                                    </label>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ULH-sd-que" userLabel="ActivateSticksButton">
-                                        <rect key="frame" x="0.0" y="0.0" width="250" height="30"/>
-                                        <color key="backgroundColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                        <state key="normal" title="Activate Sticks">
-                                            <color key="titleColor" systemColor="groupTableViewBackgroundColor"/>
+                                        <rect key="frame" x="0.0" y="4" width="250" height="38"/>
+                                        <color key="backgroundColor" systemColor="systemOrangeColor"/>
+                                        <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
+                                        <inset key="contentEdgeInsets" minX="0.0" minY="10" maxX="0.0" maxY="10"/>
+                                        <state key="normal" title="GIVE Controls">
+                                            <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         </state>
                                         <userDefinedRuntimeAttributes>
                                             <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
@@ -42,32 +52,6 @@
                                         </userDefinedRuntimeAttributes>
                                         <connections>
                                             <action selector="ActivateSticksPressed:" destination="1m5-5v-g5t" eventType="touchUpInside" id="g7a-pB-VgY"/>
-                                        </connections>
-                                    </button>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" lineBreakMode="wordWrap" numberOfLines="4" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YnT-Iq-vJj" userLabel="StatusLabel">
-                                        <rect key="frame" x="0.0" y="34" width="250" height="0.0"/>
-                                        <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <color key="tintColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                        <color key="textColor" systemColor="systemBackgroundColor"/>
-                                        <nil key="highlightedColor"/>
-                                    </label>
-                                    <button opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tXs-kJ-fdV" userLabel="DeactivateSticksButton">
-                                        <rect key="frame" x="0.0" y="38" width="250" height="40"/>
-                                        <color key="backgroundColor" red="0.0" green="0.47843137250000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                        <constraints>
-                                            <constraint firstAttribute="height" constant="40" id="dCd-cu-Dsf"/>
-                                        </constraints>
-                                        <fontDescription key="fontDescription" type="system" pointSize="15"/>
-                                        <inset key="contentEdgeInsets" minX="10" minY="6" maxX="10" maxY="6"/>
-                                        <state key="normal" title="Deactivate Sticks">
-                                            <color key="titleColor" systemColor="groupTableViewBackgroundColor"/>
-                                        </state>
-                                        <userDefinedRuntimeAttributes>
-                                            <userDefinedRuntimeAttribute type="boolean" keyPath="keyPath" value="YES"/>
-                                        </userDefinedRuntimeAttributes>
-                                        <connections>
-                                            <action selector="DeactivateSticksPressed:" destination="1m5-5v-g5t" eventType="touchDown" id="Otk-xo-S99"/>
                                         </connections>
                                     </button>
                                 </subviews>
@@ -82,7 +66,7 @@
                                 <fontDescription key="fontDescription" type="system" pointSize="32"/>
                                 <inset key="contentEdgeInsets" minX="19" minY="5" maxX="19" maxY="5"/>
                                 <state key="normal" title="Left">
-                                    <color key="titleColor" systemColor="systemBackgroundColor"/>
+                                    <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 </state>
                                 <connections>
                                     <action selector="DuttLeftPressed:" destination="1m5-5v-g5t" eventType="touchUpInside" id="rPw-OV-ROr"/>
@@ -94,7 +78,7 @@
                                 <fontDescription key="fontDescription" type="system" pointSize="32"/>
                                 <inset key="contentEdgeInsets" minX="10" minY="5" maxX="10" maxY="5"/>
                                 <state key="normal" title="Right">
-                                    <color key="titleColor" systemColor="systemBackgroundColor"/>
+                                    <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 </state>
                                 <connections>
                                     <action selector="DuttRightPressed:" destination="1m5-5v-g5t" eventType="touchUpInside" id="GKN-FO-ZpS"/>
@@ -205,23 +189,17 @@
                                         <rect key="frame" x="0.0" y="0.0" width="61" height="30"/>
                                         <color key="backgroundColor" systemColor="systemBlueColor"/>
                                         <state key="normal" title="Get Data"/>
-                                        <connections>
-                                            <action selector="getDataButton:" destination="1m5-5v-g5t" eventType="touchUpInside" id="apH-HZ-j1v"/>
-                                        </connections>
                                     </button>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="f5k-lC-Lad" userLabel="Put Data">
                                         <rect key="frame" x="0.0" y="30" width="61" height="30"/>
                                         <color key="backgroundColor" systemColor="systemBlueColor"/>
                                         <state key="normal" title="Put Data"/>
-                                        <connections>
-                                            <action selector="putDatabutton:" destination="1m5-5v-g5t" eventType="touchUpInside" id="1rL-a2-0a9"/>
-                                        </connections>
                                     </button>
                                 </subviews>
                             </stackView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="x" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="86X-go-OY0" userLabel="posx Label">
                                 <rect key="frame" x="20" y="225" width="30" height="20"/>
-                                <color key="backgroundColor" white="0.66666666669999997" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="20" id="LaU-C5-X54"/>
                                     <constraint firstAttribute="width" constant="30" id="o0g-rP-p1Q"/>
@@ -232,7 +210,7 @@
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="z" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Vc5-aK-bMl" userLabel="posz Label">
                                 <rect key="frame" x="20" y="255" width="30" height="20"/>
-                                <color key="backgroundColor" white="0.66666666669999997" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="20" id="psE-7W-AaG"/>
                                     <constraint firstAttribute="width" constant="30" id="yKC-g8-h8l"/>
@@ -243,7 +221,7 @@
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="y" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="E3b-Yq-ZBD" userLabel="posy Label">
                                 <rect key="frame" x="60" y="225" width="30" height="20"/>
-                                <color key="backgroundColor" white="0.66666666669999997" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="20" id="kQn-WX-VVt"/>
                                     <constraint firstAttribute="width" constant="30" id="uKS-sk-vfA"/>
@@ -266,7 +244,7 @@
                             <constraint firstItem="nCp-Wv-OcA" firstAttribute="leading" secondItem="bOD-EF-bVN" secondAttribute="leading" id="G9D-Sl-2PN"/>
                             <constraint firstItem="P6B-EK-tZs" firstAttribute="leading" secondItem="S6R-gz-0iS" secondAttribute="leading" constant="5" id="Hv2-fh-aam"/>
                             <constraint firstItem="E3b-Yq-ZBD" firstAttribute="leading" secondItem="86X-go-OY0" secondAttribute="trailing" constant="10" id="Ltw-4T-k0h"/>
-                            <constraint firstItem="wmX-bV-6D7" firstAttribute="top" secondItem="S6R-gz-0iS" secondAttribute="top" constant="30" id="M2q-Ei-Myb"/>
+                            <constraint firstItem="wmX-bV-6D7" firstAttribute="top" secondItem="S6R-gz-0iS" secondAttribute="top" constant="48" id="M2q-Ei-Myb"/>
                             <constraint firstItem="S6R-gz-0iS" firstAttribute="bottom" secondItem="fAl-O7-PRU" secondAttribute="bottom" constant="100" id="Mrs-0Y-fgD"/>
                             <constraint firstItem="nCp-Wv-OcA" firstAttribute="top" secondItem="S6R-gz-0iS" secondAttribute="top" constant="30" id="NGg-BK-oxg"/>
                             <constraint firstItem="bOD-EF-bVN" firstAttribute="top" secondItem="S6R-gz-0iS" secondAttribute="top" constant="100" id="Nkl-DV-EM3"/>
@@ -285,22 +263,25 @@
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="ActivateSticksButton" destination="ULH-sd-que" id="6Du-hL-jCS"/>
-                        <outlet property="DeactivateSticksButton" destination="tXs-kJ-fdV" id="XEw-vi-xx0"/>
                         <outlet property="DuttLeftButton" destination="NUQ-U2-Rs4" id="CLH-6s-Q2B"/>
                         <outlet property="DuttRightButton" destination="fAl-O7-PRU" id="EJd-BN-o7q"/>
                         <outlet property="controlPeriodLabel" destination="R37-RE-5CV" id="4gZ-02-Lmo"/>
                         <outlet property="controlPeriodStackView" destination="bOD-EF-bVN" id="dzj-nS-Okn"/>
                         <outlet property="controlPeriodStepperButton" destination="Igf-k9-fHH" id="Wij-Cg-Xj7"/>
+                        <outlet property="controlsButton" destination="ULH-sd-que" id="hnq-K8-6vu"/>
+                        <outlet property="getDataButton" destination="2hX-oY-Sx0" id="yNU-4p-xCn"/>
                         <outlet property="horizontalSpeedLabel" destination="ua3-Ab-nWd" id="Bc3-h0-faE"/>
                         <outlet property="horizontalSpeedStackView" destination="UNw-VT-nQ1" id="DgY-fh-wIj"/>
                         <outlet property="horizontalSpeedStepperButton" destination="y2l-zc-F4X" id="GCk-Om-kKk"/>
                         <outlet property="posXLabel" destination="86X-go-OY0" id="5SH-YH-1vm"/>
                         <outlet property="posYLabel" destination="E3b-Yq-ZBD" id="tRt-a8-KWz"/>
                         <outlet property="posZLabel" destination="Vc5-aK-bMl" id="umQ-Bo-DW3"/>
+                        <outlet property="previewButton" destination="FF4-5Q-Pww" id="nxp-J2-2fm"/>
                         <outlet property="previewImageView" destination="Kaq-fT-XXy" id="CNB-Ss-eWT"/>
-                        <outlet property="savePhotoButton" destination="feq-2q-bhI" id="fCA-DJ-2bv"/>
+                        <outlet property="putDataButton" destination="f5k-lC-Lad" id="8ee-DO-lF8"/>
+                        <outlet property="savePhotoButton" destination="feq-2q-bhI" id="qKk-yY-C6A"/>
                         <outlet property="statusLabel" destination="YnT-Iq-vJj" id="d7P-su-qyu"/>
+                        <outlet property="takePhotoButton" destination="aY1-IK-vb4" id="TRx-ja-h7K"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="oQs-gj-GHi" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
@@ -327,12 +308,6 @@
         <systemColor name="groupTableViewBackgroundColor">
             <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
-        <systemColor name="groupTableViewBackgroundColor">
-            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
-        <systemColor name="groupTableViewBackgroundColor">
-            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
@@ -341,6 +316,9 @@
         </systemColor>
         <systemColor name="systemGreenColor">
             <color red="0.20392156862745098" green="0.7803921568627451" blue="0.34901960784313724" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemOrangeColor">
+            <color red="1" green="0.58431372549019611" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

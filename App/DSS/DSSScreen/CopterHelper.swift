@@ -72,7 +72,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var startHeadingXYZ: Double?
     var startLocationXYZ: CLLocation?
     
-    var _operator: String = "USER"
+ //   var _operator: String = "USER"
 
     var duttTimer: Timer?
     var posCtrlTimer: Timer?
@@ -205,7 +205,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         keyManager.startListeningForChanges(on: flightModeKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
                 if let checkedNewValue = newValue{
                     let flightMode = checkedNewValue.value as! String
-                    let printStr = "listenToFlightMode: New Flight mode: " + flightMode
+                    let printStr = "New Flight mode: " + flightMode
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
@@ -500,10 +500,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         self.stop()
         self.flightController?.setVirtualStickModeEnabled(false, withCompletion: { (error: Error?) in
             if error == nil{
-                print("Sticks disabled")
+                print("stickDisable: Sticks disabled")
             }
             else{
-                print("StickDisable: Virtual stick mode change did not go through" + error.debugDescription)
+                print("stickDisable: Virtual stick mode change did not go through" + error.debugDescription)
             }
         })
     }
@@ -523,10 +523,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // Set flight controller mode
         self.flightController?.setVirtualStickModeEnabled(true, withCompletion: { (error: Error?) in
             if error == nil{
-                print("Sticks enabled")
+                print("stickEnable: Sticks enabled")
             }
             else{
-                print("StickEnable: Virtual stick mode change did not go through" + error.debugDescription)
+                print("stickEnable: Virtual stick mode change did not go through" + error.debugDescription)
             }
         })
     }
