@@ -9,6 +9,7 @@
 import Foundation
 import SwiftyJSON
 
+
 //***************************************************************************
 // Clean string from leading and trailing quotationmarks and also backslashes
 func cleanUpString(str: String)->String{

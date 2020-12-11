@@ -52,10 +52,11 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     @IBOutlet weak var connected: UILabel!
     @IBOutlet weak var connect: UIButton!
     @IBOutlet weak var startDSSButton: UIButton!
+    @IBOutlet weak var DSSIpButton: UIButton!
+    
     //@IBAction func myUnwindAction(unwindSegue: UIStoryboardSegue) {}
     
     // Buttons for layout
-    
     @IBOutlet weak var greenSafeButton: UIButton!
     @IBOutlet weak var orangeThinkButton: UIButton!
     @IBOutlet weak var greyDisabledButton: UIButton!
@@ -84,6 +85,8 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         startDSSButton.backgroundColor = UIColor.lightGray
         startDSSButton.isEnabled = false
         
+        DSSIpButton.layer.cornerRadius = radius
+        DSSIpButton.backgroundColor = UIColor.systemGreen
         greenSafeButton.layer.cornerRadius = radius
         orangeThinkButton.layer.cornerRadius = radius
         greyDisabledButton.layer.cornerRadius = radius
@@ -91,9 +94,6 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         greenSafeButton.isEnabled = false
         orangeThinkButton.isEnabled = false
         greyDisabledButton.isEnabled = false
-        
-        
-        
         
 
         
@@ -109,6 +109,9 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         if version == "" {
             version = "N/A"
         }
+        
+       // let strIPAddress : String = getIPAddress()
+       //print("IPAddress :: \(strIPAddress)")
         
         self.version.text = "Version \(version)"
         
@@ -271,6 +274,13 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     }
     
     
+    @IBAction func DSSIpButtonAction(_ sender: Any) {
+        let strIPAddress : String = getIPAddress()
+        print("IPAddress :: \(strIPAddress)")
+        DSSIpButton.setTitle(strIPAddress, for: .normal)
+    }
+    
+    
     @objc public func dismiss(_ sender: Any) {
         self.presentedViewController?.dismiss(animated: true,
                                             completion: nil)
@@ -293,3 +303,40 @@ extension UIViewController {
                      completion: nil)
     }
 }
+
+
+// Return IP address of WiFi interface (en0) as a String, or `nil` https://stackoverflow.com/questions/30748480/swift-get-devices-wifi-ip-address
+func getIPAddress() -> String {
+    var address: String?
+    var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
+    if getifaddrs(&ifaddr) == 0 {
+        var ptr = ifaddr
+        while ptr != nil {
+            defer { ptr = ptr?.pointee.ifa_next }
+
+            guard let interface = ptr?.pointee else { return "" }
+            let addrFamily = interface.ifa_addr.pointee.sa_family
+            if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) { //|| addrFamily == UInt8(AF_LINK){
+
+                // wifi = ["en0"]
+                // wired = ["en1", "en2", "en3", "en4"]
+                // cellular = ["pdp_ip0","pdp_ip1","pdp_ip2","pdp_ip3","pdp_ip4"]
+                // VPN1? = ["ipsec0", "ipsec1","ipsec3","ipsec4","ipsec5","ipsec7"]
+                // VPN2 = ["utun0", "utun1", "utun2", "utun3"]
+
+                let name: String = String(cString: (interface.ifa_name))
+                //print("name: ",name)
+                if  name == "en0" || name == "pdp_ip0" || name == "utun3" {
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    getnameinfo(interface.ifa_addr, socklen_t((interface.ifa_addr.pointee.sa_len)), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
+                    address = String(cString: hostname)
+                    print("Name: ", name, " Address: :", address ?? "empty")
+                }
+            }
+        }
+        freeifaddrs(ifaddr)
+    }
+    return address ?? ""
+}
+
+

@@ -1157,7 +1157,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Sends a command to go body left for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
-        copter.dutt(x: 0, y: 0, z: -1, yawRate: 0)
+        copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
+        
 
 
         // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
