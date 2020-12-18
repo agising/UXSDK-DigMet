@@ -817,7 +817,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogoXYZ(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_XYZ")
                             }
@@ -919,31 +919,41 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     self.printSL("Received cmd: rtl")
                     // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
                     // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
-                    copter.rtl()
-                    // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
-                    var max_attempts = 8
-                    while copter.flightMode != "GPS" && copter.flightMode != "Landing" {
-                        if max_attempts > 0{
-                            max_attempts -= 1
-                            // Sleep 0.1s
-                            print("ReadSocket: Waiting for rtl to go through before replying.")
-                            usleep(50000)
-                        }
-                        else {
-                            // We tried many times, it must have failed somehow -> nack
-                            print("ReadSocket: RTL ERROR, this should not happen. Debug.")
-                            json_r = createJsonNack("rtl")
-                            break
-                        }
+                  
+                    if copter.getIsFlying() == false {
+                        json_r = createJsonNack("rtl")
                     }
-                    if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
-                        json_r = createJsonAck("rtl")
+                    else {
+                        copter.rtl()
+                        
+                        // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
+                        var max_attempts = 8
+                        // while flightMode is neither GPS nor Landing -  wait. If flightMode is GPS or Landing - continue
+                        while copter.flightMode != "GPS" && copter.flightMode != "Landing" {
+                            if max_attempts > 0{
+                                max_attempts -= 1
+                                // Sleep 0.1s
+                                print("ReadSocket: Waiting for rtl to go through before replying.")
+                                usleep(50000)
+                            }
+                            else {
+                                // We tried many times, it must have failed somehow -> nack
+                                print("ReadSocket: RTL did not go through. Debug.")
+                                json_r = createJsonNack("rtl")
+                                break
+                            }
+                        }
+                        if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
+                            json_r = createJsonAck("rtl")
+                        }
                     }
                 case "dss_srtl":
                     // Once activated it should be possible to interfere TODO
                     self.printSL("Received comd: dss srtl")
                     json_r = createJsonAck("dss_srtl")
-                    copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    Dispatch.main{
+                        self.copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    }
                 case "save_dss_home_position":
                     // Function saves dss smart rtl home position
                     self.printSL("Received cmd: save_dss_home_position")
@@ -1131,7 +1141,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //
 //        let (success, arg) = copter.uploadMissionXYZ(mission: json)
 //        if success{
-//            _ = copter.gogoXYZ(startWp: 0)
+//            _ = copter.gogo(startWp: 0)
 //        }
 //        else{
 //            print("Mission failed to upload: " + arg!)
@@ -1199,7 +1209,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //
 //        let (success, arg) = copter.uploadMissionXYZ(mission: json)
 //         if success{
-//            //copter.gogoXYZ(startWp: 0)
+//            //copter.gogo(startWp: 0)
 //         }
 //         else{
 //             print("Mission failed to upload: " + arg!)
@@ -1227,7 +1237,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //                print("Aircraft not ready to set OriginXYZ")
 //            }
 //        }
-        //copter.gogoXYZ(startWp: 0)
+        //copter.gogo(startWp: 0)
 //        self.subscriptions.photoXYZ = true
 //        takePhotoCMD()
     }
@@ -1348,7 +1358,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @objc func onDidWPAction(_ notification: Notification){
         if let data = notification.userInfo as? [String: String]{
             if data["wpAction"] == "take_photo"{
-                print("wp action take photo - Do it!")
+                print("wpAction: take photo")
                 // Wait for allocator, allocate
                 // must be in background to not halt everything. will that work?
                 Dispatch.background {
@@ -1364,10 +1374,23 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         //print("WP action waiting for takePhoto to complete")
                     }
                     Dispatch.main {
-                        _ = self.copter.gogoXYZ(startWp: 99, useCurrentMission: true) // startWP not used
+                        _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
                     }
                 }
             }
+            if data["wpAction"] == "land"{
+                print("wpAction: land")
+                // dispatch to background, delay and land?
+                Dispatch.background {
+                    var hover = 5
+                    while hover > 0 {
+                        self.printSL("Hover at home, landing in: " + String(describing: hover))
+                        hover -= 1
+                        usleep(1000000)
+                    }
+                    self.copter.land()
+                    }
+                }
         }
     }
     

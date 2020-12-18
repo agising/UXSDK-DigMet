@@ -11,6 +11,18 @@ import UIKit
 import Photos
 import DJIUXSDK
 
+
+class MyLocation:NSObject{
+    var altitude: Double = 0
+    var heading: Double = 0
+    var coordinate = MyCoordinate()
+}
+
+class MyCoordinate:NSObject{
+    var latitude: Double = 0
+    var longitude: Double = 0
+}
+
 //
 // Class to use for allocation of resources, like camera, gimbal, etc.
 class Allocator: NSObject{
