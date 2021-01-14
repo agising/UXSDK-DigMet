@@ -80,8 +80,20 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
     //*********************
     // IBOutlet declaration: Labels
-    @IBOutlet weak var controlPeriodLabel: UILabel!
-    @IBOutlet weak var horizontalSpeedLabel: UILabel!
+//    @IBOutlet weak var controlPeriodLabel: UILabel!
+//    @IBOutlet weak var horizontalSpeedLabel: UILabel!
+    
+    // Steppers
+    @IBOutlet weak var leftStepperStackView: UIStackView!
+    @IBOutlet weak var leftStepperLabel: UILabel!
+    @IBOutlet weak var leftStepperName: UILabel!
+    @IBOutlet weak var leftStepperButton: UIStepper!
+    @IBOutlet weak var rightStepperStackView: UIStackView!
+    @IBOutlet weak var rightStepperLabel: UILabel!
+    @IBOutlet weak var rightStepperName: UILabel!
+    @IBOutlet weak var rightStepperButton: UIStepper!
+    
+    
     
     @IBOutlet weak var posXLabel: UILabel!
     @IBOutlet weak var posYLabel: UILabel!
@@ -91,10 +103,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBOutlet weak var previewImageView: UIImageView!
     
     // Steppers
-    @IBOutlet weak var controlPeriodStepperButton: UIStepper!
-    @IBOutlet weak var horizontalSpeedStepperButton: UIStepper!
-    @IBOutlet weak var horizontalSpeedStackView: UIStackView!
-    @IBOutlet weak var controlPeriodStackView: UIStackView!
+//    @IBOutlet weak var controlPeriodStepperButton: UIStepper!
+//    @IBOutlet weak var horizontalSpeedStepperButton: UIStepper!
+//    @IBOutlet weak var horizontalSpeedStackView: UIStackView!
+//    @IBOutlet weak var controlPeriodStackView: UIStackView!
     
     // Buttons
     //@IBOutlet weak var DeactivateSticksButton: UIButton!
@@ -817,7 +829,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
+//                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_XYZ")
                             }
@@ -994,6 +1007,29 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack("upload_mission_XYZ")
                         print("Mission upload failed: " + arg)
                     }
+                case "upload_mission_NED":
+                    self.printSL("Received cmd: upload_mission_NED")
+                    
+                    let (success, arg) = copter.uploadMissionNED(mission: json_m["arg"])
+                    if success{
+                        json_r = createJsonAck("upload_mission_NED")
+                    }
+                    else{
+                        json_r = createJsonNack("upload_mission_NED")
+                        print("Mission upload failed: " + arg)
+                    }
+                case "upload_mission_LLA":
+                    self.printSL("Received cmd: upload_mission_LLA")
+                    
+                    let (success, arg) = copter.uploadMissionLLA(mission: json_m["arg"])
+                    if success{
+                        json_r = createJsonAck("upload_mission_LLA")
+                    }
+                    else{
+                        json_r = createJsonNack("upload_mission_LLA")
+                        print("Mission upload failed: " + arg)
+                    }
+                    
                 default:
                     json_r = createJsonNack("API call not recognized")
                     self.printSL("API call not recognized: " + json_m["fcn"].stringValue)
@@ -1028,18 +1064,35 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
     // ****************************************************************************
     // Control period stepper. Experiments with execution time for joystick command
-    @IBAction func controlPeriodStepper(_ sender: UIStepper) {
-        controlPeriodLabel.text = String(sender.value/1000)
-        // Uses stepper input and sampleTime to calculate how many loops fireDuttTimer should loop
-        copter.loopTarget = Int(sender.value / copter.sampleTime)
+//    @IBAction func controlPeriodStepper(_ sender: UIStepper) {
+//        controlPeriodLabel.text = String(sender.value/1000)
+//        // Uses stepper input and sampleTime to calculate how many loops fireDuttTimer should loop
+//        copter.loopTarget = Int(sender.value / copter.sampleTime)
+//    }
+//
+//    //***********************************************************************************
+//    // Horizontal speed stepper. Experiments with velocity reference for joystick command
+//    @IBAction func horizontalSpeedStepper(_ sender: UIStepper) {
+//        horizontalSpeedLabel.text = String(sender.value/100)
+//        copter.xyVelLimit = Float(sender.value)
+//    }
+  
+    
+    @IBAction func leftStepperAction(_ sender: UIStepper) {
+        leftStepperLabel.text = String(sender.value/100)
+        leftStepperName.text = "hPosKP"
+        copter.hPosKP = Float(sender.value/100)
+        print("hPosKP updated: ", Float(sender.value/100))
     }
-       
-    //***********************************************************************************
-    // Horizontal speed stepper. Experiments with velocity reference for joystick command
-    @IBAction func horizontalSpeedStepper(_ sender: UIStepper) {
-        horizontalSpeedLabel.text = String(sender.value/100)
-        copter.xyVelLimit = Float(sender.value)
+    
+    @IBAction func rightStepperAction(_ sender: UIStepper) {
+        rightStepperLabel.text = String(sender.value/100)
+        rightStepperName.text = "hPosKD"
+        copter.hPosKD = Float(sender.value/100)
+        print("hPosKD updated: ", Float(sender.value/100))
     }
+    
+    
        
     //*******************************************************************************************************
     // Exit view, but first deactivate Sticks (which invalidates fireTimer-timer to stop any joystick command)
@@ -1360,7 +1413,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             if data["wpAction"] == "take_photo"{
                 print("wpAction: take photo")
                 // Wait for allocator, allocate
-                // must be in background to not halt everything. will that work?
+                // must be in background to not halt everything.
                 Dispatch.background {
                     while !self.cameraAllocator.allocate("take_photo", maxTime: 3){
                         usleep(300000)
@@ -1374,7 +1427,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         //print("WP action waiting for takePhoto to complete")
                     }
                     Dispatch.main {
-                        _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
+                        _ = self.copter.gogoMyLocation(startWp: 99, useCurrentMission: true) // startWP not used
                     }
                 }
             }
@@ -1423,13 +1476,19 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         //        self.contentViewController = modViewController
         
         // Init steppers
-        controlPeriodStepperButton.value = copter.controlPeriod
-        controlPeriodLabel.text = String(copter.controlPeriod/1000)
-        horizontalSpeedStepperButton.value = Double(copter.xyVelLimit)
-        horizontalSpeedLabel.text = String(copter.xyVelLimit/100)
-        horizontalSpeedStackView.isHidden = true
-        controlPeriodStackView.isHidden = true
-        
+//        controlPeriodStepperButton.value = copter.controlPeriod
+//        controlPeriodLabel.text = String(copter.controlPeriod/1000)
+//        horizontalSpeedStepperButton.value = Double(copter.xyVelLimit)
+//        horizontalSpeedLabel.text = String(copter.xyVelLimit/100)
+//        horizontalSpeedStackView.isHidden = true
+//        controlPeriodStackView.isHidden = true
+        leftStepperStackView.isHidden = true
+        leftStepperButton.value = Double(copter.hPosKP*100)
+        leftStepperLabel.text = String(copter.hPosKP)
+        rightStepperStackView.isHidden = true
+        rightStepperButton.value = Double(copter.hPosKD*100)
+        rightStepperLabel.text = String(copter.hPosKD)
+
         // Set up layout
         let radius: CGFloat = 5
         // Set corner radiuses to buttons

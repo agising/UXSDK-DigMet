@@ -10,17 +10,203 @@ import Foundation
 import UIKit
 import Photos
 import DJIUXSDK
+import SwiftyJSON
 
 
-class MyLocation:NSObject{
+class MyLocation: NSObject{
+    var speed: Float = 0
     var altitude: Double = 0
     var heading: Double = 0
+    var gimbalYaw: Double = 0
+    var action: String = ""
+    var isStartLocation = false
     var coordinate = MyCoordinate()
+    var geoFence = GeoFence()
+
+    // Reset all values.
+    func reset(){
+        self.speed = 0
+        self.altitude = 0
+        self.heading = 0
+        self.gimbalYaw = 0
+        self.action = ""
+        self.isStartLocation = false
+        self.coordinate.latitude = 0
+        self.coordinate.longitude = 0
+        self.geoFence.radius = 0
+        self.geoFence.height = [0, 0]
+    }
+    
+    
+    /**
+     Calculates distance to the wpLocation from the MyLocation it is called from.
+     - Parameter wpLocation: A MyLocation object to calc distance to
+     - Returns: northing, easting, dAlt, distance2D, distance3D, bearing (degrees)
+     */
+    func distanceTo(wpLocation: MyLocation)->(Double, Double, Double, Double, Double, Double){
+        
+        // Lat lon alt deltas
+        let dLat = wpLocation.coordinate.latitude - self.coordinate.latitude
+        let dLon = wpLocation.coordinate.longitude - self.coordinate.longitude
+        let dAlt = wpLocation.altitude - self.altitude
+            
+        // Convert to meters
+        let northing = dLat * 1852 * 60
+        let easting =  dLon * 1852 * 60 * cos(wpLocation.coordinate.latitude/180*Double.pi)
+        
+        // Square
+        let northing2 = pow(northing, 2)
+        let easting2 = pow(easting, 2)
+        let dAlt2 = pow(dAlt, 2)
+        
+        // Calc distances
+        let distance2D = sqrt(northing2 + easting2)
+        let distance3D = sqrt(northing2 + easting2 + dAlt2)
+        
+        // Calc bearing (ref to CopterHelper -> getCourse)
+        // Guard division by 0 and calculate: Bearing given northing and easting
+        // Case easting == 0, i.e. bearing == 0 or -180
+        var bearing: Double = 0
+        if easting == 0 {
+            if northing > 0 {
+                bearing = 0
+            }
+            else {
+                bearing = 180
+            }
+        }
+        else if easting > 0 {
+            bearing = (Double.pi/2 - atan(northing/easting))/Double.pi*180
+        }
+        else if easting < 0 {
+            bearing = -(Double.pi/2 + atan(northing/easting))/Double.pi*180
+        }
+        
+        return (northing, easting, dAlt, distance2D, distance3D, bearing)
+    }
+    
+    // This function should be used from the startMyLocation
+    func geofenceOK(wp: MyLocation)->Bool{
+        // To make sure function is only used from startlocation.
+        if !isStartLocation {
+            print("geofenceOK: WP used for reference is not a start location.")
+            return false
+        }
+        let (_, _, dAlt, dist2D, _, _) = self.distanceTo(wpLocation: wp)
+        print("geofenceOK: dAlt:", dAlt," dist2D: ", dist2D)
+
+        if dist2D > self.geoFence.radius {
+            printToScreen("geofenceOK: Radius violation")
+            return false
+        }
+        if dAlt < self.geoFence.height[0] && self.geoFence.height[1] < dAlt {
+            printToScreen("geofenceOK: Height violation")
+            return false
+        }
+        return true
+    }
+    
+    // Set up wp properties
+    func setPosition(pos: CLLocation, heading: Double, gimbalYaw: Double=0, isStartWP: Bool=false){
+        self.altitude = pos.altitude
+        self.heading = heading
+        self.gimbalYaw = gimbalYaw
+        self.coordinate.latitude = pos.coordinate.latitude
+        self.coordinate.longitude = pos.coordinate.longitude
+        self.isStartLocation = isStartWP
+    }
+    
+    func setGeoFence(radius: Double, height: [Double]){
+        self.geoFence.radius = radius
+        self.geoFence.height = height
+    }
+    
+    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, start: MyLocation){
+        // Reset all properties
+        self.reset()
+                
+        // Test if mission is LLA
+        if jsonWP["lat"].exists(){
+            // Mission is LLA
+            self.altitude = jsonWP["alt"].doubleValue
+            self.heading = jsonWP["heading"].doubleValue
+            self.coordinate.latitude = jsonWP["lat"].doubleValue
+            self.coordinate.longitude = jsonWP["lon"].doubleValue
+        }
+        
+        // Test if mission NED
+        else if jsonWP["north"].exists(){
+            // Mission is NED
+            let north = jsonWP["north"].doubleValue
+            let east = jsonWP["east"].doubleValue
+            let down = jsonWP["down"].doubleValue
+            // Calc dLat, dLon from north east. Add to start location.
+            let dLat = start.coordinate.latitude + north/(1852 * 60)
+            let dLon = start.coordinate.longitude + east/(1852 * 60 * cos(start.coordinate.latitude/180*Double.pi))
+            self.coordinate.latitude = dLat
+            self.coordinate.longitude = dLon
+            self.altitude = start.altitude - down
+            self.heading = jsonWP["heading"].doubleValue
+            
+        }
+        else if jsonWP["x"].exists(){
+            // Mission is XYZ
+            let x = jsonWP["x"].doubleValue
+            let y = jsonWP["y"].doubleValue
+            let z = jsonWP["z"].doubleValue
+            // First calculate northing and easting.
+            let XYZstartHeading = start.heading + start.gimbalYaw
+            let beta = -XYZstartHeading/180*Double.pi
+            let north = x * cos(beta) + y * sin(beta)
+            let east = -x * sin(beta) + y * cos(beta)
+            // Calc dLat, dLon from north east. Add to start location
+            let dLat = start.coordinate.latitude + north/(1852 * 60)
+            let dLon = start.coordinate.longitude + east/(1852 * 60 * cos(start.coordinate.latitude/180*Double.pi))
+            self.coordinate.latitude = dLat
+            self.coordinate.longitude = dLon
+            self.altitude = start.altitude - z
+            self.heading = start.heading + jsonWP["local_yaw"].doubleValue
+        }
+        
+        // Extract speed
+        if jsonWP["speed"].exists(){
+            self.speed = jsonWP["speed"].floatValue
+        }
+        else {
+            self.speed = defaultSpeed
+        }
+        
+        // Extract action
+        if jsonWP["action"].exists() {
+            self.action = jsonWP["action"].stringValue
+            
+        }
+
+    }
+    
+    // Prints text to both statusLabel and error output
+    func printToScreen(_ string: String){
+        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": string])
+    }
+
+    func printLocation(sentFrom: String){
+        print(sentFrom + ": ",
+              "lat: ", self.coordinate.latitude,
+              " lon: ", self.coordinate.longitude,
+              " alt: ", self.altitude,
+              " heading: ", self.heading)
+    }
 }
 
+// Subclass to MyLocation. Coordinates influenced by CLLocation
 class MyCoordinate:NSObject{
     var latitude: Double = 0
     var longitude: Double = 0
+}
+// SubClass to MyLocation. Geofence properties that are stored in the startMyLocation. Geofence is checked relative to startMyLocation
+class GeoFence: NSObject{
+    var radius: Double = 0
+    var height: [Double] = [0, 0]
 }
 
 //
@@ -194,6 +380,7 @@ func getFloatWithinAngleRange(angle: Float)->Float{
     }
     return angle2
 }
+
 
 // Struct for declared conformance for squence and following iterator protocol. Returns sequence n, n-1, ... 0
 struct Countdown: Sequence, IteratorProtocol {

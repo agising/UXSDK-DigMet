@@ -84,7 +84,7 @@
                                     <action selector="DuttRightPressed:" destination="1m5-5v-g5t" eventType="touchUpInside" id="GKN-FO-ZpS"/>
                                 </connections>
                             </button>
-                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" translatesAutoresizingMaskIntoConstraints="NO" id="UNw-VT-nQ1" userLabel="Stack View HSpeed">
+                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" translatesAutoresizingMaskIntoConstraints="NO" id="UNw-VT-nQ1" userLabel="Stack View Right">
                                 <rect key="frame" x="513" y="100" width="94" height="80"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ua3-Ab-nWd" userLabel="Velocity Label Value">
@@ -95,24 +95,24 @@
                                         <color key="textColor" systemColor="groupTableViewBackgroundColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Horizontal speed" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="CFq-At-KuW" userLabel="Velocity Label Text">
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Right stepper" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="CFq-At-KuW" userLabel="Velocity Label Text">
                                         <rect key="frame" x="0.0" y="36" width="94" height="12"/>
                                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="10"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <stepper opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" maximumValue="500" stepValue="10" translatesAutoresizingMaskIntoConstraints="NO" id="y2l-zc-F4X" userLabel="Velocity Stepper">
+                                    <stepper opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" maximumValue="300" stepValue="10" translatesAutoresizingMaskIntoConstraints="NO" id="y2l-zc-F4X" userLabel="Right Stepper">
                                         <rect key="frame" x="0.0" y="48" width="94" height="32"/>
                                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <connections>
-                                            <action selector="horizontalSpeedStepper:" destination="1m5-5v-g5t" eventType="valueChanged" id="B6k-ar-5oE"/>
+                                            <action selector="rightStepperAction:" destination="1m5-5v-g5t" eventType="valueChanged" id="nF8-3Z-lKJ"/>
                                         </connections>
                                     </stepper>
                                 </subviews>
                                 <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </stackView>
-                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" translatesAutoresizingMaskIntoConstraints="NO" id="bOD-EF-bVN" userLabel="Stack View CPeriod">
+                            <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" translatesAutoresizingMaskIntoConstraints="NO" id="bOD-EF-bVN" userLabel="Stack View Left">
                                 <rect key="frame" x="60" y="100" width="94" height="80"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="R37-RE-5CV" userLabel="Time Label Value">
@@ -122,18 +122,18 @@
                                         <color key="textColor" systemColor="groupTableViewBackgroundColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="controlPeriod" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="k3H-2b-qUN" userLabel="Time Label Text">
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Left stepper" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="k3H-2b-qUN" userLabel="Time Label Text">
                                         <rect key="frame" x="0.0" y="36" width="94" height="12"/>
                                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <fontDescription key="fontDescription" type="system" pointSize="10"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <stepper opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" maximumValue="10000" stepValue="100" translatesAutoresizingMaskIntoConstraints="NO" id="Igf-k9-fHH" userLabel="Time Stepper">
+                                    <stepper opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" contentHorizontalAlignment="center" contentVerticalAlignment="center" maximumValue="300" stepValue="10" translatesAutoresizingMaskIntoConstraints="NO" id="Igf-k9-fHH" userLabel="Time Stepper">
                                         <rect key="frame" x="0.0" y="48" width="94" height="32"/>
                                         <color key="backgroundColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <connections>
-                                            <action selector="controlPeriodStepper:" destination="1m5-5v-g5t" eventType="valueChanged" id="ONm-fZ-XR6"/>
+                                            <action selector="leftStepperAction:" destination="1m5-5v-g5t" eventType="valueChanged" id="sRF-k2-4dT"/>
                                         </connections>
                                     </stepper>
                                 </subviews>
@@ -265,20 +265,22 @@
                     <connections>
                         <outlet property="DuttLeftButton" destination="NUQ-U2-Rs4" id="CLH-6s-Q2B"/>
                         <outlet property="DuttRightButton" destination="fAl-O7-PRU" id="EJd-BN-o7q"/>
-                        <outlet property="controlPeriodLabel" destination="R37-RE-5CV" id="4gZ-02-Lmo"/>
-                        <outlet property="controlPeriodStackView" destination="bOD-EF-bVN" id="dzj-nS-Okn"/>
-                        <outlet property="controlPeriodStepperButton" destination="Igf-k9-fHH" id="Wij-Cg-Xj7"/>
                         <outlet property="controlsButton" destination="ULH-sd-que" id="hnq-K8-6vu"/>
                         <outlet property="getDataButton" destination="2hX-oY-Sx0" id="yNU-4p-xCn"/>
-                        <outlet property="horizontalSpeedLabel" destination="ua3-Ab-nWd" id="Bc3-h0-faE"/>
-                        <outlet property="horizontalSpeedStackView" destination="UNw-VT-nQ1" id="DgY-fh-wIj"/>
-                        <outlet property="horizontalSpeedStepperButton" destination="y2l-zc-F4X" id="GCk-Om-kKk"/>
+                        <outlet property="leftStepperButton" destination="Igf-k9-fHH" id="NoK-3w-reW"/>
+                        <outlet property="leftStepperLabel" destination="R37-RE-5CV" id="is2-e4-UsQ"/>
+                        <outlet property="leftStepperName" destination="k3H-2b-qUN" id="z9D-PD-4m1"/>
+                        <outlet property="leftStepperStackView" destination="bOD-EF-bVN" id="YCM-OM-vtJ"/>
                         <outlet property="posXLabel" destination="86X-go-OY0" id="5SH-YH-1vm"/>
                         <outlet property="posYLabel" destination="E3b-Yq-ZBD" id="tRt-a8-KWz"/>
                         <outlet property="posZLabel" destination="Vc5-aK-bMl" id="umQ-Bo-DW3"/>
                         <outlet property="previewButton" destination="FF4-5Q-Pww" id="nxp-J2-2fm"/>
                         <outlet property="previewImageView" destination="Kaq-fT-XXy" id="CNB-Ss-eWT"/>
                         <outlet property="putDataButton" destination="f5k-lC-Lad" id="8ee-DO-lF8"/>
+                        <outlet property="rightStepperButton" destination="y2l-zc-F4X" id="mpc-LW-UVc"/>
+                        <outlet property="rightStepperLabel" destination="ua3-Ab-nWd" id="Qnk-Ct-5Jt"/>
+                        <outlet property="rightStepperName" destination="CFq-At-KuW" id="733-za-Sgc"/>
+                        <outlet property="rightStepperStackView" destination="UNw-VT-nQ1" id="fw2-bs-Zjv"/>
                         <outlet property="savePhotoButton" destination="feq-2q-bhI" id="qKk-yY-C6A"/>
                         <outlet property="statusLabel" destination="YnT-Iq-vJj" id="d7P-su-qyu"/>
                         <outlet property="takePhotoButton" destination="aY1-IK-vb4" id="TRx-ja-h7K"/>
