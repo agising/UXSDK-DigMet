@@ -346,12 +346,17 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // The old implementation TODO
         self.startHeadingXYZ = heading + gimbalYaw
         self.startLocationXYZ = pos
+        
+        
         // The new implementation
-        self.startMyLocation.setPosition(pos: pos, heading: heading, gimbalYaw: gimbalYaw)
+        self.startMyLocation.setPosition(pos: pos, heading: heading, gimbalYaw: gimbalYaw, isStartWP: true)
         self.startMyLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
         self.startMyLocation.printLocation(sentFrom: "setOriginXYZ")
         
         print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", of which gimbalYaw is: " + String(describing: gimbalYaw))
+        
+        
+        
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "StartLocation set to here including gimbalYaw."])
         return true
     }
@@ -409,10 +414,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         self.dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
         self.dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
         self.dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
-        print("xyz home alt:", self.startLocationXYZ!.altitude)
-
-
-        //print("appendLocToDssSmartRtlMission: the updated smart rtl mission: ", self.dssSmartRtlMission)
+        self.dssSmartRtlMission[id]["heading"] = JSON(-1)
+        self.dssSmartRtlMission[id]["speed"] = JSON(self.activeWP.speed)
         return true
     }
 
@@ -756,10 +759,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
         self.pendingMission = tempMission
         
-        
-        print("dssRTL: Old controller is used!       WARNING")
-        
-        _ = self.xgogo(startWp: 0, useCurrentMission: false)  // Handle response?
+        _ = self.gogoMyLocation(startWp: 0, useCurrentMission: false)  // Handle response?
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "DSS Smart RTL activated"])
     }
     //*************************************************************************************
@@ -1506,19 +1506,17 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // always false.. TODO
         if trackingMyLocation(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
             print("fireMyLocationCtrlTimer: Wp", self.missionNextWp, " is tracked")
-            print(self.activeWP.altitude, self.currentMyLocation.altitude)
-            
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
             
             if self.missionNextWp != -1{
-                // Add to DSS SRTL list.
-                // TODO
-                // Extend a list of MyLocations
-                // Save
-                // - coordinates
-                // - alt
-                // - speed?
-                // - heading
+                if  self.missionNextWp != -1{
+                    if self.appendLocToDssSmartRtlMission(){
+                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
+                    }
+                    else {
+                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
+                    }
+                }
             }
             
             // WP is tracked. If we are on a mission
