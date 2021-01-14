@@ -193,7 +193,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         // Make sure originXYZ is set
         guard let _ = self.copter.startHeadingXYZ else {
             // OriginXYZ is not yet set. Try to set it!
-            if copter.setOriginXYZ(){
+            if copter.setStartLocation(){
                 print("writeMetaData: OriginXYZ set from here")
                 _ = writeMetaDataXYZ()
                 // Return true because to problem is fixed and the func is called again.
@@ -613,6 +613,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                     let filename = self.jsonPhotos[String(sessionIndex)]["filename"].stringValue
                     let fileURL = documentsURL.appendingPathComponent(filename)
+                    print("The file url we try to publish: ", fileURL.description)
                     do{
                         //print("The read fileURL points at: ", fileURL)
                         let photoData = try Data(contentsOf: fileURL)
@@ -1295,30 +1296,22 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //        takePhotoCMD()
     }
     
-    //********************************************************
-    // Set gimbal pitch according to scheeme and take a photo.
-    @IBAction func takePhotoButton(_ sender: Any) {
-         //copter.gotoXYZ(refPosX: 0, refPosY: 0, refPosZ: -15)
-
-//        previewImageView.photo = nil
-//        statusLabel.text = "Capture photo button pressed, preview cleared"
-
-//        setGimbalPitch(pitch: self.nextGimbalPitch)
-//        updateGnextGimbalPitch()
+//    //********************************************************
+//    // Set gimbal pitch according to scheeme and take a photo.
+//    @IBAction func takePhotoButton(_ sender: Any) {
 //
-        copter.posCtrlTimer?.invalidate()
-        // Dispatch to wait in the pitch movement, then capture an photo. TODO - use closure instead of stupid timer.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
-            self.capturePhoto(completion: {(success) in
-                if success {
-                    self.printSL("Photo successfully taken")
-                }
-                else{
-                    self.printSL("Photo from button press failed to complete")
-                }
-            })
-        })
-    }
+//        // Dispatch to wait in the pitch movement, then capture an photo. TODO - use closure instead of stupid timer.
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
+//            self.capturePhoto(completion: {(success) in
+//                if success {
+//                    self.printSL("Photo successfully taken")
+//                }
+//                else{
+//                    self.printSL("Photo from button press failed to complete")
+//                }
+//            })
+//        })
+//    }
     
     //**********************************************
     // Download and preview the last photo on sdCard
@@ -1361,7 +1354,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
         // If subscribed to XYZ updates, also get local_yaw and publish
         if subscriptions.XYZ{
-            print("heading: ", self.copter.heading, ", yawXYZ: ", self.copter.yawXYZ, ", gimbalYawXYZ: ", self.gimbal.yawRelativeToAircraftHeading ?? 0, ", startHeadingXYZ: ", self.copter.startHeadingXYZ!)
+            print("heading: ", copter.currentMyLocation.heading, ", yawXYZ: ", copter.yawXYZ, ", gimbalYawXYZ: ", gimbal.yawRelativeToAircraftHeading ?? 0, ", startHeadingXYZ: ", copter.startMyLocation.heading + copter.startMyLocation.gimbalYaw)
             var json = JSON()
             json["x"].doubleValue = round(100 * copter.posX) / 100
             json["y"].doubleValue = round(100 * copter.posY) / 100
