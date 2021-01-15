@@ -187,20 +187,20 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-    //**********************************************************************************************
-    // Writes metadata to json. OriginXYZ is required to be set, if it is not, set ut to current pos
+    //**************************************************************************************************
+    // Writes metadata to json. startMyLocation for the calulations, if it is not, set ut to current pos
     func writeMetaDataXYZ()->Bool{
-        // Make sure originXYZ is set
-        guard let _ = self.copter.startHeadingXYZ else {
-            // OriginXYZ is not yet set. Try to set it!
+        // Make sure startWP in order to be able to calc the local XYZ
+        if !self.copter.startMyLocation.isStartLocation {
+            // StartLocation is not set. Try to set it!
             if copter.setStartLocation(){
-                print("writeMetaData: OriginXYZ set from here")
+                print("writeMetaData: setStartLocation set from here")
                 _ = writeMetaDataXYZ()
                 // Return true because to problem is fixed and the func is called again.
                 return true
             }
             else{
-                self.printSL("writeMetaData: Could not set OriginXYZ, Aircraft ready?")
+                self.printSL("writeMetaData: Could not setStartLocation, Aircraft ready?")
                 return false
             }
         }

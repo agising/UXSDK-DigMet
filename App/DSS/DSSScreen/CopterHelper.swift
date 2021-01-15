@@ -75,8 +75,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
   //  var dssHomeHeading: Double?               // Home heading of DSS
 
     var flightMode: String?                     // the flight mode as a string
-    var startHeadingXYZ: Double?                // The start heading that defines the XYZ coordinate system
-    var startLocationXYZ: CLLocation?           // The start location that defines the XYZ coordinate system
+    //var startHeadingXYZ: Double?                // The start heading that defines the XYZ coordinate system
+    //var startLocationXYZ: CLLocation?           // The start location that defines the XYZ coordinate system
     var currentMyLocation: MyLocation = MyLocation()
     var startMyLocation: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.
 
@@ -147,13 +147,26 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             if let checkedNewValue = newValue{
                 let vel = checkedNewValue.value as! DJISDKVector3D
                 // Velocities are in NED coordinate system !
-                guard let checkedHeading = self.getHeading() else {return}
-                guard let checkedStartHeading = self.startHeadingXYZ else {return}
-                let alpha = (checkedHeading - checkedStartHeading)/180*Double.pi
+//                guard let checkedHeading = self.getHeading() else {return}
+//                guard let checkedStartHeading = self.startHeadingXYZ else {return}
+//                let alpha = (checkedHeading - checkedStartHeading)/180*Double.pi
+
+ 
                 
+                
+                // Coution, does this code calc velX,Y,Z to the XYZ frame? Is not intention to use body?
+                // TODO
+                
+                
+                
+                let heading = self.currentMyLocation.heading
+                let startHeading = self.startMyLocation.heading + self.startMyLocation.gimbalYaw
+                let alpha = (heading - startHeading)/180*Double.pi
                 self.velX = Float(vel.x * cos(alpha) + vel.y * sin(alpha))
                 self.velY = Float(-vel.x * sin(alpha) + vel.y * cos(alpha))
                 self.velZ = Float(vel.z)
+                
+                print("startListenToVel: velX: ", self.velX)
                 
                 //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
             }
