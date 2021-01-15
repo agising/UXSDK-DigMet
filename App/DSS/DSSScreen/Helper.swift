@@ -22,6 +22,7 @@ class MyLocation: NSObject{
     var isStartLocation = false
     var coordinate = MyCoordinate()
     var geoFence = GeoFence()
+    var vel = Vel()
 
     // Reset all values.
     func reset(){
@@ -35,6 +36,10 @@ class MyLocation: NSObject{
         self.coordinate.longitude = 0
         self.geoFence.radius = 0
         self.geoFence.height = [0, 0]
+        self.vel.bodyX = 0
+        self.vel.bodyY = 0
+        self.vel.bodyZ = 0
+        self.vel.yawRate = 0
     }
     
     
@@ -208,6 +213,15 @@ class GeoFence: NSObject{
     var radius: Double = 0
     var height: [Double] = [0, 0]
 }
+// SubClass to MyLocation. Body class for body velocities
+class Vel: NSObject{
+    var bodyX: Float = 0
+    var bodyY: Float = 0
+    var bodyZ: Float = 0
+    var yawRate: Float = 0
+}
+
+
 
 //
 // Class to use for allocation of resources, like camera, gimbal, etc.

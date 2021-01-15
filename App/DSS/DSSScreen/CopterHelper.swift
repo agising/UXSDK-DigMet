@@ -29,27 +29,27 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var missionIsActive = false
     var wpActionExecuting = false
 
-    var posX: Double = 0
-    var posY: Double = 0
-    var posZ: Double = 0
-    var gimbalYawXYZ: Double = 0
-    var yawXYZ: Double = 0
+    var posX: Double = 0                        // posX in XYZ coordinate system (dependent on heading and pos and heading)
+    var posY: Double = 0                        // posY in XYZ coordinate system (dependent on heading and start heading)
+    var posZ: Double = 0                        // posZ in XYZ coordinate system (dependent on start alt)
+    var gimbalYawXYZ: Double = 0                // gimbal yaw in XYZ coordinate system (dependent on heading and start heading)
+    var yawXYZ: Double = 0                      // yaw in XYZ coordinate system (dependent on heading and start heading)
     
    
-    var velX: Float = 0
-    var velY: Float = 0
-    var velZ: Float = 0
-    var yawRate: Double = 0
+//    var velBodyX: Float = 0                     // velBodyX (dependent on heaidng)
+//    var velBodyY: Float = 0                     // velBodyY (dependent on heaidng)
+//    var velBodyZ: Float = 0                     // velBodyZ
+ //   var yawRate: Double = 0                     // yawRate in 'all' coordinate systems
     
-    var refPosX: Double = 0                     // Refpos x relative XYZ origin
-    var refPosY: Double = 0                     // Refpos y relative XYZ origin
-    var refPosZ: Double = 0                     // Refpos z relative XYZ origin
-    var refYawXYZ = 0.0                         // Patameter used for refYawXYZ, -1 means one degree left of X axis.
-    var localYaw: Double = -1                   // Parameter used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
+//    var refPosX: Double = 0                     // refPosX in XYZ coordinate system (dependent on heading and start heading)
+//    var refPosY: Double = 0                     // refPosY in XYZ coordinate system (dependent on heading and start heading)
+//    var refPosZ: Double = 0                     // refPosZ in XYZ coordinate system
+    var refYawXYZ = 0.0                         // refYawXYZ in XYZ coordinate system, -1 means one degree left of X axis.
+    var localYaw: Double = -1                   // localYaw used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
     
-    var refVelX: Float = 0.0
-    var refVelY: Float = 0.0
-    var refVelZ: Float = 0.0
+    var refVelBodyX: Float = 0.0
+    var refVelBodyY: Float = 0.0
+    var refVelBodyZ: Float = 0.0
     var refYawRate: Float = 0.0
     
    // var refLat: Double = 0
@@ -147,26 +147,22 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             if let checkedNewValue = newValue{
                 let vel = checkedNewValue.value as! DJISDKVector3D
                 // Velocities are in NED coordinate system !
-//                guard let checkedHeading = self.getHeading() else {return}
-//                guard let checkedStartHeading = self.startHeadingXYZ else {return}
-//                let alpha = (checkedHeading - checkedStartHeading)/180*Double.pi
-
- 
-                
-                
-                // Coution, does this code calc velX,Y,Z to the XYZ frame? Is not intention to use body?
-                // TODO
-                
-                
                 
                 let heading = self.currentMyLocation.heading
-                let startHeading = self.startMyLocation.heading + self.startMyLocation.gimbalYaw
-                let alpha = (heading - startHeading)/180*Double.pi
-                self.velX = Float(vel.x * cos(alpha) + vel.y * sin(alpha))
-                self.velY = Float(-vel.x * sin(alpha) + vel.y * cos(alpha))
-                self.velZ = Float(vel.z)
+                // Velocities in the XYZ cooredingate system (dependent on heading and start heading)
+                //let startHeading = self.startMyLocation.heading + self.startMyLocation.gimbalYaw
+                // let alpha = (heading - startHeading)/180*Double.pi
+                // self.velX = Float(vel.x * cos(alpha) + vel.y * sin(alpha))
+                // self.velY = Float(-vel.x * sin(alpha) + vel.y * cos(alpha))
+                // self.velZ = Float(vel.z)
                 
-                print("startListenToVel: velX: ", self.velX)
+                // Velocities on the BODY coordinate system (dependent on heading)
+                let beta = heading/180*Double.pi
+                self.currentMyLocation.vel.bodyX = Float(vel.x * cos(beta) + vel.y * sin(beta))
+                self.currentMyLocation.vel.bodyY = Float(-vel.x * sin(beta) + vel.y * cos(beta))
+                self.currentMyLocation.vel.bodyZ = Float(vel.z)
+                
+                print("startListenToVel: velBodyX: ", self.currentMyLocation.vel.bodyX, "velBodyY: ", self.currentMyLocation.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
                 
                 //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
             }
@@ -592,9 +588,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Enable the virtual sticks mode and reset reference velocities
     func stickEnable(){
         // Reset any speed set, think about YAW -> Todo!
-        self.refVelX = 0
-        self.refVelY = 0
-        self.refVelZ = 0
+        self.refVelBodyX = 0
+        self.refVelBodyY = 0
+        self.refVelBodyZ = 0
         self.refYawRate = 0
 
         // Set flight controller mode
@@ -612,9 +608,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Sned a velocity command for a short time, dutts the aircraft in x, y, z, yaw.
     func dutt(x: Float, y: Float, z: Float, yawRate: Float){
         // limit to max
-        self.refVelX = limitToMax(value: x, limit: xyVelLimit/100)
-        self.refVelY = limitToMax(value: y, limit: xyVelLimit/100)
-        self.refVelZ = limitToMax(value: z, limit: zVelLimit/100)
+        self.refVelBodyX = limitToMax(value: x, limit: xyVelLimit/100)
+        self.refVelBodyY = limitToMax(value: y, limit: xyVelLimit/100)
+        self.refVelBodyZ = limitToMax(value: z, limit: zVelLimit/100)
         self.refYawRate = limitToMax(value: yawRate, limit: yawRateLimit)
         
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. DuttTimer will execute control commands for a period of time
@@ -1300,7 +1296,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             duttTimer?.invalidate()
         }
         else {
-            sendControlData(velX: self.refVelX, velY: self.refVelY, velZ: self.refVelZ, yawRate: self.refYawRate, speed: self.defaultXYVel)
+            sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: self.defaultXYVel)
         }
     }
     
@@ -1551,7 +1547,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
             // If ETA is low, reduce speed (brake in time)
             var speed = self.activeWP.speed
-            let vel = sqrt(pow(self.velX,2)+pow(self.velY,2))
+            let vel = sqrt(pow(self.currentMyLocation.vel.bodyX,2)+pow(self.currentMyLocation.vel.bodyY ,2))
             
             //hdrano:
             //decellerate at 2m/s/s
@@ -1572,14 +1568,14 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             }
 
             // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
-            self.refVelX = (xDiffBody*hPosKP - hPosKD*self.velX/xDivider)*turnFactor
-            self.refVelY = (yDiffBody*hPosKP - hPosKD*self.velY/yDivider)*turnFactor
+            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyX/xDivider)*turnFactor
+            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyY/yDivider)*turnFactor
             
             // Calc refVelZ
-            self.refVelZ = Float(-dAlt) * vPosKP
+            self.refVelBodyZ = Float(-dAlt) * vPosKP
         
             // TODO, do not store reference values globally?
-            self.sendControlData(velX: self.refVelX, velY: self.refVelY, velZ: self.refVelZ, yawRate: self.refYawRate, speed: speed)
+            self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
         }
         // Maxtime for flying to wp
         if myLocationCtrlLoopCnt >= myLocationCtrlLoopTarget{
@@ -1608,3 +1604,4 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //            else{
 //                yDivider = yDiffBody + 1
 //            }
+
