@@ -30,6 +30,9 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewController {
     //**********************
     // Variable declarations
+    
+    var debug: Int = 0                  // 0 - off, 1 debug to screen, 2 debug to StatusLabel (user)
+        
     var aircraft: DJIAircraft?
     var camera: DJICamera?
     var DJIgimbal: DJIGimbal?
@@ -53,9 +56,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var gimbalcapability: [AnyHashable: Any]? = [:]
     var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
+    var transferAllAllocator = Allocator(name: "transferAll")
     
     var copter = CopterController()
-    var gimbal = GimbalController()
+    //var gimbal = GimbalController()
    
     var photo: UIImage = UIImage.init() // Is this used?
     var sessionLastIndex: Int = 0 // Picture index of this session
@@ -73,6 +77,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var lastPhotoDataFilename = ""
     var metaDataURL: URL?
     var metaDataFilename = ""
+    
     
     var idle: Bool = true                   // For future implementation of task que
     
@@ -190,13 +195,19 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //**************************************************************************************************
     // Writes metadata to json. startMyLocation for the calulations, if it is not, set ut to current pos
     func writeMetaDataXYZ()->Bool{
-        // Make sure startWP in order to be able to calc the local XYZ
+        // Make sure startWP is set in order to be able to calc the local XYZ
         if !self.copter.startMyLocation.isStartLocation {
             // StartLocation is not set. Try to set it!
             if copter.setStartLocation(){
                 print("writeMetaData: setStartLocation set from here")
+                // In simulation the position is not updated until take-off. So we need to update the currentMyLocation with the current gimbal data to the it right in simulation too.
+                guard let heading = self.copter.getHeading() else {
+                   print("writeMetaDataXYZ: Error updating heading")
+                   return false}
+                self.copter.currentMyLocation.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
+                
+                // Start location is set, call the function again, return true because problem is fixed.
                 _ = writeMetaDataXYZ()
-                // Return true because to problem is fixed and the func is called again.
                 return true
             }
             else{
@@ -211,7 +222,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         jsonMeta["y"] = JSON(self.copter.posY)
         jsonMeta["z"] = JSON(self.copter.posZ)
         jsonMeta["agl"] = JSON(-1)
-        jsonMeta["local_yaw"] = JSON(copter.gimbalYawXYZ)
+        jsonMeta["local_yaw"] = JSON(self.copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)
         jsonMeta["index"] = JSON(self.sessionLastIndex)
 
         var jsonPhoto = JSON()
@@ -316,7 +327,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // cameraSetMode checks if the newCamera mode is the active mode, and if not it tries to set the mode 'attempts' times. TODO - is attemtps needed?
     func cameraSetMode(_ newCameraMode: DJICameraMode,_ attempts: Int, completionHandler: @escaping (Bool) -> Void) {
      
-         // Don't loop for ever
+         // Don't exxed maximum number of tries
          if attempts <= 0{
              NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Error: Camera set mode - too many"])
              completionHandler(false)
@@ -324,7 +335,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
          }
                      
          // Cameramode seems to automatically be reset to single photo. We cannot use local variable to store the mode. Hence getting and setting the current mode should intefere equally, it is better to set directly than first getting, checking and then setting.
-         // Set mode to newCameraMode. If there is a fault call the function again.
+         // Set mode to newCameraMode.
          self.camera?.setMode(newCameraMode, withCompletion: {(error: Error?) in
              if error != nil {
                  self.cameraSetMode(newCameraMode, attempts - 1 , completionHandler: {(success: Bool) in
@@ -334,12 +345,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                  })
              }
              else{
-                 // Camera mode must be successfully set
+                 // Camera mode is successfully set
                  completionHandler(true)
              }
          })
      }
-    
     
     
     // Function could be redefined to send a notification that updates the GUI
@@ -352,7 +362,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         print(str)
     }
     
-
+    func printDB(_ str: String){
+        if debug == 1 {
+            print(str)
+        }
+        if debug == 2 {
+            self.printSL(str)
+        }
+    }
     
     // Can be moved to separate file
     //*********************************************************
@@ -363,27 +380,50 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         print("Previewing photo from path")
     }
     
-    //
-    // Function executed when incoming command is download_picture
-    func downloadPictureCMD(sessionIndex: Int){
-        // First download from sdCard
-        self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
-            self.cameraAllocator.deallocate()
-            if saveSuccess {
-                self.printSL("Image downloaded to App")
-                print("Publish photo on PUB-socket")
-                let photoData = self.lastPhotoData
-                var json_photo = JSON()
-                json_photo["photo"].stringValue = getBase64utf8(data: photoData)
-                json_photo["metadata"] = self.jsonMetaData[String(self.sessionLastIndex)]
-                print(self.jsonMetaData)
-                _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
-            }
-            else{
-                self.printSL("Download from sdCard Failed")
-            }
-        })
-    }
+//    // **********************************************************************************************************
+//    // Function executed when incoming command is download_picture. Camera allocator must be allocated by calling function.
+//    func downloadPhotoCMD(sessionIndex: Int){
+//        // Check if already downloaded from sdCard
+//        if self.jsonPhotos[String(sessionIndex)].exists(){
+//            if jsonPhotos[String(sessionIndex)]["stored"] == false{
+//                printSL("transferIndex: Download photo: " + String(sessionIndex))
+//
+//                // Allocate resource
+//                var maxTime = 41
+//                while !self.cameraAllocator.allocate("download", maxTime: 40){
+//                    // Sleep 0.1s
+//                    usleep(100000)
+//                    maxTime -= 1
+//                    if maxTime < 0 {
+//                        // Give up to download photo
+//                        self.printSL("downloadPhotoCMD: Error, could not allocate cameraAllocator")
+//                        return
+//                    }
+//                }
+//                // Allocator allocated
+//                self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
+//                    self.cameraAllocator.deallocate()
+//                    if saveSuccess {
+//                        self.printSL("Image downloaded to App")
+//                        print("Publish photo on PUB-socket")
+//                        let photoData = self.lastPhotoData
+//                        var json_photo = JSON()
+//                        json_photo["photo"].stringValue = getBase64utf8(data: photoData)
+//                        json_photo["metadata"] = self.jsonMetaData[String(self.sessionLastIndex)]
+//                        print(self.jsonMetaData)
+//                        _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
+//                    }
+//                    else{
+//                        self.printSL("Download from sdCard Failed. Report if endless loop..")
+//                        // Sleep for 0.1s to give the system some time to recover.
+//                        usleep(100000)
+//                        // Risking endless loop..
+//                        self.downloadPhotoCMD(sessionIndex: sessionIndex)
+//                    }
+//                })
+//            }
+//        }
+//    }
 
     
     //**********************************************************************
@@ -427,7 +467,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             
             // Print number of files on sdCard and note the first photo of the session if not already done
-            self.printSL("Files on sdCard: " + String(describing: files.count))
+            print("Files on sdCard: ", String(describing: files.count))
             if self.sdFirstIndex == -1 {
                 self.sdFirstIndex = files.count - self.sessionLastIndex
                 print("sessionIndex 1 mapped to cameraIndex: ", self.sdFirstIndex)
@@ -480,7 +520,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 theSessionIndex = sessionIndex
             }
 
-            print("temp output: CameraIndex: ", cameraIndex)
             // Create a photo container for this scope
             var photoData: Data?
             var i: Int?
@@ -488,7 +527,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             // Download batchhwise, append data. Closure is called each time data is updated.
             files[cameraIndex].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
                 if error != nil{
-                    // THis happens if download is triggered to close to taking a picture. Is the allocator used?
+                    // This happens if download is triggered to close to taking a picture. Is the allocator used?
                     self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
                     completionHandler(false)
                 }
@@ -533,42 +572,84 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 self.lastPhotoDataURL = fileURL
                 self.lastPhotoDataFilename = filename
                 self.jsonPhotos[String(theSessionIndex)]["stored"].boolValue = true
-                print("Did print stored = true to jsonPhotos index: ", theSessionIndex)
-                print("The write fileURL points at: ", fileURL)
+                self.printDB("savePhotoDataToApp: The write fileURL points at: " + fileURL.description)
             } catch {
-                self.printSL("Could not write photoData to App: " + String(describing: error))
+                self.printSL("savePhotoDataToApp: Could not write photoData to App: " + String(describing: error))
             }
         }
     }
     
-    // ******************************************************************
-    // Transfers (publishes) all photos, downloads from sdCard if needed.
+    // ***************************************************************************************************************
+    // Transfers (publishes) all photos, downloads from sdCard if needed. transferAll allocates the rescource it self.
     func transferAll(){
+        // Check if there are any photos to transfer
         if self.sessionLastIndex == 0 {
             print("transferAll: No photos to transfer")
             return
         }
-        self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1)
+        self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1, skipped: 0)
     }
-    // Interative nested calls, allows three download attempts per index.
-    func transferAllHelper(sessionIndex: Int, attempt: Int){
+
+    // *****************************************************************
+    // Iterative nested calls, allows three download attempts per index.
+    func transferAllHelper(sessionIndex: Int, attempt: Int, skipped: Int){
+        // If too many attempts, skip this photo
         if attempt > 3{
             print("transferAllHelper: Difficulties downloading index: ", sessionIndex, " Skipping.")
-            self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1)
+            // If there are more photos in que, try with next one, add one to skipped.
+            if sessionIndex > 1 {
+                self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1, skipped: skipped + 1)
+            }
+            // If no more photos in que, report result to user, deallocate transferAll and return.
+            else {
+                self.printSL("downloadAllHelper: Caution: " + String(skipped + 1) + " photos not transferred")
+                self.transferAllAllocator.deallocate()
+                return
+            }
+        }
+        else {
+            self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success) in
+                if success{
+                    // If no more photos in que, report result to user, deallocate transferAll and return
+                    if sessionIndex == 1{
+                        if skipped == 0 {
+                            self.printSL("downloadAllHelper: All photos transferred")
+                        }
+                        else {
+                            self.printSL("downloadAllHelper: Caution: " + String(skipped) + " photos not transferred")
+                        }
+                        self.transferAllAllocator.deallocate()
+                        return
+                    }
+                    else {
+                        self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1, skipped: skipped)
+                    }
+                }
+                else{
+                    // Sleep to give system a chance to recover..
+                    usleep(200000)
+                    self.transferAllHelper(sessionIndex: sessionIndex, attempt: attempt + 1, skipped: skipped)
+                }
+            })
+        }
+    }
+    
+    //
+    // Uses transferIndex to download and transfer photo with index sessionIndex. I tries max three times.
+    func transferSingle(sessionIndex: Int, attempt: Int){
+        if attempt > 3{
+            print("transferSingle: Difficulties downloading index: ", sessionIndex, " Skipping.")
+            return
         }
         self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success) in
             if success{
-                if sessionIndex == 1{
-                    print("transferAllHelper: All photos transferred") // First photo is index 1
-                }
-                else{
-                //print("transferAllHelpter: Following index has been transferred: ", sessionIndex)
-                self.transferAllHelper(sessionIndex: sessionIndex - 1, attempt: 1)
-                }
+                self.printSL("downloadSingle: Photo index: " + String(sessionIndex) + ", transferred")
             }
             else{
-                print("transferAllHelper:  Following index failed to transfer: ", sessionIndex)
-                self.transferAllHelper(sessionIndex: sessionIndex, attempt: attempt + 1)
+                self.printSL("downloadSingle: Filed to transfer index: " + String(sessionIndex))
+                // Sleep to give user a chance to read the message..
+                usleep(500000)
+                self.transferSingle(sessionIndex: sessionIndex, attempt: attempt + 1)
             }
         })
     }
@@ -581,31 +662,39 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         if self.jsonPhotos[String(sessionIndex)].exists(){
             if jsonPhotos[String(sessionIndex)]["stored"] == false{
                 printSL("transferIndex: Download photo: " + String(sessionIndex))
-                if self.cameraAllocator.allocate("transferIndex", maxTime: 40){
-                    self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
-                        self.cameraAllocator.deallocate()
-                        if saveSuccess {
-                            self.printSL("transferIndex: Photo " + String(sessionIndex) + " downloaded to App")
-                            self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success: Bool) in
-                                // Completion handler on first call depends on the second call, child process.
-                                if success{
-                                    completionHandler(true)
-                                }
-                                else{
-                                    completionHandler(false)
-                                }
-                            })
-                        }
-                        else{
-                            print("transferIndex Error: Could not download the photo from sdCard")
-                            completionHandler(false)
-                        }
-                    })
+                //if self.cameraAllocator.allocate("transferIndex", maxTime: 40)
+                // Allocate resource
+                var maxTime = 41
+                while !self.cameraAllocator.allocate("download", maxTime: 40){
+                    // Sleep 0.1s
+                    usleep(100000)
+                    maxTime -= 1
+                    if maxTime < 0 {
+                        // Give up attempt to download index
+                        self.printSL("transferIndex: Error, could not allocate cameraAllocator")
+                        completionHandler(false)
+                    }
                 }
-                else {
-                    print("transferIndex: Error, could not allocate cameraAllocator")
-                    completionHandler(false)
-                }
+                // Allocator allocated
+                self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
+                    self.cameraAllocator.deallocate()
+                    if saveSuccess {
+                        self.printSL("transferIndex: Photo " + String(sessionIndex) + " downloaded to App")
+                        self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success: Bool) in
+                            // Completion handler on first call depends on the second call, child process.
+                            if success{
+                                completionHandler(true)
+                            }
+                            else{
+                                completionHandler(false)
+                            }
+                        })
+                    }
+                    else{
+                        self.printSL("transferIndex: Error, failed to download index " + String(sessionIndex))
+                        completionHandler(false)
+                    }
+                })
             }
             // Photo is locally stored, load and transfer it!
             else{
@@ -613,11 +702,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                     let filename = self.jsonPhotos[String(sessionIndex)]["filename"].stringValue
                     let fileURL = documentsURL.appendingPathComponent(filename)
-                    print("The file url we try to publish: ", fileURL.description)
+                    self.printDB("The file url we try to publish: " + fileURL.description)
                     do{
                         //print("The read fileURL points at: ", fileURL)
                         let photoData = try Data(contentsOf: fileURL)
-                        self.printSL("transferIndex: Publish photo on PUB-socket")
+                        self.printSL("transferIndex: Publish photo " + String(sessionIndex) + " on PUB-socket")
                         var json_photo = JSON()
                         json_photo["photo"].stringValue = getBase64utf8(data: photoData)
                         json_photo["metadata"] = self.jsonMetaData[String(sessionIndex)]
@@ -625,14 +714,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         completionHandler(true)
                     }
                     catch{
-                        print("transferIndex could not load data: ", filename)
+                        print("transferIndex: Could not load data: ", filename)
                         completionHandler(false)
                     }
                 }
             }
         }
         else{
-            self.printSL("The index has not been produced yet. No such index in jsonPhotos: " + String(sessionIndex))
+            self.printSL("transferIndex: Index has not been produced yet: " + String(sessionIndex))
             completionHandler(false)
         }
     }
@@ -731,10 +820,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         catch{
             if topic == "photo"{
-                print("Tried to publish photo, but failed.")
+                print("publish: Error, tried to publish photo, but failed.")
             }
             else{
-            print("Tried to publish, but failed: " + publishStr)
+                print("publish: Error, tried to publish, but failed: " + publishStr)
             }
             return false
         }
@@ -821,16 +910,51 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "gimbal_set":
                     self.printSL("Received cmd: gimbal_set")
                     json_r = createJsonAck("gimbal_set")
-                    self.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
+                    self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
                     
-                case "gogo_XYZ":
-                    self.printSL("Received cmd: gogo_XYZ")
+                case "gogo_LLA":
+                    self.printSL("Received cpmd: gogo_LLA")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-//                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
+                                }
+                                json_r = createJsonAck("gogo_LLA")
+                            }
+                            else{
+                                json_r = createJsonNack("gogo_LLA")
+                            }
+                        }
+                    else{
+                         json_r = createJsonNack("gogo_LLA")
+                    }
+
+                case "gogo_NED":
+                    self.printSL("Received cpmd: gogo_NED")
+                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                        let next_wp = json_m["arg"]["next_wp"].intValue
+                        if copter.pendingMission["id" + String(next_wp)].exists(){
+                                Dispatch.main{
+                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
+                                }
+                                json_r = createJsonAck("gogo_NED")
+                            }
+                            else{
+                                json_r = createJsonNack("gogo_NED")
+                            }
+                        }
+                    else{
+                         json_r = createJsonNack("gogo_NED")
+                    }
+
+                case "gogo_XYZ":
+                    self.printSL("Received cpmd: gogo_XYZ")
+                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                        let next_wp = json_m["arg"]["next_wp"].intValue
+                        if copter.pendingMission["id" + String(next_wp)].exists(){
+                                Dispatch.main{
                                     _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_XYZ")
@@ -911,19 +1035,48 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             }
                         case "download":
                             self.printSL("Received cmd: photo, with arg download")
-                            if self.cameraAllocator.allocate("download", maxTime: 40) {
+                            // Check if argument is ok, send reply and do actions in the background
+                            let sessionIndex = json_m["arg"]["index"].intValue
+                            // Index does not exist
+                            if sessionIndex > self.sessionLastIndex {
+                                self.printSL("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + String(self.sessionLastIndex))
+                                json_r = createJsonNack("photo")
+                                json_r["arg2"] = JSON("index does not exist")
+                                // Done
+                            }
+                            else if sessionIndex == -1 {
+                                if transferAllAllocator.allocate("transferAll", maxTime: 300) {
+                                    json_r = createJsonAck("photo")
+                                    json_r["arg2"].stringValue = "download"
+                                    // Transfer all in background, transferAll handles the allcoator
+                                    Dispatch.background {
+                                        // Transfer function handles the allocator
+                                        self.printSL("Downloading all photos...")
+                                        self.transferAll()
+                                    }
+                                }
+                                else {
+                                    json_r = createJsonNack("photo")
+                                    json_r["arg2"] = JSON("download all already running")
+                                    self.printSL("Dowload all nacked, already running")
+                                }
+                            }
+                            // Index is 0 or less (but not -1 since it is already tested)
+                            else if sessionIndex < 1 {
+                                self.printSL("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
+                                json_r = createJsonNack("photo")
+                                json_r["arg2"] = JSON("bad index")
+                                // Done
+                            }
+                            // Index must be ok, download the index
+                            else{
                                 json_r = createJsonAck("photo")
                                 json_r["arg2"].stringValue = "download"
-                                var sessionIndex = json_m["arg"]["index"].intValue
-                                // Help user to find the last index
-                                if sessionIndex == -1 {
-                                    sessionIndex = self.sessionLastIndex
+                                Dispatch.background{
+                                    // Download function handles the allocator
+                                    self.printSL("Download photo index " + String(sessionIndex))
+                                    self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
                                 }
-                                print("The download index argument: " + String(describing: sessionIndex))
-                                downloadPictureCMD(sessionIndex: sessionIndex)
-                            }
-                            else { // Camera resource busy
-                                json_r = createJsonNack("photo")
                             }
                         default:
                             self.printSL("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
@@ -1126,13 +1279,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         self.dismiss(animated: true, completion: nil)
     }
     
-//    //**************************************************************************************************
-//    // DeactivateSticks: Touch down action, deactivate immidiately and reset ActivateSticks button color
-//    @IBAction func DeactivateSticksPressed(_ sender: UIButton) {
-//        copter.stop()
-//        deactivateSticks()
-//        copter._operator = "USER" // Reject application control
-//    }
 
     //************************************************************************************
     // ActivateSticks: Touch down up inside action, ativate when ready (release of button)
@@ -1140,19 +1286,19 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         if inControls == "USER"{
             // GIVE the controls to client
             inControls = "CLIENT"
+            // Prepare button text for next toggle
             controlsButton.setTitle("TAKE Controls", for: .normal)
             activateSticks()
+            self.printSL("CLIENT has the Controls")
         }
         else{
-            // TAKE back the controls
+            // TAKE back the controls from CLIENT
             deactivateSticks()
             inControls = "USER"
+            // Prepare button text for next toggle
             controlsButton.setTitle("GIVE Controls", for: .normal)
+            self.printSL("USER has the Controls")
         }
-        
-        // TODO, remove commented code.
-        //activateSticks()
-        //copter._operator = "CLIENT" // Allow application control
     }
 
     //***************************************************************************************************************
@@ -1173,48 +1319,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //            }
 //        })
         
-     
-//        var json = JSON()
-//        json["id0"] = JSON()
-//        json["id0"]["x"] = JSON(1)
-//        json["id0"]["y"] = JSON(2)
-//        json["id0"]["z"] = JSON(-13)
-//        json["id0"]["local_yaw"] = JSON(0)
-//
-//        json["id1"] = JSON()
-//        json["id1"]["x"] = JSON(0)
-//        json["id1"]["y"] = JSON(0)
-//        json["id1"]["z"] = JSON(-16)
-//        json["id1"]["local_yaw"] = JSON(0)
-//
-//        json["id2"] = JSON()
-//        json["id2"]["x"] = JSON(1)
-//        json["id2"]["y"] = JSON(2)
-//        json["id2"]["z"] = JSON(-13)
-//        json["id2"]["local_yaw"] = JSON(0)
-//
-//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-//        if success{
-//            _ = copter.gogo(startWp: 0)
-//        }
-//        else{
-//            print("Mission failed to upload: " + arg!)
-//        }
-//        printJson(jsonObject: json)
-    
-        
-        
-//        if self.subscriptions.photoXYZ{
-//            self.subscriptions.photo_XYZ = false
-//            print("Subscription false")
-//            self.gimbal.setPitch(pitch: -90)
-//        }
-//        else{
-//            self.subscriptions.photoXYZ = true
-//            print("Subscription true")
-//            self.gimbal.setPitch(pitch: 12.2)
-//        }
-        //self.downloadPictureCMD()
+   
     }
 
     //***************************************************************************************************************
@@ -1222,7 +1327,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
         copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
-        
+        copter.currentMyLocation.printLocation(sentFrom: "Dutt button")
 
 
         // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
@@ -1230,88 +1335,15 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
         //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
         
-
-//        self.transferAll()
 //
 //        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
 //            print(mode.self)
 //        })
 
-//        copter.dssSrtl(hoverTime: 5)
-//
-//        previewImageView.image = nil
         
 
-//        var json = JSON()
-//        json["id0"] = JSON()
-//        json["id0"]["x"] = JSON(0)
-//        json["id0"]["y"] = JSON(-2)
-//        json["id0"]["z"] = JSON(-15)
-//        json["id0"]["local_yaw"] = JSON(0)
-//
-//        json["id1"] = JSON()
-//        json["id1"]["x"] = JSON(0)
-//        json["id1"]["y"] = JSON(4)
-//        json["id1"]["z"] = JSON(-18)
-//        json["id1"]["local_yaw"] = JSON(0)
-//
-//        json["id2"] = JSON()
-//        json["id2"]["x"] = JSON(0)
-//        json["id2"]["y"] = JSON(-2)
-//        json["id2"]["z"] = JSON(-15)
-//        json["id2"]["local_yaw"] = JSON(0)
-//
-//        let (success, arg) = copter.uploadMissionXYZ(mission: json)
-//         if success{
-//            //copter.gogo(startWp: 0)
-//         }
-//         else{
-//             print("Mission failed to upload: " + arg!)
-//         }
-        
-       // _ = self.publish(topic: "no_topic", json: json)
-        
-       // printJson(jsonObject: json)
-       
-//        if let gimbalRelativeHeading = getYawRelativeToAircaftHeading(){
-//            self.printSL("Yaw relative to ac :" + String(gimbalRelativeHeading))
-//        }
-//        else{
-//            print("gimbal heading not available")
-//        }
-//        if copter.setOriginXYZ(){
-//            print("originXYZ set")
-//        }
-//        else{
-//            if copter.startHeadingXYZ != nil{
-//                self.printSL("OriginXYZ cannot be updated")
-//            }
-//            else
-//            {
-//                print("Aircraft not ready to set OriginXYZ")
-//            }
-//        }
-        //copter.gogo(startWp: 0)
-//        self.subscriptions.photoXYZ = true
-//        takePhotoCMD()
     }
     
-//    //********************************************************
-//    // Set gimbal pitch according to scheeme and take a photo.
-//    @IBAction func takePhotoButton(_ sender: Any) {
-//
-//        // Dispatch to wait in the pitch movement, then capture an photo. TODO - use closure instead of stupid timer.
-//        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: {
-//            self.capturePhoto(completion: {(success) in
-//                if success {
-//                    self.printSL("Photo successfully taken")
-//                }
-//                else{
-//                    self.printSL("Photo from button press failed to complete")
-//                }
-//            })
-//        })
-//    }
     
     //**********************************************
     // Download and preview the last photo on sdCard
@@ -1354,12 +1386,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
         // If subscribed to XYZ updates, also get local_yaw and publish
         if subscriptions.XYZ{
-            print("heading: ", copter.currentMyLocation.heading, ", yawXYZ: ", copter.yawXYZ, ", gimbalYawXYZ: ", gimbal.yawRelativeToAircraftHeading ?? 0, ", startHeadingXYZ: ", copter.startMyLocation.heading + copter.startMyLocation.gimbalYaw)
             var json = JSON()
             json["x"].doubleValue = round(100 * copter.posX) / 100
             json["y"].doubleValue = round(100 * copter.posY) / 100
             json["z"].doubleValue = round(100 * copter.posZ) / 100
-            json["local_yaw"].doubleValue = round(100 * copter.gimbalYawXYZ) / 100
+            json["local_yaw"].doubleValue =
+                round(100 * (copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)) / 100
 
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
@@ -1404,7 +1436,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @objc func onDidWPAction(_ notification: Notification){
         if let data = notification.userInfo as? [String: String]{
             if data["wpAction"] == "take_photo"{
-                print("wpAction: take photo")
+                self.printSL("wpAction: take photo")
                 // Wait for allocator, allocate
                 // must be in background to not halt everything.
                 Dispatch.background {
@@ -1412,7 +1444,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         usleep(300000)
                         //print("WP action trying to allocate camera")
                     }
-                    print("Camera allocator allocated by wpAction")
+                    self.printDB("Camera allocator allocated by wpAction")
                     self.takePhotoCMD()
                     // takePhotoCMD will execute and deallocate
                     while self.cameraAllocator.allocated{
@@ -1440,16 +1472,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-    //*************************************************************************
-    //*************************************************************************
-    
-//    public override var contentViewController: DUXFPVView {
-//
-//        var newContentViewController = DUXFPVViewController()
-//        newContentViewController.fpvView?.showCameraDisplayNam
-//        self.contentViewController = newContentViewController
-//    }
-
     
     // ************
     // viewDidLoad
@@ -1485,14 +1507,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         // Set up layout
         let radius: CGFloat = 5
         // Set corner radiuses to buttons
-        //DeactivateSticksButton.layer.cornerRadius = radius
-        //ActivateSticksButton.layer.cornerRadius = radius
         controlsButton.layer.cornerRadius = radius
         DuttLeftButton.layer.cornerRadius = radius
         DuttRightButton.layer.cornerRadius = radius
         
         // Disable some buttons
-        //DeactivateSticksButton.backgroundColor = UIColor.lightGray
         disableButton(DuttLeftButton)
         disableButton(DuttRightButton)
         
@@ -1502,14 +1521,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         savePhotoButton.isHidden = true
         getDataButton.isHidden = true
         putDataButton.isHidden = true
-        //DeactivateSticksButton.isHidden = true
         
         
         printSL("Setting up aircraft")
-        //DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: {
-        
+    
         // Setup aircraft
-         var setupOk = true
+        var setupOk = true
         if let product = DJISDKManager.product() as? DJIAircraft {
             self.aircraft = product
             
@@ -1540,10 +1557,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             // Store the gimbal reference
             if let gimbalReference = self.aircraft?.gimbal {
-                self.gimbal.gimbal = gimbalReference
-                self.gimbal.initGimbal()
-                // Copy gimbal controller to copter for gimbal access
-                self.copter.gimbal = self.gimbal
+                self.copter.gimbal.gimbal = gimbalReference
+                self.copter.gimbal.initGimbal()
             }
             else{
                 setupOk = false
@@ -1556,20 +1571,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         
 
-        // Test notification center,https://learnappmaking.com/notification-center-how-to-swift/
-        //let posUpdateLabels = Notification.Name("posUpdateLabels")
+        // Notification center,https://learnappmaking.com/notification-center-how-to-swift/
         NotificationCenter.default.addObserver(self, selector: #selector(onDidXYZUpdate(_:)), name: .didXYZUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidVelUpdate(_:)), name: .didVelUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPrintThis(_:)), name: .didPrintThis, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidWPAction(_:)), name: .didWPAction, object: nil)
-        
-
-        
-
-        // Start subscriptions
-        //copter.startListenToPos() // startListen to position requres home location for calculation of XYZ. Function is called when home pos is updated.
-
         
         _ = initPublisher()
         if startReplyThread(){

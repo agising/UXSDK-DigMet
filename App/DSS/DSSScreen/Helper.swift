@@ -18,6 +18,7 @@ class MyLocation: NSObject{
     var altitude: Double = 0
     var heading: Double = 0
     var gimbalYaw: Double = 0
+    var gimbalYawRelativeToHeading: Double = 0
     var action: String = ""
     var isStartLocation = false
     var coordinate = MyCoordinate()
@@ -30,6 +31,7 @@ class MyLocation: NSObject{
         self.altitude = 0
         self.heading = 0
         self.gimbalYaw = 0
+        self.gimbalYawRelativeToHeading = 0
         self.action = ""
         self.isStartLocation = false
         self.coordinate.latitude = 0
@@ -112,13 +114,18 @@ class MyLocation: NSObject{
     }
     
     // Set up wp properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYaw: Double=0, isStartWP: Bool=false){
+    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double=0, isStartWP: Bool=false){
         self.altitude = pos.altitude
         self.heading = heading
-        self.gimbalYaw = gimbalYaw
+        self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
+        self.gimbalYaw = heading + gimbalYawRelativeToHeading
         self.coordinate.latitude = pos.coordinate.latitude
         self.coordinate.longitude = pos.coordinate.longitude
         self.isStartLocation = isStartWP
+        
+        
+        
+        
     }
     
     func setGeoFence(radius: Double, height: [Double]){
@@ -126,7 +133,7 @@ class MyLocation: NSObject{
         self.geoFence.height = height
     }
     
-    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, start: MyLocation){
+    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, startWP: MyLocation){
         // Reset all properties
         self.reset()
                 
@@ -146,11 +153,11 @@ class MyLocation: NSObject{
             let east = jsonWP["east"].doubleValue
             let down = jsonWP["down"].doubleValue
             // Calc dLat, dLon from north east. Add to start location.
-            let dLat = start.coordinate.latitude + north/(1852 * 60)
-            let dLon = start.coordinate.longitude + east/(1852 * 60 * cos(start.coordinate.latitude/180*Double.pi))
+            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
+            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = start.altitude - down
+            self.altitude = startWP.altitude - down
             self.heading = jsonWP["heading"].doubleValue
             
         }
@@ -160,17 +167,29 @@ class MyLocation: NSObject{
             let y = jsonWP["y"].doubleValue
             let z = jsonWP["z"].doubleValue
             // First calculate northing and easting.
-            let XYZstartHeading = start.heading + start.gimbalYaw
+            let XYZstartHeading = startWP.gimbalYaw
             let beta = -XYZstartHeading/180*Double.pi
             let north = x * cos(beta) + y * sin(beta)
             let east = -x * sin(beta) + y * cos(beta)
             // Calc dLat, dLon from north east. Add to start location
-            let dLat = start.coordinate.latitude + north/(1852 * 60)
-            let dLon = start.coordinate.longitude + east/(1852 * 60 * cos(start.coordinate.latitude/180*Double.pi))
+            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
+            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = start.altitude - z
-            self.heading = start.heading + jsonWP["local_yaw"].doubleValue
+            self.altitude = startWP.altitude - z
+            if jsonWP["local_yaw"].doubleValue != -1 {
+                self.heading = startWP.gimbalYaw + jsonWP["local_yaw"].doubleValue
+                // Make sure heading is within 0-360 range (mainly to avoid -1 which has other meaning)
+                if self.heading < 0 {
+                    self.heading += 360
+                }
+                if self.heading > 360 {
+                    self.heading -= 360
+                }
+            }
+            else {
+                self.heading = -1
+            }
         }
         
         // Extract speed
@@ -184,9 +203,7 @@ class MyLocation: NSObject{
         // Extract action
         if jsonWP["action"].exists() {
             self.action = jsonWP["action"].stringValue
-            
         }
-
     }
     
     // Prints text to both statusLabel and error output
@@ -199,7 +216,9 @@ class MyLocation: NSObject{
               "lat: ", self.coordinate.latitude,
               " lon: ", self.coordinate.longitude,
               " alt: ", self.altitude,
-              " heading: ", self.heading)
+              " heading: ", self.heading,
+              " gimbalYaw: ", self.gimbalYaw,
+              " gimbalYawRelativeToHeading: ", self.gimbalYawRelativeToHeading)
     }
 }
 
@@ -219,6 +238,13 @@ class Vel: NSObject{
     var bodyY: Float = 0
     var bodyZ: Float = 0
     var yawRate: Float = 0
+}
+
+// SubClass to MyLocation. Body class for body velocities
+class XYZ: NSObject{
+    var x: Float = 0
+    var y: Float = 0
+    var z: Float = 0
 }
 
 

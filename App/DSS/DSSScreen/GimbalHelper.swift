@@ -13,8 +13,8 @@ class GimbalController: NSObject, DJIGimbalDelegate{
     var gimbal: DJIGimbal?
     var pitchRangeExtensionSet = false
     
-    var gimbalPitch: Float? = nil
-    var yawRelativeToAircraftHeading: Double? = nil
+    var gimbalPitch: Float = 0
+    var yawRelativeToHeading: Double = 0
 
     // *******************************************
     // Init the gimbal, set pitch range extension.
@@ -43,7 +43,7 @@ class GimbalController: NSObject, DJIGimbalDelegate{
     // The gimbal delegate function
     func gimbal(_ gimbal: DJIGimbal, didUpdate state: DJIGimbalState) {
         gimbalPitch = state.attitudeInDegrees.pitch
-        yawRelativeToAircraftHeading = state.yawRelativeToAircraftHeading
+        yawRelativeToHeading = state.yawRelativeToAircraftHeading
     }
 
     
@@ -69,22 +69,22 @@ class GimbalController: NSObject, DJIGimbalDelegate{
     
     // **************************************************************************************************
     // Get the gimbal yaw relative to aircraft heading. Tested ok. Handeled by the delegate funciton now.
-    func getYawRelativeToAircraftHeading()->Double?{
+    func getYawRelativeToAircraftHeading()->Double{
         guard let gimbalStateKey = DJIGimbalKey(param: DJIGimbalParamAttitudeYawRelativeToAircraft) else {
             NSLog("Couldn't create the key")
-            return nil
+            return 0
         }
 
         guard let keyManager = DJISDKManager.keyManager() else {
             print("Couldn't get the keyManager, are you registered")
-            return nil
+            return 0
         }
                 
         if let gimbalStateValue = keyManager.getValueFor(gimbalStateKey) {
-            let yawRelativeToAircraftHeading = gimbalStateValue.value as? Double
+            let yawRelativeToAircraftHeading = gimbalStateValue.value as! Double
             return yawRelativeToAircraftHeading
         }
-     return nil
+     return 0
     }
 
 

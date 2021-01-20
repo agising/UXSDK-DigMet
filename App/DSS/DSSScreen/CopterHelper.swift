@@ -12,8 +12,7 @@ import SwiftyJSON
 
 class CopterController: NSObject, DJIFlightControllerDelegate {
     var flightController: DJIFlightController?
-    var gimbal: GimbalController?
-    
+    var gimbal = GimbalController()
     var state: DJIFlightControllerState?
     
     // Geofencing
@@ -32,19 +31,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var posX: Double = 0                        // posX in XYZ coordinate system (dependent on heading and pos and heading)
     var posY: Double = 0                        // posY in XYZ coordinate system (dependent on heading and start heading)
     var posZ: Double = 0                        // posZ in XYZ coordinate system (dependent on start alt)
-    var gimbalYawXYZ: Double = 0                // gimbal yaw in XYZ coordinate system (dependent on heading and start heading)
-    var yawXYZ: Double = 0                      // yaw in XYZ coordinate system (dependent on heading and start heading)
+   // var gimbalYawXYZ: Double = 0                // gimbal yaw in XYZ coordinate system (dependent on heading and start heading)
+  //  var yawXYZ: Double = 0                      // yaw in XYZ coordinate system (dependent on heading and start heading)
     
-   
-//    var velBodyX: Float = 0                     // velBodyX (dependent on heaidng)
-//    var velBodyY: Float = 0                     // velBodyY (dependent on heaidng)
-//    var velBodyZ: Float = 0                     // velBodyZ
- //   var yawRate: Double = 0                     // yawRate in 'all' coordinate systems
-    
-//    var refPosX: Double = 0                     // refPosX in XYZ coordinate system (dependent on heading and start heading)
-//    var refPosY: Double = 0                     // refPosY in XYZ coordinate system (dependent on heading and start heading)
-//    var refPosZ: Double = 0                     // refPosZ in XYZ coordinate system
-    var refYawXYZ = 0.0                         // refYawXYZ in XYZ coordinate system, -1 means one degree left of X axis.
+   // var refYawXYZ = 0.0                         // refYawXYZ in XYZ coordinate system, -1 means one degree left of X axis.
     var localYaw: Double = -1                   // localYaw used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
     
     var refVelBodyX: Float = 0.0
@@ -52,9 +42,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var refVelBodyZ: Float = 0.0
     var refYawRate: Float = 0.0
     
-   // var refLat: Double = 0
-   // var refLon: Double = 0
-   // var refAltLLA: Double = 0
     var refYawLLA: Double = 0
     
     var xyVelLimit: Float = 900 // 300                 // cm/s horizontal speed
@@ -162,12 +149,32 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 self.currentMyLocation.vel.bodyY = Float(-vel.x * sin(beta) + vel.y * cos(beta))
                 self.currentMyLocation.vel.bodyZ = Float(vel.z)
                 
-                print("startListenToVel: velBodyX: ", self.currentMyLocation.vel.bodyX, "velBodyY: ", self.currentMyLocation.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
+                //print("startListenToVel: velBodyX: ", self.currentMyLocation.vel.bodyX, "velBodyY: ", self.currentMyLocation.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
                 
                 //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
             }
         })
     }
+    
+//    func getPosition(){
+//        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
+//            NSLog("Couldn't create the key")
+//            return
+//        }
+//
+//        guard let keyManager = DJISDKManager.keyManager() else {
+//            print("Couldn't get the keyManager, are you registered")
+//            return
+//        }
+//
+//        if let posValue = keyManager.getValueFor(locationKey) {
+//            let pos = posValue.value as! CLLocation
+//
+//        }
+//        if let flyingValue = keyManager.getValueFor(flyingKey) {
+//            let flying = flyingValue.value as! Bool
+//            return flying
+//        }
     
     //*************************************
     // Start listening for position updates
@@ -185,57 +192,61 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         keyManager.startListeningForChanges(on: locationKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
             if let checkedNewValue = newValue{
                 let temp = (checkedNewValue.value as! CLLocation)
+                print("Position starts updating now")
                 self.pos = temp
                 guard let heading = self.getHeading() else {
                    print("PosListener: Error updating heading")
                    return}
                 self.heading = heading
                 
-                // Todo: Uppdate different frames depending on subscription. Only implementet XYZ-frame.
                 // Update the XYZ coordinates relative to the XYZ frame. XYZ if XYZ is not set prior to takeoff, the homelocation updated at takeoff will be set as XYZ origin.
                 
-                if self.startMyLocation.coordinate.latitude == 0 {
-                    print("startListenToPos: No start location saved")
+                if !self.startMyLocation.isStartLocation {
+                    print("startListenToPos: No start location saved, local XYZ cannot be calculated")
                     return
                 }
-//                guard let start = self.startLocationXYZ else {
-//                    print("PosListener: No start location XYZ")
-//                    return}
-//                guard let checkedStartHeading = self.startHeadingXYZ else {
-//                    print("PosListener: No start headingXYZ")
-//                    return}
-                
-                let lat_diff = self.pos!.coordinate.latitude - self.startMyLocation.coordinate.latitude
-                let lon_diff = self.pos!.coordinate.longitude - self.startMyLocation.coordinate.longitude
-                let alt_diff = self.pos!.altitude - self.startMyLocation.altitude
 
-                let posN = lat_diff * 1852 * 60
-                let posE = lon_diff * 1852 * 60 * cos(self.startMyLocation.coordinate.latitude/180*Double.pi)
-                
-//                let alpha = checkedStartHeading/180*Double.pi
-                let alpha = (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)/180*Double.pi
-                
-                // Coordinate transformation, from (E,N) to (y,x)
-                self.posX =  posN * cos(alpha) + posE * sin(alpha)
-                self.posY = -posN * sin(alpha) + posE * cos(alpha)
-                self.posZ = -alt_diff
-                
-                guard let yawRelativeToAircraftHeading = self.gimbal!.yawRelativeToAircraftHeading else {
-                               print("PosListener: Error: no gimbal relative to aircraft heading")
-                               return}
-//                self.gimbalYawXYZ = heading - checkedStartHeading + yawRelativeToAircraftHeading
-//                self.yawXYZ = heading - checkedStartHeading
-
-                self.gimbalYawXYZ = heading - (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)
-                self.yawXYZ = heading - (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)
-
-                NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
-                
-                // A semaphore could be needed, controller reads often. Expand to hold posX, Y, ZTODO
-                self.currentMyLocation.setPosition(pos: temp, heading: heading, gimbalYaw: yawRelativeToAircraftHeading)
+                self.updateXYZ(pos: temp, heading: heading)
             }
         })
     }
+    
+    // **********************************************************
+    // Update the local XYZ position based on the startMyLocation
+    func updateXYZ(pos: CLLocation, heading: Double){
+        if !startMyLocation.isStartLocation {
+            print("updateXYZ: Error, cannot update XYZ without a set start position")
+        }
+        // Lat-, lon-, alt-diff
+        let lat_diff = pos.coordinate.latitude - self.startMyLocation.coordinate.latitude
+        let lon_diff = pos.coordinate.longitude - self.startMyLocation.coordinate.longitude
+        let alt_diff = pos.altitude - self.startMyLocation.altitude
+
+        // posN, posE
+        let posN = lat_diff * 1852 * 60
+        let posE = lon_diff * 1852 * 60 * cos(self.startMyLocation.coordinate.latitude/180*Double.pi)
+        
+        // X direction definition
+        let alpha = (self.startMyLocation.gimbalYaw)/180*Double.pi
+
+        // Coordinate transformation, from (N, E) to (X,Y)
+        let x =  posN * cos(alpha) + posE * sin(alpha)
+        let y = -posN * sin(alpha) + posE * cos(alpha)
+        let z = -alt_diff
+        
+        self.posX = x
+        self.posY = y
+        self.posZ = z
+        
+        //self.currentMyLocation
+        
+        NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
+        
+        // A semaphore could be needed, controller reads often. Expand currentMyLocation to hold posX, Y, ZTODO
+        self.currentMyLocation.setPosition(pos: pos, heading: self.heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading)
+    }
+    
+    
     
     // ***************************
     // Monitor flight mode changes
@@ -288,27 +299,14 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             if let checkedNewValue = newValue{
                 self.homeHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
-                // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
-
-//                if self.startHeadingXYZ == nil && self.getIsFlying() == true {
-//                    print("HomePosListener: The local XYZ is not set, setting local XYZ to home position and start heading")
-//                    self.startLocationXYZ = (checkedNewValue.value as! CLLocation)
-//                    self.startHeadingXYZ = self.homeHeading
-//                    print("HomePosListener: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!))
-//                    //NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "XYZ origin set to here"])
-//                    print("HomePosListener: Home pos was updated. XYZ origin was automatically set")
-//
-                
-                // Cath the event of setting home wp in take-off (in flight..) TODO - catch takeoff as flight mode?
-                if self.startMyLocation.coordinate.latitude == 0 && self.getIsFlying() == true {
-                    // Save current postion as the start position. Geofence (radius and height) will be evaluated relative to this pos
-                    self.startMyLocation.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYaw: 0, isStartWP: true)
+                print("HomePosListener: Home pos was updated.")
+               
+                // If start location is not yet set and we are flying, set start location to here.
+                if !self.startMyLocation.isStartLocation && self.getIsFlying() == true {
+                    // Save current postion as the start position. Geofence (radius and height) will be evaluated relative to this pos. getHeading()! TODO guard and handle this.
+                    self.startMyLocation.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYawRelativeToHeading: 0, isStartWP: true)
                     self.startMyLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-                    self.startMyLocation.printLocation(sentFrom: "setOrigin")
-                    
-                }
-                else{
-                    print("HomePosListener: Home pos was updated.")
+                    self.startMyLocation.printLocation(sentFrom: "startListenToHomePosUpated")
                 }
             }
         })
@@ -333,7 +331,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Set the startLocation and orientation as a reference of the system. Can only be set once for safety!
     // old: setOriginXYZ
     func setStartLocation()->Bool{
-//        if let _ = self.startHeadingXYZ {
         if self.startMyLocation.isStartLocation{
             print("setStartLocation Caution: Start location already set!")
             return false
@@ -344,34 +341,20 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         guard let heading = getHeading() else {
             print("setStartLocation: Can't get current heading")
             return false}
-        guard let gimbalYaw = self.gimbal?.yawRelativeToAircraftHeading else {
-            print("setStartLocation: Cant get gimbalYaw")
-            return false}
         
-        if heading == 0 {
-            print("setStartLocation: Start heading is exactly 0, CAUTION!")
-        }
-//        // The old implementation TODO
-//        self.startHeadingXYZ = heading + gimbalYaw
-//        self.startLocationXYZ = pos
-        
-        
-        // The new implementation
-        self.startMyLocation.setPosition(pos: pos, heading: heading, gimbalYaw: gimbalYaw, isStartWP: true)
+        // Gimbal yaw is included in heading for the startpoint since the cameras sets the reference if startpoint is not automatically set. GimbalYawRelativeToHeading is forced to 0
+        let startHeading = heading + self.gimbal.yawRelativeToHeading
+        self.startMyLocation.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isStartWP: true)
         self.startMyLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-        self.startMyLocation.printLocation(sentFrom: "setOriginXYZ")
+        self.startMyLocation.printLocation(sentFrom: "setStartLocation")
         
-//        print("setOriginXYZ: StartHeadingXYZ: " + String(describing: self.startHeadingXYZ!) + ", of which gimbalYaw is: " + String(describing: gimbalYaw))
-        
-        
+        // Update XYZ
+        self.updateXYZ(pos: pos, heading: heading)
         
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "StartLocation set to here including gimbalYaw."])
+        
         return true
     }
-
-
-    
-
     
     //**************************************************************************************************
     // Clears the DSS smart rtl list and adds current location as DSS home location, also saves heading.
@@ -927,28 +910,350 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
     }
     
-    // *****************************************************************************************
-    // Converts heading from a mission to local yaw in range 0-360 or -1. -1 means follow course
-    func getLocalYawFromHeading(heading: Double)->Double{
-        var local_yaw: Double = -1
-        if heading == -1 {
-            // Use course for heading
-            local_yaw = -1
+
+    
+    
+    // ***********************************************************
+    // Calculate the NED coordinates of target relative to origin
+    func getNEDFromLocation(start: CLLocation, target: MyLocation)->(Double, Double, Double){
+        // Coordinates delta
+        let dLat = target.coordinate.latitude - start.coordinate.latitude
+        let dLon = target.coordinate.longitude - start.coordinate.longitude
+        let dAlt = target.altitude - start.altitude
+            
+        // Convert to meters NED
+        let posN = dLat * 1852 * 60
+        let posE = dLon * 1852 * 60 * cos(start.coordinate.latitude/180*Double.pi)
+        let posD = -dAlt
+        
+        // Return NED
+        return (posN, posE, posD)
+    }
+    
+//    func getXYZYawFromNED(posN: Double, posE: Double, posD: Double)->(Double, Double, Double){
+//        // Start heading and heading shall be available since isReadyForMission() shall have returned true prior to executing
+//        let startHeadingXYZ = self.startHeadingXYZ!
+//        let alpha = startHeadingXYZ/180*Double.pi
+//
+//        // Coordinate transformation, from (E,N) to (y,x)
+//        let x =  posN * cos(alpha) + posE * sin(alpha)
+//        let y = -posN * sin(alpha) + posE * cos(alpha)
+//        let z = posD
+//
+//        return(x, y, z)
+//    }
+    
+    //******************************************************************************************
+    // Step up mission next wp if it exists, otherwise report -1 to indicate mission is complete
+    func setMissionNextWp(num: Int){
+        if mission["id" + String(num)].exists(){
+            self.missionNextWp = num
+            self.missionNextWpId = "id" + String(num)
+        }
+        else{
+            self.missionNextWp = -1
+            self.missionNextWpId = "id-1"
+        }
+        self.missionType = self.getMissionType()
+    }
+    
+
+    
+    // ****************************************************
+    // Return the missionType string of the current mission
+    func getMissionType()->String{
+    if self.mission["id0"]["x"].exists() {return "XYZ"}
+    if self.mission["id0"]["north"].exists() {return "NED"}
+    if self.mission["id0"]["lat"].exists() {return "LLA"}
+    return ""
+    }
+
+    // *************************************************************************************************
+    // Prepare a MyLocation for mission execution, then call gotoMyLocation. New implementeation of gogo
+    func gogoMyLocation(startWp: Int, useCurrentMission: Bool)->Bool{
+        // useCurrentMission?
+        if useCurrentMission {
+            self.setMissionNextWp(num: self.missionNextWp + 1)
+            if self.missionNextWp == -1{
+              NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo" + self.missionType])
+                return true
+            }
+            else{
+                self.missionIsActive = true
+            }
+        }
+        // Check if there is a pending mission
+        else{
+            if self.pendingMission["id" + String(startWp)].exists(){
+                self.mission = self.pendingMission
+                self.missionNextWp = startWp
+                self.missionType = self.getMissionType()
+                self.missionIsActive = true
+                print("gogoMyLocation: missionIsActive is set to true")
+            }
+            else{
+                print("gogoMyLocation - Error: No such wp id in pending mission: id" + String(startWp))
+                return false
+            }
+
+        }
+        // Check if ready for mission, then setup the wp and gogo. Convert any coordinate system to LLA.
+        if isReadyForMission(){
+            // Reset the activeWP TODO - does this cause a memory leak? If so create a reset function. Test in playground.
+            let id = "id" + String(self.missionNextWp)
+            self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startMyLocation)
+
+            self.activeWP.printLocation(sentFrom: "gogoMyLocation")
+
+            self.gotoMyLocation(wp: self.activeWP)
+            //self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, localYaw: yaw, speed: speed)
+
+            // Notify about going to startWP
+            NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo" + self.missionType])
+            return true
+        }
+        else{
+            print("gogoMyLocation - Error: Aircraft or mission not ready for mission flight")
+            return false
+        }
+    }
+    
+    //
+    // Corresponding function to gotoXYZ but for MyLocation and lat long.  What ever type of WP we are going to, create a MyLocation object, then activate gotoMyLocation
+    private func gotoMyLocation(wp: MyLocation){
+        // Check some Geo fence stuff. Ask start location if the wp is within the geofence.
+        if !startMyLocation.geofenceOK(wp: wp){
+            print("The WP violates the geofence!")
+            return
+        }
+        // Print some status?
+        print("gotoMyLocation is setting up controller timer.")
+        
+        // Fire LLAPosCtrl
+        duttTimer?.invalidate()
+        myLocationCtrlTimer?.invalidate()
+        myLocationCtrlLoopCnt = 0
+        self.myLocationCtrlTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(self.fireMyLocationCtrlTimer), userInfo: nil, repeats: true)
+    }
+    
+
+    
+    //
+    // Algorithm for detemining if at WP is tracked. When tracked mission can continue.
+    // Algorithm requires both position and yaw to be tracked according to globally defined tracking limits.
+    func trackingMyLocation(posLimit: Double, yawLimit: Double, velLimit: Double)->Bool{
+        // Distance in meters
+        let (_, _, _, _, distance3D, _) = self.activeWP.distanceTo(wpLocation: self.currentMyLocation)
+        let yawError = abs(getDoubleWithinAngleRange(angle: self.currentMyLocation.heading - self.refYawLLA))
+
+        // TODO? Put tracking record on MyLocation?
+        if distance3D < posLimit && yawError < yawLimit {
+            trackingRecord += 1
         }
         else {
-            // Convert to local yaw
-//            local_yaw = heading - self.startHeadingXYZ!
-            local_yaw = heading - (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)
-            // local_yaw must be in range 0-360, or -1
-            if local_yaw < 0 {
-                local_yaw += 360
+            trackingRecord = 0
+        }
+        if trackingRecord >= trackingRecordTarget{
+            trackingRecord = 0
+            return true
+        }
+        else{
+            return false
+        }
+    }
+    
+
+
+    //************************************************************************************************************
+    // Timer function that loops every x ms until timer is invalidated. Each loop control data (joystick) is sent.
+    @objc func fireDuttTimer() {
+        duttLoopCnt += 1
+        if duttLoopCnt >= duttLoopTarget {
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+            duttTimer?.invalidate()
+        }
+        else {
+            sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: self.defaultXYVel)
+        }
+    }
+    
+    
+  
+    
+    @objc func fireMyLocationCtrlTimer(_ timer: Timer) {
+        
+        
+        myLocationCtrlLoopCnt += 1
+        // always false.. TODO
+        if trackingMyLocation(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
+            print("fireMyLocationCtrlTimer: Wp", self.missionNextWp, " is tracked")
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+            
+            if self.missionNextWp != -1{
+                if  self.missionNextWp != -1{
+                    if self.appendLocToDssSmartRtlMission(){
+                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
+                    }
+                    else {
+                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
+                    }
+                }
             }
-            if local_yaw > 360 {
-                local_yaw -= 360
+            
+            // WP is tracked. If we are on a mission
+            if self.missionIsActive{
+                // check for wp action
+                let action = self.activeWP.action
+                if action == "take_photo"{
+                    // Notify action to be executed
+                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+                    // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
+                    self.missionIsActive = false
+                    self.myLocationCtrlTimer?.invalidate()
+                    return
+                }
+                if action == "land"{
+                    let secondsSleep: UInt32 = 5*1000000
+                    usleep(secondsSleep)
+                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+                    self.missionIsActive = false
+                    self.myLocationCtrlTimer?.invalidate()
+                    return
+                }
+                // Note that the current mission is stoppped (paused) if there is a wp action.
+                self.setMissionNextWp(num: self.missionNextWp + 1)
+                if self.missionNextWp != -1{
+                    let id = "id" + String(self.missionNextWp)
+                    self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startMyLocation)
+                    
+                    self.activeWP.printLocation(sentFrom: "gogoMyLocation")
+                    
+                    gotoMyLocation(wp: self.activeWP)
+                }
+                else{
+                    print("id is -1")
+                    self.missionIsActive = false
+                    myLocationCtrlTimer?.invalidate() // dont fire timer again
+                }
+                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_???"])
+            }
+            else {
+                print("No mission is active")
+                myLocationCtrlTimer?.invalidate()
             }
         }
-        return local_yaw
+        // WP is not tracked
+        // The controller
+        else {
+            // Calculate BODY control commands from lat long reference frame
+            
+            // Get distance and bearing from here to wp
+            let (northing, easting, dAlt, distance2D, _, bearing) = self.currentMyLocation.distanceTo(wpLocation: self.activeWP)
+            
+            // Set reference Yaw. Heading equals bearing or manually set? Only check once per wp. If bearing becomes exactly -1 it will be evaluated agian, that is ok.
+            if self.activeWP.heading == -1{
+                self.activeWP.heading = bearing
+            }
+            self.refYawLLA = self.activeWP.heading
+            //let refYaw = self.activeWP.heading
+            
+            // Calculate yaw-error, use shortest way (right or left?)
+            let yawError = getFloatWithinAngleRange(angle: (Float(self.currentMyLocation.heading - self.refYawLLA)))
+            // P-controller for Yaw
+            self.refYawRate = -yawError*yawKP
+            // Feedforward TBD
+            //let yawFF = self.refYawRate*yawFFKP*0
+            
+            print("bearing: ", bearing, "reYawLLa: ", self.refYawLLA, "refYawRate: ", self.refYawRate)
+            
+            // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
+            var turnFactor: Float = 1                    //let turnFactor2 = pow(180/(abs(yawError)+180),2) - did not work without feed forward
+            if abs(yawError) > 10 {
+                turnFactor = 0
+            }
+            else{
+                turnFactor = 1
+            }
+            
+            guard let checkedHeading = self.getHeading() else {return}
+            //let alphaRad = (checkedHeading + Double(yawFF))/180*Double.pi
+            
+            // Rotate from NED to Body
+            let alphaRad = checkedHeading/180*Double.pi
+            // xDiffBody is in body coordinates
+            let xDiffBody = Float(northing * cos(alphaRad) + easting * sin(alphaRad))
+            let yDiffBody = Float(-northing * sin(alphaRad) + easting * cos(alphaRad))
+
+            // If ETA is low, reduce speed (brake in time)
+            var speed = self.activeWP.speed
+            let vel = sqrt(pow(self.currentMyLocation.vel.bodyX,2)+pow(self.currentMyLocation.vel.bodyY ,2))
+            
+            //hdrano:
+            //decellerate at 2m/s/s
+            // at distance_to_wp = Speed/2 -> brake
+            if Float(distance2D) < etaLimit * vel {
+                // Slow down to half speed (dont limit more than to 1.5 though) or use wp speed if it is lower.
+                speed = min(max(vel/2,1.5), speed)
+                print("Braking!")
+            }
+            // Calculate a divider for derivative part used close to target, avoid zero..
+            var xDivider = abs(xDiffBody) + 1
+            if xDiffBody < 0 {
+                xDivider = -xDivider
+            }
+            var yDivider = abs(yDiffBody) + 1
+            if yDiffBody < 0 {
+                yDivider = -yDivider
+            }
+
+            // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
+            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyX/xDivider)*turnFactor
+            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyY/yDivider)*turnFactor
+            
+            // Calc refVelZ
+            self.refVelBodyZ = Float(-dAlt) * vPosKP
+        
+            // TODO, do not store reference values globally?
+            self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
+        }
+        // Maxtime for flying to wp
+        if myLocationCtrlLoopCnt >= myLocationCtrlLoopTarget{
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "myLocationController max time exeeded"])
+            myLocationCtrlTimer?.invalidate()
+        }
     }
+}
+
+//          hdrpano explaining when to brake and how to react to any joystick input from pilot.
+//          https://www.youtube.com/watch?fbclid=IwAR0w0VGptmEtxpYLqo1vrizU0K_M-veU_rMU8FN45yy-upvS_4noByA5qrs&v=fRPYyuK_eLA&feature=youtu.be
+
+
+// XYZ stuff, delete when more tested
+
+//    // *****************************************************************************************
+//    // Converts heading from a mission to local yaw in range 0-360 or -1. -1 means follow course
+//    func getLocalYawFromHeading(heading: Double)->Double{
+//        var local_yaw: Double = -1
+//        if heading == -1 {
+//            // Use course for heading
+//            local_yaw = -1
+//        }
+//        else {
+//            // Convert to local yaw
+////            local_yaw = heading - self.startHeadingXYZ!
+//            local_yaw = heading - (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)
+//            // local_yaw must be in range 0-360, or -1
+//            if local_yaw < 0 {
+//                local_yaw += 360
+//            }
+//            if local_yaw > 360 {
+//                local_yaw -= 360
+//            }
+//        }
+//        return local_yaw
+//    }
     
     
     
@@ -1006,56 +1311,155 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //        return (x, y, z, local_yaw, speed)
 //    }
 //
-    
-    
-    // ***********************************************************
-    // Calculate the NED coordinates of target relative to origin
-    func getNEDFromLocation(start: CLLocation, target: MyLocation)->(Double, Double, Double){
-        // Coordinates delta
-        let dLat = target.coordinate.latitude - start.coordinate.latitude
-        let dLon = target.coordinate.longitude - start.coordinate.longitude
-        let dAlt = target.altitude - start.altitude
-            
-        // Convert to meters NED
-        let posN = dLat * 1852 * 60
-        let posE = dLon * 1852 * 60 * cos(start.coordinate.latitude/180*Double.pi)
-        let posD = -dAlt
-        
-        // Return NED
-        return (posN, posE, posD)
-    }
-    
-//    func getXYZYawFromNED(posN: Double, posE: Double, posD: Double)->(Double, Double, Double){
-//        // Start heading and heading shall be available since isReadyForMission() shall have returned true prior to executing
-//        let startHeadingXYZ = self.startHeadingXYZ!
-//        let alpha = startHeadingXYZ/180*Double.pi
+
+
+// ************************************************************************************************************************************************
+// Position controller from XYZ coordinates.
+// Takes speed argument in userInfo. If omitted default speed is used.
+// Evaluates if a wp is tracked, compares tracking limits and during a number of loops
+// Looks for wp action. If action it stops mission and notifies action, after action is performed mission is restarted by action function.
+// If no action the wp number is increased, new XYZ reference positions are extracted from any mission (XYZ, LLA, NED) and gotoXYZ is called. gotoXYZ invalidates the timer and starts a new timer.
+// Position controller that files towards self.refPosX/Y/Z/ refYawXYZ. Reference positions are given in XYZ coordinate system, drone is controlled in BODY XYZ. Yaw is handeled too, if yaw arg i -1 heading is set to course towards next wp.
+// Safety function for maxtime
+
+//    @objc func xfirePosCtrlTimer(_ timer: Timer) {
+//        // Test if speed argument is passed. If not use default speed.
+//        var speed = self.defaultXYVel
+//        if timer.isValid{
+//            if let temp = timer.userInfo as? Float {
+//                speed = temp
+//            }
+//        }
 //
-//        // Coordinate transformation, from (E,N) to (y,x)
-//        let x =  posN * cos(alpha) + posE * sin(alpha)
-//        let y = -posN * sin(alpha) + posE * cos(alpha)
-//        let z = posD
+//        posCtrlLoopCnt += 1
+//        // If we arrived. Compares rePosX with posX etc
+//        if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
+//            print("firePosCtrolTimer: Wp", self.missionNextWp, " is tracked")
+//            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+//            // Add location to DSS RTL List. TODO what if we are on the dss srtl?
+//            // Do not add climb to alt after take-off. It is executed as a mission.
+//            if  self.missionNextWp != -1{
+//                if self.appendLocToDssSmartRtlMission(){
+//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
+//                }
+//                else {
+//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
+//                }
+//            }
+//            // WP tracked, If we are on a mission
+//            if self.missionIsActive{
+//                // Check for wp action
+//                let action = getAction(idNum: self.missionNextWp)
+//                if action == "take_photo"{
+//                    // Notify action to be executed
+//                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+//                    // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
+//                    self.missionIsActive = false
+//                    self.posCtrlTimer?.invalidate()
+//                    return
+//                }
+//                if action == "land"{
+//                    let secondsSleep: UInt32 = 5*1000000
+//                    usleep(secondsSleep)
+//                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+//                    self.missionIsActive = false
+//                    self.posCtrlTimer?.invalidate()
+//                    return
+//                }
+//                // Note that the current mission is stoppped (paused) if there is a wp action.
 //
-//        return(x, y, z)
+//                self.setMissionNextWp(num: self.missionNextWp + 1)
+//                if self.missionNextWp != -1{
+//                    let (x, y, z, yaw, speed_) = self.getWpXYZYaw(idNum: self.missionNextWp)
+//                    self.xgotoXYZ(refPosX: x, refPosY: y, refPosZ: z, localYaw: yaw, speed: speed_)
+//                }
+//                else{
+//                    print("id is -1")
+//                    self.missionIsActive = false
+//                    self.posCtrlTimer?.invalidate() // dont fire timer again
+//                }
+//                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
+//            }
+//            else{
+//                print("No mission is active")
+//                posCtrlTimer?.invalidate()
+//            }
+//        }
+//        // WP is not tracked
+//        // The controller
+//        else{
+//            // Implement P-controller, position error to ref vel: Get error in XYZ, handle yaw, rotate to BODY XYZ. Then send control data.
+//            let xDiff: Float = Float(self.refPosX - self.posX)
+//            let yDiff: Float = Float(self.refPosY - self.posY)
+//            let zDiff: Float = Float(self.refPosZ - self.posZ)
+//
+//            //Do not concider gimbalYaw in yawControl
+//            // Check if following course or heading:
+//            if self.localYaw == -1 {
+//                // heading equals course
+//                self.refYawXYZ = getCourse(dX: Double(xDiff), dY: Double(yDiff))
+//                //( To only check course once)
+//                self.localYaw = self.refYawXYZ
+//            }
+//            else {
+//                self.refYawXYZ = self.localYaw
+//            }
+//
+//
+//            // Calculate yaw error, use shortest way (right or left?)
+//            let yawError = getFloatWithinAngleRange(angle: Float(self.yawXYZ - self.refYawXYZ))
+//            self.refYawRate = -yawError*yawKP
+//
+//            // Feedfoward to fly in straight line
+//            let yawFF = self.refYawRate*yawFFKP
+//
+//            guard let checkedHeading = self.getHeading() else {return}
+//            guard let checkedStartHeading = self.startHeadingXYZ else {return}
+//            let alphaRad = (checkedHeading - checkedStartHeading + Double(yawFF))/180*Double.pi
+//
+//            // Rotate coordinates, calc refvelx, refvely
+////            let oldRefVelX = self.refVelX
+////            let oldRefVelY = self.refVelY
+//
+//            // xDiff is in XYZ coordinates.
+//            let xDiffBody = xDiff * Float(cos(alphaRad)) + yDiff * Float(sin(alphaRad))
+//            let yDiffBody = -xDiff * Float(sin(alphaRad)) + yDiff * Float(cos(alphaRad))
+////            self.refVelX =  (xDiff * Float(cos(alphaRad)) + yDiff * Float(sin(alphaRad)))*hPosKP
+////            self.refVelY = (-xDiff * Float(sin(alphaRad)) + yDiff * Float(cos(alphaRad)))*hPosKP
+//
+//            self.refVelX = xDiffBody*hPosKP - hPosKD*self.velX/(abs(xDiffBody)+1)
+//            self.refVelY = yDiffBody*hPosKP - hPosKD*self.velY/(abs(yDiffBody)+1)
+//
+//            print("refVelX: ", self.refVelX, "velX: ", self.velX, " brake: ", hPosKD*self.velX/abs(xDiffBody)+1)
+////            print("oldRefVelX: ", oldRefVelX, " newRefVelX: ", self.refVelX, "velx: ", self.velX)
+////            print("oldRefVelY: ", oldRefVelY, " newRefVelY: ", self.refVelY, "vely: ", self.velY)
+//
+//            // Calc refvelz
+//            self.refVelZ = (zDiff) * vPosKP
+//            // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
+//
+//            //print("local_yaw: ", self.localYaw, " xDiff: ", xDiff, " yDiff: ", yDiff, "refYawXYZ: ", self.refYawXYZ, " yawFF: ", yawFF)
+//
+//
+//            // Send control data, limits in velocity are handeled in sendControlData
+//            sendControlData(velX: self.refVelX, velY: self.refVelY, velZ: self.refVelZ, yawRate: self.refYawRate, speed: speed)
+//        }
+//
+//        // For safety during testing.. Maxtime for flying to wp
+//        if posCtrlLoopCnt >= posCtrlLoopTarget{
+//            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+//
+//            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Position controller max time exeeded"])
+//
+//            posCtrlTimer?.invalidate()
+//        }
 //    }
-    
-    //******************************************************************************************
-    // Step up mission next wp if it exists, otherwise report -1 to indicate mission is complete
-    func setMissionNextWp(num: Int){
-        if mission["id" + String(num)].exists(){
-            self.missionNextWp = num
-            self.missionNextWpId = "id" + String(num)
-        }
-        else{
-            self.missionNextWp = -1
-            self.missionNextWpId = "id-1"
-        }
-        self.missionType = self.getMissionType()
-    }
-    
-    //**********************************************************************************************
-    // Starts the pending mission on startWp. returns false if startWp is not in the pending mission
-    // useCurrentMission is needed for continuing current mission after wp action. If set to false,
-    // the pending mission will be loaded.
+
+
+//**********************************************************************************************
+// Starts the pending mission on startWp. returns false if startWp is not in the pending mission
+// useCurrentMission is needed for continuing current mission after wp action. If set to false,
+// the pending mission will be loaded.
 //    func xgogo(startWp: Int, useCurrentMission: Bool)->Bool{
 //        // useCurrentMission?
 //        if useCurrentMission{
@@ -1135,87 +1539,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //        self.posCtrlTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(self.xfirePosCtrlTimer), userInfo: speed, repeats: true)
 //    }
 
-    
-    // ****************************************************
-    // Return the missionType string of the current mission
-    func getMissionType()->String{
-    if self.mission["id0"]["x"].exists() {return "XYZ"}
-    if self.mission["id0"]["north"].exists() {return "NED"}
-    if self.mission["id0"]["lat"].exists() {return "LLA"}
-    return ""
-    }
-
-    // *************************************************************************************************
-    // Prepare a MyLocation for mission execution, then call gotoMyLocation. New implementeation of gogo
-    func gogoMyLocation(startWp: Int, useCurrentMission: Bool)->Bool{
-        // useCurrentMission?
-        if useCurrentMission {
-            self.setMissionNextWp(num: self.missionNextWp + 1)
-            if self.missionNextWp == -1{
-              NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo" + self.missionType])
-                return true
-            }
-            else{
-                self.missionIsActive = true
-            }
-        }
-        // Check if there is a pending mission
-        else{
-            if self.pendingMission["id" + String(startWp)].exists(){
-                self.mission = self.pendingMission
-                self.missionNextWp = startWp
-                self.missionType = self.getMissionType()
-                self.missionIsActive = true
-                print("gogoMyLocation: missionIsActive is set to true")
-            }
-            else{
-                print("gogoMyLocation - Error: No such wp id in pending mission: id" + String(startWp))
-                return false
-            }
-
-        }
-        // Check if ready for mission, then setup the wp and gogo. Convert any coordinate system to LLA.
-        if isReadyForMission(){
-            // Reset the activeWP TODO - does this cause a memory leak? If so create a reset function. Test in playground.
-            let id = "id" + String(self.missionNextWp)
-            self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, start: self.startMyLocation)
-
-            self.activeWP.printLocation(sentFrom: "gogoMyLocation")
-
-            self.gotoMyLocation(wp: self.activeWP)
-            //self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, localYaw: yaw, speed: speed)
-
-            // Notify about going to startWP
-            NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo" + self.missionType])
-            return true
-        }
-        else{
-            print("gogoMyLocation - Error: Aircraft or mission not ready for mission flight")
-            return false
-        }
-    }
-    
-    //
-    // Corresponding function to gotoXYZ but for MyLocation and lat long.  What ever type of WP we are going to, create a MyLocation object, then activate gotoMyLocation
-    private func gotoMyLocation(wp: MyLocation){
-        // Check some Geo fence stuff. Ask start location if the wp is within the geofence.
-        if !startMyLocation.geofenceOK(wp: wp){
-            print("The WP violates the geofence!")
-            return
-        }
-        // Print some status?
-        print("gotoMyLocation is setting up controller timer.")
-        
-        // Fire LLAPosCtrl
-        duttTimer?.invalidate()
-        myLocationCtrlTimer?.invalidate()
-        myLocationCtrlLoopCnt = 0
-        self.myLocationCtrlTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(self.fireMyLocationCtrlTimer), userInfo: nil, repeats: true)
-    }
-    
-    //********************************************************************************************
-    // Algorithm for determining of a wp is tracked or not. When tracked the mission can continue.
-    // Algorithm requires position and yaw to be tracked trackingRecordTarget times
+//********************************************************************************************
+// Algorithm for determining of a wp is tracked or not. When tracked the mission can continue.
+// Algorithm requires position and yaw to be tracked trackingRecordTarget times
 //    func trackingWP(posLimit: Double, yawLimit: Double, velLimit: Double)->Bool{
 //
 //        let x2 = pow(self.refPosX - self.posX, 2)
@@ -1239,31 +1565,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //            return false
 //        }
 //    }
-    
-    //
-    // Algorithm for detemining if at WP is tracked. When tracked mission can continue.
-    // Algorithm requires both position and yaw to be tracked according to globally defined tracking limits.
-    func trackingMyLocation(posLimit: Double, yawLimit: Double, velLimit: Double)->Bool{
-        // Distance in meters
-        let (_, _, _, _, distance3D, _) = self.activeWP.distanceTo(wpLocation: self.currentMyLocation)
-        let yawError = abs(getDoubleWithinAngleRange(angle: self.currentMyLocation.heading - self.refYawLLA))
 
-        // TODO? Put tracking record on MyLocation?
-        if distance3D < posLimit && yawError < yawLimit {
-            trackingRecord += 1
-        }
-        else {
-            trackingRecord = 0
-        }
-        if trackingRecord >= trackingRecordTarget{
-            trackingRecord = 0
-            return true
-        }
-        else{
-            return false
-        }
-    }
-    
 //    // ********************************************************************
 //    // Takes velocity arguments and returns course in XYZ coordinate system
 //    func getCourse(dX: Double, dY: Double)->(Double){
@@ -1286,322 +1588,3 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //        }
 //        return course
 //    }
-
-    //************************************************************************************************************
-    // Timer function that loops every x ms until timer is invalidated. Each loop control data (joystick) is sent.
-    @objc func fireDuttTimer() {
-        duttLoopCnt += 1
-        if duttLoopCnt >= duttLoopTarget {
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-            duttTimer?.invalidate()
-        }
-        else {
-            sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: self.defaultXYVel)
-        }
-    }
-    
-    
-    // ************************************************************************************************************************************************
-    // Position controller from XYZ coordinates.
-    // Takes speed argument in userInfo. If omitted default speed is used.
-    // Evaluates if a wp is tracked, compares tracking limits and during a number of loops
-    // Looks for wp action. If action it stops mission and notifies action, after action is performed mission is restarted by action function.
-    // If no action the wp number is increased, new XYZ reference positions are extracted from any mission (XYZ, LLA, NED) and gotoXYZ is called. gotoXYZ invalidates the timer and starts a new timer.
-    // Position controller that files towards self.refPosX/Y/Z/ refYawXYZ. Reference positions are given in XYZ coordinate system, drone is controlled in BODY XYZ. Yaw is handeled too, if yaw arg i -1 heading is set to course towards next wp.
-    // Safety function for maxtime
-    
-//    @objc func xfirePosCtrlTimer(_ timer: Timer) {
-//        // Test if speed argument is passed. If not use default speed.
-//        var speed = self.defaultXYVel
-//        if timer.isValid{
-//            if let temp = timer.userInfo as? Float {
-//                speed = temp
-//            }
-//        }
-//        
-//        posCtrlLoopCnt += 1
-//        // If we arrived. Compares rePosX with posX etc
-//        if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
-//            print("firePosCtrolTimer: Wp", self.missionNextWp, " is tracked")
-//            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-//            // Add location to DSS RTL List. TODO what if we are on the dss srtl?
-//            // Do not add climb to alt after take-off. It is executed as a mission.
-//            if  self.missionNextWp != -1{
-//                if self.appendLocToDssSmartRtlMission(){
-//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
-//                }
-//                else {
-//                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
-//                }
-//            }
-//            // WP tracked, If we are on a mission
-//            if self.missionIsActive{
-//                // Check for wp action
-//                let action = getAction(idNum: self.missionNextWp)
-//                if action == "take_photo"{
-//                    // Notify action to be executed
-//                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-//                    // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
-//                    self.missionIsActive = false
-//                    self.posCtrlTimer?.invalidate()
-//                    return
-//                }
-//                if action == "land"{
-//                    let secondsSleep: UInt32 = 5*1000000
-//                    usleep(secondsSleep)
-//                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-//                    self.missionIsActive = false
-//                    self.posCtrlTimer?.invalidate()
-//                    return
-//                }
-//                // Note that the current mission is stoppped (paused) if there is a wp action.
-//
-//                self.setMissionNextWp(num: self.missionNextWp + 1)
-//                if self.missionNextWp != -1{
-//                    let (x, y, z, yaw, speed_) = self.getWpXYZYaw(idNum: self.missionNextWp)
-//                    self.xgotoXYZ(refPosX: x, refPosY: y, refPosZ: z, localYaw: yaw, speed: speed_)
-//                }
-//                else{
-//                    print("id is -1")
-//                    self.missionIsActive = false
-//                    self.posCtrlTimer?.invalidate() // dont fire timer again
-//                }
-//                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_XYZ"])
-//            }
-//            else{
-//                print("No mission is active")
-//                posCtrlTimer?.invalidate()
-//            }
-//        }
-//        // WP is not tracked
-//        // The controller
-//        else{
-//            // Implement P-controller, position error to ref vel: Get error in XYZ, handle yaw, rotate to BODY XYZ. Then send control data.
-//            let xDiff: Float = Float(self.refPosX - self.posX)
-//            let yDiff: Float = Float(self.refPosY - self.posY)
-//            let zDiff: Float = Float(self.refPosZ - self.posZ)
-//
-//            //Do not concider gimbalYaw in yawControl
-//            // Check if following course or heading:
-//            if self.localYaw == -1 {
-//                // heading equals course
-//                self.refYawXYZ = getCourse(dX: Double(xDiff), dY: Double(yDiff))
-//                //( To only check course once)
-//                self.localYaw = self.refYawXYZ
-//            }
-//            else {
-//                self.refYawXYZ = self.localYaw
-//            }
-//            
-//            
-//            // Calculate yaw error, use shortest way (right or left?)
-//            let yawError = getFloatWithinAngleRange(angle: Float(self.yawXYZ - self.refYawXYZ))
-//            self.refYawRate = -yawError*yawKP
-//            
-//            // Feedfoward to fly in straight line
-//            let yawFF = self.refYawRate*yawFFKP
-//            
-//            guard let checkedHeading = self.getHeading() else {return}
-//            guard let checkedStartHeading = self.startHeadingXYZ else {return}
-//            let alphaRad = (checkedHeading - checkedStartHeading + Double(yawFF))/180*Double.pi
-//
-//            // Rotate coordinates, calc refvelx, refvely
-////            let oldRefVelX = self.refVelX
-////            let oldRefVelY = self.refVelY
-//            
-//            // xDiff is in XYZ coordinates.
-//            let xDiffBody = xDiff * Float(cos(alphaRad)) + yDiff * Float(sin(alphaRad))
-//            let yDiffBody = -xDiff * Float(sin(alphaRad)) + yDiff * Float(cos(alphaRad))
-////            self.refVelX =  (xDiff * Float(cos(alphaRad)) + yDiff * Float(sin(alphaRad)))*hPosKP
-////            self.refVelY = (-xDiff * Float(sin(alphaRad)) + yDiff * Float(cos(alphaRad)))*hPosKP
-//
-//            self.refVelX = xDiffBody*hPosKP - hPosKD*self.velX/(abs(xDiffBody)+1)
-//            self.refVelY = yDiffBody*hPosKP - hPosKD*self.velY/(abs(yDiffBody)+1)
-//           
-//            print("refVelX: ", self.refVelX, "velX: ", self.velX, " brake: ", hPosKD*self.velX/abs(xDiffBody)+1)
-////            print("oldRefVelX: ", oldRefVelX, " newRefVelX: ", self.refVelX, "velx: ", self.velX)
-////            print("oldRefVelY: ", oldRefVelY, " newRefVelY: ", self.refVelY, "vely: ", self.velY)
-//
-//            // Calc refvelz
-//            self.refVelZ = (zDiff) * vPosKP
-//            // If velocity get limited the copter will not fly in straight line! Handled in sendControlData
-//
-//            //print("local_yaw: ", self.localYaw, " xDiff: ", xDiff, " yDiff: ", yDiff, "refYawXYZ: ", self.refYawXYZ, " yawFF: ", yawFF)
-//            
-//            
-//            // Send control data, limits in velocity are handeled in sendControlData
-//            sendControlData(velX: self.refVelX, velY: self.refVelY, velZ: self.refVelZ, yawRate: self.refYawRate, speed: speed)
-//        }
-//        
-//        // For safety during testing.. Maxtime for flying to wp
-//        if posCtrlLoopCnt >= posCtrlLoopTarget{
-//            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-//
-//            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Position controller max time exeeded"])
-//            
-//            posCtrlTimer?.invalidate()
-//        }
-//    }
-    
-    @objc func fireMyLocationCtrlTimer(_ timer: Timer) {
-        
-        
-        myLocationCtrlLoopCnt += 1
-        // always false.. TODO
-        if trackingMyLocation(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
-            print("fireMyLocationCtrlTimer: Wp", self.missionNextWp, " is tracked")
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-            
-            if self.missionNextWp != -1{
-                if  self.missionNextWp != -1{
-                    if self.appendLocToDssSmartRtlMission(){
-                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
-                    }
-                    else {
-                        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
-                    }
-                }
-            }
-            
-            // WP is tracked. If we are on a mission
-            if self.missionIsActive{
-                // check for wp action
-                let action = self.activeWP.action
-                if action == "take_photo"{
-                    // Notify action to be executed
-                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-                    // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
-                    self.missionIsActive = false
-                    self.myLocationCtrlTimer?.invalidate()
-                    return
-                }
-                if action == "land"{
-                    let secondsSleep: UInt32 = 5*1000000
-                    usleep(secondsSleep)
-                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-                    self.missionIsActive = false
-                    self.myLocationCtrlTimer?.invalidate()
-                    return
-                }
-                // Note that the current mission is stoppped (paused) if there is a wp action.
-                self.setMissionNextWp(num: self.missionNextWp + 1)
-                if self.missionNextWp != -1{
-                    let id = "id" + String(self.missionNextWp)
-                    self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, start: self.startMyLocation)
-                    
-                    self.activeWP.printLocation(sentFrom: "gogoMyLocation")
-                    
-                    gotoMyLocation(wp: self.activeWP)
-                }
-                else{
-                    print("id is -1")
-                    self.missionIsActive = false
-                    myLocationCtrlTimer?.invalidate() // dont fire timer again
-                }
-                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_???"])
-            }
-            else {
-                print("No mission is active")
-                myLocationCtrlTimer?.invalidate()
-            }
-        }
-        // WP is not tracked
-        // The controller
-        else {
-            // Calculate BODY control commands from lat long reference frame
-            
-            // Get distance and bearing from here to wp
-            let (northing, easting, dAlt, distance2D, _, bearing) = self.currentMyLocation.distanceTo(wpLocation: self.activeWP)
-            
-            // Set reference Yaw. Heading equals bearing or manually set? Only check once per wp. If bearing becomes exactly -1 it will be evaluated agian, that is ok.
-            if self.activeWP.heading == -1{
-                self.activeWP.heading = bearing
-            }
-            self.refYawLLA = self.activeWP.heading
-            
-            
-            // Calculate yaw-error, use shortest way (right or left?)
-            let yawError = getFloatWithinAngleRange(angle: (Float(self.currentMyLocation.heading - self.refYawLLA)))
-            // P-controller for Yaw
-            self.refYawRate = -yawError*yawKP
-            // Feedforward TBD
-            //let yawFF = self.refYawRate*yawFFKP*0
-            
-            // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
-            var turnFactor: Float = 1                    //let turnFactor2 = pow(180/(abs(yawError)+180),2) - did not work without feed forward
-            if abs(yawError) > 10 {
-                turnFactor = 0
-            }
-            else{
-                turnFactor = 1
-            }
-            
-            guard let checkedHeading = self.getHeading() else {return}
-            //let alphaRad = (checkedHeading + Double(yawFF))/180*Double.pi
-            
-            // Rotate from NED to Body
-            let alphaRad = checkedHeading/180*Double.pi
-            // xDiffBody is in body coordinates
-            let xDiffBody = Float(northing * cos(alphaRad) + easting * sin(alphaRad))
-            let yDiffBody = Float(-northing * sin(alphaRad) + easting * cos(alphaRad))
-
-            // If ETA is low, reduce speed (brake in time)
-            var speed = self.activeWP.speed
-            let vel = sqrt(pow(self.currentMyLocation.vel.bodyX,2)+pow(self.currentMyLocation.vel.bodyY ,2))
-            
-            //hdrano:
-            //decellerate at 2m/s/s
-            // at distance_to_wp = Speed/2 -> brake
-            if Float(distance2D) < etaLimit * vel {
-                // Slow down to half speed (dont limit more than to 1.5 though) or use wp speed if it is lower.
-                speed = min(max(vel/2,1.5), speed)
-                print("Braking!")
-            }
-            // Calculate a divider for derivative part used close to target, avoid zero..
-            var xDivider = abs(xDiffBody) + 1
-            if xDiffBody < 0 {
-                xDivider = -xDivider
-            }
-            var yDivider = abs(yDiffBody) + 1
-            if yDiffBody < 0 {
-                yDivider = -yDivider
-            }
-
-            // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
-            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyX/xDivider)*turnFactor
-            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyY/yDivider)*turnFactor
-            
-            // Calc refVelZ
-            self.refVelBodyZ = Float(-dAlt) * vPosKP
-        
-            // TODO, do not store reference values globally?
-            self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
-        }
-        // Maxtime for flying to wp
-        if myLocationCtrlLoopCnt >= myLocationCtrlLoopTarget{
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-
-            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "myLocationController max time exeeded"])
-            myLocationCtrlTimer?.invalidate()
-        }
-    }
-}
-
-//          hdrpano explaining when to brake
-//          https://www.youtube.com/watch?fbclid=IwAR0w0VGptmEtxpYLqo1vrizU0K_M-veU_rMU8FN45yy-upvS_4noByA5qrs&v=fRPYyuK_eLA&feature=youtu.be
-
-//            var xDivider: Float = 1
-//            var yDivider: Float = 1
-//            if xDiffBody < 0{
-//                xDivider = xDiffBody - 1
-//            }
-//            else{
-//                xDivider = xDiffBody + 1
-//            }
-//            if yDiffBody < 0{
-//                yDivider = yDiffBody - 1
-//            }
-//            else{
-//                yDivider = yDiffBody + 1
-//            }
-
