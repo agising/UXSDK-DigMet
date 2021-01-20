@@ -197,6 +197,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         jsonMeta["agl"] = JSON(-1)
         // In sim loc.gimbalYaw does not update while on ground exept for first photo.
         jsonMeta["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
+        jsonMeta["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
         jsonMeta["index"] = JSON(self.sessionLastIndex)
 
         var jsonPhoto = JSON()
