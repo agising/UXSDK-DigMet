@@ -16,7 +16,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //var djiState: DJIFlightControllerState?       // Use to enable the dji state delegate func
     
     // Geofencing
-    var geoFenceRadius: Double = 50                 // Geofence radius relative start location (startMyLocation)
+    var geoFenceRadius: Double = 50                 // Geofence radius relative start location (startLoc)
     var geoFenceHeight: [Double] = [2, 20]          // Geofence height relative start location
     
     var pendingMission = JSON()
@@ -56,8 +56,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var flightMode: String?                     // the flight mode as a string
     //var startHeadingXYZ: Double?                // The start heading that defines the XYZ coordinate system
     //var startLocationXYZ: CLLocation?           // The start location that defines the XYZ coordinate system
-    var currentMyLocation: MyLocation = MyLocation()
-    var startMyLocation: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.
+    var loc: MyLocation = MyLocation()
+    var startLoc: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.
 
  //   var _operator: String = "USER"
 
@@ -122,9 +122,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 let vel = checkedNewValue.value as! DJISDKVector3D
                 // Velocities are in NED coordinate system !
                 
-                let heading = self.currentMyLocation.heading
+                let heading = self.loc.heading
                 // Velocities in the XYZ cooredingate system (dependent on heading and start heading)
-                //let startHeading = self.startMyLocation.heading + self.startMyLocation.gimbalYaw
+                //let startHeading = self.startLoc.heading + self.startLoc.gimbalYaw
                 // let alpha = (heading - startHeading)/180*Double.pi
                 // self.velX = Float(vel.x * cos(alpha) + vel.y * sin(alpha))
                 // self.velY = Float(-vel.x * sin(alpha) + vel.y * cos(alpha))
@@ -132,11 +132,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 
                 // Velocities on the BODY coordinate system (dependent on heading)
                 let beta = heading/180*Double.pi
-                self.currentMyLocation.vel.bodyX = Float(vel.x * cos(beta) + vel.y * sin(beta))
-                self.currentMyLocation.vel.bodyY = Float(-vel.x * sin(beta) + vel.y * cos(beta))
-                self.currentMyLocation.vel.bodyZ = Float(vel.z)
+                self.loc.vel.bodyX = Float(vel.x * cos(beta) + vel.y * sin(beta))
+                self.loc.vel.bodyY = Float(-vel.x * sin(beta) + vel.y * cos(beta))
+                self.loc.vel.bodyZ = Float(vel.z)
                 
-                //print("startListenToVel: velBodyX: ", self.currentMyLocation.vel.bodyX, "velBodyY: ", self.currentMyLocation.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
+                //print("startListenToVel: velBodyX: ", self.loc.vel.bodyX, "velBodyY: ", self.loc.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
                 
                 //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
             }
@@ -185,35 +185,35 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 
                 // Update the XYZ coordinates relative to the XYZ frame. XYZ if XYZ is not set prior to takeoff, the homelocation updated at takeoff will be set as XYZ origin.
                 
-                if !self.startMyLocation.isStartLocation {
+                if !self.startLoc.isStartLocation {
                     print("startListenToPos: No start location saved, local XYZ cannot be calculated")
                     return
                 }
 
                 //self.updateXYZ(pos: temp, heading: heading)
                 
-                self.currentMyLocation.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startMyLocation)
+                self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc)
             }
         })
     }
     
     // **********************************************************
-    // Update the local XYZ position based on the startMyLocation
+    // Update the local XYZ position based on the startLoc
 //    func updateXYZ(pos: CLLocation, heading: Double){
-//        if !startMyLocation.isStartLocation {
+//        if !startLoc.isStartLocation {
 //            print("updateXYZ: Error, cannot update XYZ without a set start position")
 //        }
 //        // Lat-, lon-, alt-diff
-//        let lat_diff = pos.coordinate.latitude - self.startMyLocation.coordinate.latitude
-//        let lon_diff = pos.coordinate.longitude - self.startMyLocation.coordinate.longitude
-//        let alt_diff = pos.altitude - self.startMyLocation.altitude
+//        let lat_diff = pos.coordinate.latitude - self.startLoc.coordinate.latitude
+//        let lon_diff = pos.coordinate.longitude - self.startLoc.coordinate.longitude
+//        let alt_diff = pos.altitude - self.startLoc.altitude
 //
 //        // posN, posE
 //        let posN = lat_diff * 1852 * 60
-//        let posE = lon_diff * 1852 * 60 * cos(self.startMyLocation.coordinate.latitude/180*Double.pi)
+//        let posE = lon_diff * 1852 * 60 * cos(self.startLoc.coordinate.latitude/180*Double.pi)
 //
 //        // X direction definition
-//        let alpha = (self.startMyLocation.gimbalYaw)/180*Double.pi
+//        let alpha = (self.startLoc.gimbalYaw)/180*Double.pi
 //
 //        // Coordinate transformation, from (N, E) to (X,Y)
 //        let x =  posN * cos(alpha) + posE * sin(alpha)
@@ -224,12 +224,12 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //        self.posY = y
 //        self.posZ = z
 //
-//        //self.currentMyLocation
+//        //self.loc
 //
 //        NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
 //
-//        // A semaphore could be needed, controller reads often. Expand currentMyLocation to hold posX, Y, ZTODO
-//        self.currentMyLocation.setPosition(pos: pos, heading: self.heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.currentMyLocation)
+//        // A semaphore could be needed, controller reads often. Expand loc to hold posX, Y, ZTODO
+//        self.loc.setPosition(pos: pos, heading: self.heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.loc)
 //    }
     
     
@@ -288,11 +288,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 print("HomePosListener: Home pos was updated.")
                
                 // If start location is not yet set and we are flying, set start location to here.
-                if !self.startMyLocation.isStartLocation && self.getIsFlying() == true {
+                if !self.startLoc.isStartLocation && self.getIsFlying() == true {
                     // Save current postion as the start position. Geofence (radius and height) will be evaluated relative to this pos. getHeading()! TODO guard and handle this.
-                    self.startMyLocation.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startMyLocation)
-                    self.startMyLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-                    self.startMyLocation.printLocation(sentFrom: "startListenToHomePosUpated")
+                    self.startLoc.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc)
+                    self.startLoc.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
+                    self.startLoc.printLocation(sentFrom: "startListenToHomePosUpated")
                 }
             }
         })
@@ -317,7 +317,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Set the startLocation and orientation as a reference of the system. Can only be set once for safety!
     // old: setOriginXYZ
     func setStartLocation()->Bool{
-        if self.startMyLocation.isStartLocation{
+        if self.startLoc.isStartLocation{
             print("setStartLocation Caution: Start location already set!")
             return false
         }
@@ -330,13 +330,13 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 
         // Gimbal yaw is included in heading for the startpoint since the cameras sets the reference if startpoint is not automatically set. GimbalYawRelativeToHeading is forced to 0
         let startHeading = heading + self.gimbal.yawRelativeToHeading
-        self.startMyLocation.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startMyLocation)
-        self.startMyLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-        self.startMyLocation.printLocation(sentFrom: "setStartLocation")
+        self.startLoc.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc)
+        self.startLoc.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
+        self.startLoc.printLocation(sentFrom: "setStartLocation")
         
         usleep(200000)
         
-        self.currentMyLocation.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startMyLocation)
+        self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc)
         // Sleep needed? TODO
         
         // Update XYZ
@@ -367,9 +367,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         dssSmartRtlMission[id]["action"] = JSON("land")
         
 //        if pos.altitude - self.startLocationXYZ!.altitude < 2 {
-        if pos.altitude - self.startMyLocation.altitude < 2 {
+        if pos.altitude - self.startLoc.altitude < 2 {
             print("saveCurrentPosAsDSSHome: Forcing land altitude to 2m")
-            self.dssSmartRtlMission[id]["alt"].doubleValue = self.startMyLocation.altitude + 2
+            self.dssSmartRtlMission[id]["alt"].doubleValue = self.startLoc.altitude + 2
         }
         
         print("saveCurrentPosAsDSSHome: DSS home saved: ",self.dssSmartRtlMission)
@@ -379,7 +379,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //******************************************************
     // Appends current location to the DSS smart rtl mission
     func appendLocToDssSmartRtlMission()->Bool{
-        // TODO, should copy currentMyLocation instead, but it is not supported yet..
+        // TODO, should copy loc instead, but it is not supported yet..
         guard let pos = self.getCurrentLocation() else {
             return false}
         
@@ -653,11 +653,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     func setAlt(targetAlt: Double, reference: String){
         switch reference{
         case "HOME":
-            print("setAlt: Target alt:", targetAlt, "current alt: ", self.currentMyLocation.altitude)
+            print("setAlt: Target alt:", targetAlt, "current alt: ", self.loc.altitude)
             self.activeWP.altitude = targetAlt
-            self.activeWP.heading = self.currentMyLocation.heading
-            self.activeWP.coordinate.latitude = self.currentMyLocation.coordinate.latitude
-            self.activeWP.coordinate.longitude = self.currentMyLocation.coordinate.longitude
+            self.activeWP.heading = self.loc.heading
+            self.activeWP.coordinate.latitude = self.loc.coordinate.latitude
+            self.activeWP.coordinate.longitude = self.loc.coordinate.longitude
             self.activeWP.speed = 0
             gotoMyLocation(wp: self.activeWP)
         default:
@@ -884,7 +884,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // ******************************************************************************************************************************
     // Tests if some parameters are not nil. These parameters are used in the mission control and will not be checked each time there
     func isReadyForMission()->(Bool){
-        if self.startMyLocation.coordinate.latitude == 0 {
+        if self.startLoc.coordinate.latitude == 0 {
             print("readyForMission Error: No start location")
             return false
         }
@@ -992,7 +992,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         if isReadyForMission(){
             // Reset the activeWP TODO - does this cause a memory leak? If so create a reset function. Test in playground.
             let id = "id" + String(self.missionNextWp)
-            self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startMyLocation)
+            self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startLoc)
 
             self.activeWP.printLocation(sentFrom: "gogoMyLocation")
 
@@ -1013,7 +1013,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Corresponding function to gotoXYZ but for MyLocation and lat long.  What ever type of WP we are going to, create a MyLocation object, then activate gotoMyLocation
     private func gotoMyLocation(wp: MyLocation){
         // Check some Geo fence stuff. Ask start location if the wp is within the geofence.
-        if !startMyLocation.geofenceOK(wp: wp){
+        if !startLoc.geofenceOK(wp: wp){
             print("The WP violates the geofence!")
             return
         }
@@ -1034,8 +1034,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Algorithm requires both position and yaw to be tracked according to globally defined tracking limits.
     func trackingMyLocation(posLimit: Double, yawLimit: Double, velLimit: Double)->Bool{
         // Distance in meters
-        let (_, _, _, _, distance3D, _) = self.activeWP.distanceTo(wpLocation: self.currentMyLocation)
-        let yawError = abs(getDoubleWithinAngleRange(angle: self.currentMyLocation.heading - self.refYawLLA))
+        let (_, _, _, _, distance3D, _) = self.activeWP.distanceTo(wpLocation: self.loc)
+        let yawError = abs(getDoubleWithinAngleRange(angle: self.loc.heading - self.refYawLLA))
 
         // TODO? Put tracking record on MyLocation?
         if distance3D < posLimit && yawError < yawLimit {
@@ -1115,7 +1115,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 self.setMissionNextWp(num: self.missionNextWp + 1)
                 if self.missionNextWp != -1{
                     let id = "id" + String(self.missionNextWp)
-                    self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startMyLocation)
+                    self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startLoc)
                     
                     self.activeWP.printLocation(sentFrom: "gogoMyLocation")
                     
@@ -1139,7 +1139,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             // Calculate BODY control commands from lat long reference frame
             
             // Get distance and bearing from here to wp
-            let (northing, easting, dAlt, distance2D, _, bearing) = self.currentMyLocation.distanceTo(wpLocation: self.activeWP)
+            let (northing, easting, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.activeWP)
             
             // Set reference Yaw. Heading equals bearing or manually set? Only check once per wp. If bearing becomes exactly -1 it will be evaluated agian, that is ok.
             if self.activeWP.heading == -1{
@@ -1149,7 +1149,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             //let refYaw = self.activeWP.heading
             
             // Calculate yaw-error, use shortest way (right or left?)
-            let yawError = getFloatWithinAngleRange(angle: (Float(self.currentMyLocation.heading - self.refYawLLA)))
+            let yawError = getFloatWithinAngleRange(angle: (Float(self.loc.heading - self.refYawLLA)))
             // P-controller for Yaw
             self.refYawRate = -yawError*yawKP
             // Feedforward TBD
@@ -1177,7 +1177,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
             // If ETA is low, reduce speed (brake in time)
             var speed = self.activeWP.speed
-            let vel = sqrt(pow(self.currentMyLocation.vel.bodyX,2)+pow(self.currentMyLocation.vel.bodyY ,2))
+            let vel = sqrt(pow(self.loc.vel.bodyX,2)+pow(self.loc.vel.bodyY ,2))
             
             //hdrano:
             //decellerate at 2m/s/s
@@ -1198,8 +1198,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             }
 
             // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
-            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyX/xDivider)*turnFactor
-            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.currentMyLocation.vel.bodyY/yDivider)*turnFactor
+            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.loc.vel.bodyX/xDivider)*turnFactor
+            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.loc.vel.bodyY/yDivider)*turnFactor
             
             // Calc refVelZ
             self.refVelBodyZ = Float(-dAlt) * vPosKP
@@ -1234,7 +1234,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 //        else {
 //            // Convert to local yaw
 ////            local_yaw = heading - self.startHeadingXYZ!
-//            local_yaw = heading - (self.startMyLocation.heading + self.startMyLocation.gimbalYaw)
+//            local_yaw = heading - (self.startLoc.heading + self.startLoc.gimbalYaw)
 //            // local_yaw must be in range 0-360, or -1
 //            if local_yaw < 0 {
 //                local_yaw += 360

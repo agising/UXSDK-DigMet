@@ -193,18 +193,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     }
     
     //**************************************************************************************************
-    // Writes metadata to json. startMyLocation for the calulations, if it is not, set ut to current pos
+    // Writes metadata to json. startLoc for the calulations, if it is not, set ut to current pos
     func writeMetaDataXYZ()->Bool{
         // Make sure startWP is set in order to be able to calc the local XYZ
-        if !self.copter.startMyLocation.isStartLocation {
+        if !self.copter.startLoc.isStartLocation {
             // StartLocation is not set. Try to set it!
             if copter.setStartLocation(){
                 print("writeMetaData: setStartLocation set from here")
-                // In simulation the position is not updated until take-off. So we need to update the currentMyLocation with the current gimbal data to the it right in simulation too.
+                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to the it right in simulation too.
                 guard let heading = self.copter.getHeading() else {
                    print("writeMetaDataXYZ: Error updating heading")
                    return false}
-                self.copter.currentMyLocation.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
+                self.copter.loc.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
                 
                 // Start location is set, call the function again, return true because problem is fixed.
                 _ = writeMetaDataXYZ()
@@ -218,12 +218,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
         var jsonMeta = JSON()
         jsonMeta["filename"] = JSON("")
-        jsonMeta["x"] = JSON(self.copter.currentMyLocation.pos.x)
-        jsonMeta["y"] = JSON(self.copter.currentMyLocation.pos.y)
-        jsonMeta["z"] = JSON(self.copter.currentMyLocation.pos.z)
+        jsonMeta["x"] = JSON(self.copter.loc.pos.x)
+        jsonMeta["y"] = JSON(self.copter.loc.pos.y)
+        jsonMeta["z"] = JSON(self.copter.loc.pos.z)
         jsonMeta["agl"] = JSON(-1)
-        // In sim currentMyLocation.gimbalYaw does not update while on ground exept for first photo.
-        jsonMeta["local_yaw"] = JSON(self.copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)
+        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+        jsonMeta["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
         jsonMeta["index"] = JSON(self.sessionLastIndex)
 
         var jsonPhoto = JSON()
@@ -983,7 +983,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r["arg3"].stringValue = self.inControls
                     case "posD":
                         json_r["arg2"].stringValue = "posD"
-                        json_r["arg3"] = JSON(self.copter.currentMyLocation.pos.z)
+                        json_r["arg3"] = JSON(self.copter.loc.pos.z)
                     case "armed":
                         json_r["arg2"].stringValue = "armed"
                         json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
@@ -1328,7 +1328,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
         copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
-        copter.currentMyLocation.printLocation(sentFrom: "Dutt button")
+        copter.loc.printLocation(sentFrom: "Dutt button")
 
 
         // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
@@ -1381,18 +1381,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //*************************************************
     // Update gui when nofication didposupdate happened
     @objc func onDidXYZUpdate(_ notification: Notification){
-        self.posXLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.x)
-        self.posYLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.y)
-        self.posZLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.z)
+        self.posXLabel.text = String(format: "%.1f", copter.loc.pos.x)
+        self.posYLabel.text = String(format: "%.1f", copter.loc.pos.y)
+        self.posZLabel.text = String(format: "%.1f", copter.loc.pos.z)
         
         // If subscribed to XYZ updates, also get local_yaw and publish
         if subscriptions.XYZ{
             var json = JSON()
-            json["x"].doubleValue = round(100 * copter.currentMyLocation.pos.x) / 100
-            json["y"].doubleValue = round(100 * copter.currentMyLocation.pos.y) / 100
-            json["z"].doubleValue = round(100 * copter.currentMyLocation.pos.z) / 100
+            json["x"].doubleValue = round(100 * copter.loc.pos.x) / 100
+            json["y"].doubleValue = round(100 * copter.loc.pos.y) / 100
+            json["z"].doubleValue = round(100 * copter.loc.pos.z) / 100
             json["local_yaw"].doubleValue =
-                round(100 * (copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)) / 100
+                round(100 * (copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)) / 100
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
     }
