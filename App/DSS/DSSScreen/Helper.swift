@@ -20,10 +20,11 @@ class MyLocation: NSObject{
     var gimbalYaw: Double = 0
     var gimbalYawRelativeToHeading: Double = 0
     var action: String = ""
-    var isStartLocation = false
+    var isStartLocation: Bool = false
     var coordinate = MyCoordinate()
     var geoFence = GeoFence()
     var vel = Vel()
+    var pos = XYZ()
 
     // Reset all values.
     func reset(){
@@ -42,6 +43,9 @@ class MyLocation: NSObject{
         self.vel.bodyY = 0
         self.vel.bodyZ = 0
         self.vel.yawRate = 0
+        self.pos.x = 0
+        self.pos.y = 0
+        self.pos.z = 0
     }
     
     
@@ -114,7 +118,7 @@ class MyLocation: NSObject{
     }
     
     // Set up wp properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double=0, isStartWP: Bool=false){
+    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isStartWP: Bool=false, startWP: MyLocation){
         self.altitude = pos.altitude
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
@@ -123,9 +127,33 @@ class MyLocation: NSObject{
         self.coordinate.longitude = pos.coordinate.longitude
         self.isStartLocation = isStartWP
         
+        // Dont set up XYZ for the startMyLocation it self.
+        if self.isStartLocation{
+            return
+        }
+        // If startWP is not setup, return
+        if !startWP.isStartLocation {
+            print("setPosition: Error, cannot update XYZ without a set start position")
+            return
+        }
+        // Lat-, lon-, alt-diff
+        let lat_diff = pos.coordinate.latitude - startWP.coordinate.latitude
+        let lon_diff = pos.coordinate.longitude - startWP.coordinate.longitude
+        let alt_diff = pos.altitude - startWP.altitude
+
+        // posN, posE
+        let posN = lat_diff * 1852 * 60
+        let posE = lon_diff * 1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi)
         
-        
-        
+        // X direction definition
+        let alpha = (startWP.gimbalYaw)/180*Double.pi
+
+        // Coordinate transformation, from (N, E) to (X,Y)
+        self.pos.x =  posN * cos(alpha) + posE * sin(alpha)
+        self.pos.y = -posN * sin(alpha) + posE * cos(alpha)
+        self.pos.z = -alt_diff
+                
+        NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
     }
     
     func setGeoFence(radius: Double, height: [Double]){
@@ -242,12 +270,10 @@ class Vel: NSObject{
 
 // SubClass to MyLocation. Body class for body velocities
 class XYZ: NSObject{
-    var x: Float = 0
-    var y: Float = 0
-    var z: Float = 0
+    var x: Double = 0
+    var y: Double = 0
+    var z: Double = 0
 }
-
-
 
 //
 // Class to use for allocation of resources, like camera, gimbal, etc.

@@ -218,10 +218,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
         var jsonMeta = JSON()
         jsonMeta["filename"] = JSON("")
-        jsonMeta["x"] = JSON(self.copter.posX)
-        jsonMeta["y"] = JSON(self.copter.posY)
-        jsonMeta["z"] = JSON(self.copter.posZ)
+        jsonMeta["x"] = JSON(self.copter.currentMyLocation.pos.x)
+        jsonMeta["y"] = JSON(self.copter.currentMyLocation.pos.y)
+        jsonMeta["z"] = JSON(self.copter.currentMyLocation.pos.z)
         jsonMeta["agl"] = JSON(-1)
+        // In sim currentMyLocation.gimbalYaw does not update while on ground exept for first photo.
         jsonMeta["local_yaw"] = JSON(self.copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)
         jsonMeta["index"] = JSON(self.sessionLastIndex)
 
@@ -982,7 +983,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r["arg3"].stringValue = self.inControls
                     case "posD":
                         json_r["arg2"].stringValue = "posD"
-                        json_r["arg3"] = JSON(copter.posZ)
+                        json_r["arg3"] = JSON(self.copter.currentMyLocation.pos.z)
                     case "armed":
                         json_r["arg2"].stringValue = "armed"
                         json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
@@ -1380,19 +1381,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //*************************************************
     // Update gui when nofication didposupdate happened
     @objc func onDidXYZUpdate(_ notification: Notification){
-        self.posXLabel.text = String(format: "%.1f", copter.posX)
-        self.posYLabel.text = String(format: "%.1f", copter.posY)
-        self.posZLabel.text = String(format: "%.1f", copter.posZ)
+        self.posXLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.x)
+        self.posYLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.y)
+        self.posZLabel.text = String(format: "%.1f", copter.currentMyLocation.pos.z)
         
         // If subscribed to XYZ updates, also get local_yaw and publish
         if subscriptions.XYZ{
             var json = JSON()
-            json["x"].doubleValue = round(100 * copter.posX) / 100
-            json["y"].doubleValue = round(100 * copter.posY) / 100
-            json["z"].doubleValue = round(100 * copter.posZ) / 100
+            json["x"].doubleValue = round(100 * copter.currentMyLocation.pos.x) / 100
+            json["y"].doubleValue = round(100 * copter.currentMyLocation.pos.y) / 100
+            json["z"].doubleValue = round(100 * copter.currentMyLocation.pos.z) / 100
             json["local_yaw"].doubleValue =
                 round(100 * (copter.currentMyLocation.gimbalYaw - self.copter.startMyLocation.gimbalYaw)) / 100
-
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
     }
