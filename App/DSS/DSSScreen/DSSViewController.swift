@@ -38,7 +38,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var DJIgimbal: DJIGimbal?
     
     
-    var acks = 0
+    //var acks = 0
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
     var infoPublisher: SwiftyZeroMQ.Socket?
     var dataPublisher: SwiftyZeroMQ.Socket?
@@ -46,47 +46,29 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     let replyEndpoint = "tcp://*:5557"
     let infoPublishEndPoint = "tcp://*:5558"
     let dataPublishEndPoint = "tcp://*:5559"
-    var sshAllocator = Allocator(name: "ssh")
+    //var sshAllocator = Allocator(name: "ssh")
     var subscriptions = Subscriptions()
     var inControls = "USER"
     
     var pitchRangeExtension_set: Bool = false
     var nextGimbalPitch: Int = 0
     
-    var gimbalcapability: [AnyHashable: Any]? = [:]
+    //var gimbalcapability: [AnyHashable: Any]? = [:]
     var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
     var transferAllAllocator = Allocator(name: "transferAll")
     
     var copter = CopterController()
-    //var gimbal = GimbalController()
    
-    var photo: UIImage = UIImage.init() // Is this used?
     var sessionLastIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
     var transferring: Bool = false
-    var jsonMetaData: JSON = JSON()
-    var jsonPhotos: JSON = JSON()
-    
-    var lastImage: UIImage = UIImage.init()
-    var lastImagePreview: UIImage = UIImage.init()
-    var lastImageFilename = ""
-    var lastImageURL = ""
-    var lastPhotoData: Data = Data.init()
-    var lastPhotoDataURL: URL?
-    var lastPhotoDataFilename = ""
-    var metaDataURL: URL?
-    var metaDataFilename = ""
-    
+    var jsonMetaData: JSON = JSON()                 // All the photo metadata
+    var jsonPhotos: JSON = JSON()                   // Photos filename and downloaded status
+        
     
     var idle: Bool = true                   // For future implementation of task que
     
-    //var helperView = myView(coder: NSObject)
-
-    //*********************
-    // IBOutlet declaration: Labels
-//    @IBOutlet weak var controlPeriodLabel: UILabel!
-//    @IBOutlet weak var horizontalSpeedLabel: UILabel!
     
     // Steppers
     @IBOutlet weak var leftStepperStackView: UIStackView!
@@ -107,15 +89,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // IBOutlet declaration: ImageView
     @IBOutlet weak var previewImageView: UIImageView!
     
-    // Steppers
-//    @IBOutlet weak var controlPeriodStepperButton: UIStepper!
-//    @IBOutlet weak var horizontalSpeedStepperButton: UIStepper!
-//    @IBOutlet weak var horizontalSpeedStackView: UIStackView!
-//    @IBOutlet weak var controlPeriodStackView: UIStackView!
-    
-    // Buttons
-    //@IBOutlet weak var DeactivateSticksButton: UIButton!
-    //@IBOutlet weak var ActivateSticksButton: UIButton!
     @IBOutlet weak var controlsButton: UIButton!
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var DuttLeftButton: UIButton!
@@ -381,52 +354,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         print("Previewing photo from path")
     }
     
-//    // **********************************************************************************************************
-//    // Function executed when incoming command is download_picture. Camera allocator must be allocated by calling function.
-//    func downloadPhotoCMD(sessionIndex: Int){
-//        // Check if already downloaded from sdCard
-//        if self.jsonPhotos[String(sessionIndex)].exists(){
-//            if jsonPhotos[String(sessionIndex)]["stored"] == false{
-//                printSL("transferIndex: Download photo: " + String(sessionIndex))
-//
-//                // Allocate resource
-//                var maxTime = 41
-//                while !self.cameraAllocator.allocate("download", maxTime: 40){
-//                    // Sleep 0.1s
-//                    usleep(100000)
-//                    maxTime -= 1
-//                    if maxTime < 0 {
-//                        // Give up to download photo
-//                        self.printSL("downloadPhotoCMD: Error, could not allocate cameraAllocator")
-//                        return
-//                    }
-//                }
-//                // Allocator allocated
-//                self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
-//                    self.cameraAllocator.deallocate()
-//                    if saveSuccess {
-//                        self.printSL("Image downloaded to App")
-//                        print("Publish photo on PUB-socket")
-//                        let photoData = self.lastPhotoData
-//                        var json_photo = JSON()
-//                        json_photo["photo"].stringValue = getBase64utf8(data: photoData)
-//                        json_photo["metadata"] = self.jsonMetaData[String(self.sessionLastIndex)]
-//                        print(self.jsonMetaData)
-//                        _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
-//                    }
-//                    else{
-//                        self.printSL("Download from sdCard Failed. Report if endless loop..")
-//                        // Sleep for 0.1s to give the system some time to recover.
-//                        usleep(100000)
-//                        // Risking endless loop..
-//                        self.downloadPhotoCMD(sessionIndex: sessionIndex)
-//                    }
-//                })
-//            }
-//        }
-//    }
 
-    
     //**********************************************************************
      // Save photo from sdCardto app memory. Setup camera then call getImage
     func savePhoto(sessionIndex: Int, completionHandler: @escaping (Bool) -> Void){
@@ -534,7 +462,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 }
                 else if isComplete {
                     if let photoData = photoData{
-                        self.lastPhotoData = photoData
+                        //self.lastPhotoData = photoData
                         self.savePhotoDataToApp(photoData: photoData, filename: files[cameraIndex].fileName, sessionIndex: theSessionIndex)
                         completionHandler(true)
                         }
@@ -570,8 +498,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             let fileURL = documentsURL.appendingPathComponent(filename)
             do {
                 try photoData.write(to: fileURL, options: .atomicWrite)
-                self.lastPhotoDataURL = fileURL
-                self.lastPhotoDataFilename = filename
                 self.jsonPhotos[String(theSessionIndex)]["stored"].boolValue = true
                 self.printDB("savePhotoDataToApp: The write fileURL points at: " + fileURL.description)
             } catch {
@@ -663,7 +589,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         if self.jsonPhotos[String(sessionIndex)].exists(){
             if jsonPhotos[String(sessionIndex)]["stored"] == false{
                 printSL("transferIndex: Download photo: " + String(sessionIndex))
-                //if self.cameraAllocator.allocate("transferIndex", maxTime: 40)
                 // Allocate resource
                 var maxTime = 41
                 while !self.cameraAllocator.allocate("download", maxTime: 40){
@@ -726,24 +651,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             completionHandler(false)
         }
     }
-    
-    //********************************************
-    // Save PhotoData to app, set URL to the objet
-//    func saveDataToApp(data: Data, filename: String){
-//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-//        if let documentsURL = documentsURL {
-//            let fileURL = documentsURL.appendingPathComponent(filename)
-//            self.metaDataURL = fileURL
-//            self.metaDataFilename = filename
-//            do {
-//                try data.write(to: fileURL, options: .atomicWrite)
-//            } catch {
-//                self.printSL("Could not write Data to App: " + String(describing: error))
-//            }
-//        }
-//    }
-    
-    
+        
+
     // Can be moved to separate file
     // ******************************************************************
     // Download the preview of the last photo taken. Preview it on screen
@@ -776,17 +685,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
         })
     }
-    
-    
-    
-//    // Find the MetaData to attach when file is uploaded (if subscribed)
-//                  var metaData = JSON()
-//                  for i in stride(from: self.sessionLastIndex, to: 0, by: -1){
-//                      if self.jsonMetaData[String(i)]["fileName"].stringValue == fileNameUploading{
-//                          metaData = self.jsonMetaData[String(i)]
-//                      }
-//                  }
-    
+        
        
     //**************************
     // Init the publisher socket
@@ -833,7 +732,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
     // ******************************
     // Initiate the zmq reply thread.
-    // MARK: ZMQ
     func startReplyThread()->Bool{
         do{
             // Reply socket
@@ -853,7 +751,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-
 
     // ****************************************************
     // zmq reply thread that reads command from applictaion
@@ -920,7 +817,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_LLA")
                             }
@@ -938,7 +835,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_NED")
                             }
@@ -956,7 +853,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
                                 Dispatch.main{
-                                    _ = self.copter.gogoMyLocation(startWp: next_wp, useCurrentMission: false)
+                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
                                 }
                                 json_r = createJsonAck("gogo_XYZ")
                             }
@@ -1215,24 +1112,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //***************
     // Button actions
     //***************
-    
-    
-    // ****************************************************************************
-    // Control period stepper. Experiments with execution time for joystick command
-//    @IBAction func controlPeriodStepper(_ sender: UIStepper) {
-//        controlPeriodLabel.text = String(sender.value/1000)
-//        // Uses stepper input and sampleTime to calculate how many loops fireDuttTimer should loop
-//        copter.loopTarget = Int(sender.value / copter.sampleTime)
-//    }
-//
-//    //***********************************************************************************
-//    // Horizontal speed stepper. Experiments with velocity reference for joystick command
-//    @IBAction func horizontalSpeedStepper(_ sender: UIStepper) {
-//        horizontalSpeedLabel.text = String(sender.value/100)
-//        copter.xyVelLimit = Float(sender.value)
-//    }
-  
-    
     @IBAction func leftStepperAction(_ sender: UIStepper) {
         leftStepperLabel.text = String(sender.value/100)
         leftStepperName.text = "hPosKP"
@@ -1248,7 +1127,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     }
     
     
-       
     //*******************************************************************************************************
     // Exit view, but first deactivate Sticks (which invalidates fireTimer-timer to stop any joystick command)
  
@@ -1307,20 +1185,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBAction func DuttRightPressed(_ sender: UIButton) {
         // Set the control command
         copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-
-
-        // Clear screen, lets fly!
-        // previewImageView.image = nil
-//        transferIndex(sessionIndex: 2, completionHandler: {(success) in
-//            if success{
-//                print("Photo transferred")
-//            }
-//            else{
-//                print("Photo failed to transfer")
-//            }
-//        })
         
-   
+        
     }
 
     //***************************************************************************************************************
@@ -1328,23 +1194,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
         copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
-        copter.loc.printLocation(sentFrom: "Dutt button")
-
-
-        // Load photo from library to be able to test scp without drone conencted. Could add dummy pic to App assets instead.
-        //self.lastImage = loadUIImageFromPhotoLibrary()! // TODO, unsafe code
-        //self.previewImageView.photo = loadUIImageFromPhotoLibrary()
-        //savePhotoDataToApp(photoData: self.lastImage.jpegData(compressionQuality: 1)!, filename: "From_album.jpg")
         
-//
-//        self.copter.flightController?.getControlMode(completion: {(mode: DJIFlightControllerControlMode, error: Error?) in
-//            print(mode.self)
-//        })
-
         
-
     }
-    
     
     //**********************************************
     // Download and preview the last photo on sdCard
@@ -1452,7 +1304,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         //print("WP action waiting for takePhoto to complete")
                     }
                     Dispatch.main {
-                        _ = self.copter.gogoMyLocation(startWp: 99, useCurrentMission: true) // startWP not used
+                        _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
                     }
                 }
             }
@@ -1491,12 +1343,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         //        self.contentViewController = modViewController
         
         // Init steppers
-//        controlPeriodStepperButton.value = copter.controlPeriod
-//        controlPeriodLabel.text = String(copter.controlPeriod/1000)
-//        horizontalSpeedStepperButton.value = Double(copter.xyVelLimit)
-//        horizontalSpeedLabel.text = String(copter.xyVelLimit/100)
-//        horizontalSpeedStackView.isHidden = true
-//        controlPeriodStackView.isHidden = true
         leftStepperStackView.isHidden = true
         leftStepperButton.value = Double(copter.hPosKP*100)
         leftStepperLabel.text = String(copter.hPosKP)
