@@ -119,22 +119,14 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // Velocities are in NED coordinate system !
                 
                 let heading = self.loc.heading
-                // Velocities in the XYZ cooredingate system (dependent on heading and start heading)
-                //let startHeading = self.startLoc.heading + self.startLoc.gimbalYaw
-                // let alpha = (heading - startHeading)/180*Double.pi
-                // self.velX = Float(vel.x * cos(alpha) + vel.y * sin(alpha))
-                // self.velY = Float(-vel.x * sin(alpha) + vel.y * cos(alpha))
-                // self.velZ = Float(vel.z)
                 
                 // Velocities on the BODY coordinate system (dependent on heading)
                 let beta = heading/180*Double.pi
                 self.loc.vel.bodyX = Float(vel.x * cos(beta) + vel.y * sin(beta))
                 self.loc.vel.bodyY = Float(-vel.x * sin(beta) + vel.y * cos(beta))
                 self.loc.vel.bodyZ = Float(vel.z)
-                
-                //print("startListenToVel: velBodyX: ", self.loc.vel.bodyX, "velBodyY: ", self.loc.vel.bodyY, "velx: ", vel.x, "vely: ", vel.y)
-                
-                //NotificationCenter.default.post(name: .didVelUpdate, object: nil)
+                                
+                NotificationCenter.default.post(name: .didVelUpdate, object: nil)
             }
         })
     }
@@ -678,128 +670,83 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     
     //*************************************************************************************************
     // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
-    func uploadMissionXYZ(mission: JSON)->(success: Bool, arg: String){
-        // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
-        var wpCnt = 0
-        for (_,subJson):(String, JSON) in mission {
-            // Check wp-numbering
-            if mission["id" + String(wpCnt)].exists()
-            {
-                // Check for geofence violation
-//                guard withinLimit(value: subJson["x"].doubleValue, lowerLimit: missionGeoFenceX[0], upperLimit: missionGeoFenceX[1])
-//                    else {return (false, "GeofenceX or x missing")}
-//                guard withinLimit(value: subJson["y"].doubleValue, lowerLimit: missionGeoFenceY[0], upperLimit: missionGeoFenceY[1])
-//                    else {return (false, "GeofenceY or y missing")}
-//                guard withinLimit(value: subJson["z"].doubleValue, lowerLimit: missionGeoFenceZ[0], upperLimit: missionGeoFenceZ[1])
-//                    else {return (false, "GeofenceZ or z missing")}
-//                guard withinLimit(value: subJson["local_yaw"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) || subJson["local_yaw"].doubleValue == -1
-//                    else {return (false, "local_yaw out of bounds or missing")}
-                // Check if any wp-action is supported, otherwise reject.
-                if subJson["action"].exists() {
-                    if subJson["action"].stringValue != "take_photo"{
-                        return(false, "Faulty wp action")
-                    }
-                }
-                // Check that any speed setting is positive
-                if subJson["speed"].exists() {
-                    if subJson["speed"].doubleValue < 0.1 {
-                        return(false, "Too low speed")
-                    }
-                }
-                wpCnt += 1
-                continue
-            }
-            else{
-                return (false, "Wp numbering faulty")
-            }
-        }
-        self.pendingMission = mission
-        return (true, "")
-    }
-    // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
-    func uploadMissionNED(mission: JSON)->(success: Bool, arg: String){
-        // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
-        var wpCnt = 0
-        print("uploadMissionNED: Evaluate to use Radius for geofence - TODO")
-        print("uploadMissionNED TODO: Test geofence NED")
+    func uploadMission(mission: JSON)->(success: Bool, arg: String){
 
-        for (_,subJson):(String, JSON) in mission {
-            // Check wp-numbering
-            if mission["id" + String(wpCnt)].exists()
-            {
-                // Check for geofence violation
-//                guard withinLimit(value: subJson["north"].doubleValue, lowerLimit: missionGeoFenceNorth[0], upperLimit: missionGeoFenceNorth[1])
-//                    else {return (false, "GeofenceNorth or North missing")}
-//                guard withinLimit(value: subJson["east"].doubleValue, lowerLimit: missionGeoFenceEast[0], upperLimit: missionGeoFenceEast[1])
-//                    else {return (false, "GeofenceEast or East missing")}
-//                guard withinLimit(value: subJson["down"].doubleValue, lowerLimit: missionGeoFenceDown[0], upperLimit: missionGeoFenceDown[1])
-//                    else {return (false, "GeofenceDown or Down missing")}
-//                guard withinLimit(value: subJson["heading"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) || subJson["heading"].doubleValue == -1
-//                    else {return (false, "heading out of bounds or missing")}
-                // Check if any wp-action is supported, otherwise reject.
-                if subJson["action"].exists() {
-                    if subJson["action"].stringValue != "take_photo"{
-                        return(false, "Faulty wp action")
-                    }
-                }
-                // Check that any speed setting is positive
-                if subJson["speed"].exists() {
-                    if subJson["speed"].doubleValue < 0.1 {
-                        return(false, "Too low speed")
-                    }
-                }
-                wpCnt += 1
-                continue
-            }
-            else{
-                return (false, "Wp numbering faulty")
-            }
+
+        // Create a temo WP to verify any geofence violation against
+        var tempStartLocation = MyLocation()
+        if self.startLoc.isStartLocation {
+            // There is a startLocation set, use it
+            tempStartLocation = self.startLoc
         }
-        self.pendingMission = mission
-        return (true, "")
-    }
-    
-    // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
-    func uploadMissionLLA(mission: JSON)->(success: Bool, arg: String){
+        else if let pos = self.getCurrentLocation(){
+            // If current position is available, create a temporary startLocation at the current position
+            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation)
+            tempStartLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
+        }
+        else {
+            // Position cannot be obtained, geofence cannot be checked. Return false
+            return(false, "No startPosition nor Position available. GEO fence fail.")
+        }
+
+        // Loop through the wp in the mission
         // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
         var wpCnt = 0
-        print("uploadMissionLLA: Evaluate to use Radius for geofence - TODO")
-        print("uploadMissionLLA TODO: Test geofence LLA")
-        for (_,subJson):(String, JSON) in mission {
-            // Check wp-numbering
+        let tempWP = MyLocation()
+        
+        for (wpID,subJson):(String, JSON) in mission {
+            // Temporarily translate from Json to MyLocation
+            tempWP.setUpFromJsonWp(jsonWP: subJson, defaultSpeed: self.defaultHVel, startWP: tempStartLocation)
+            
+            // Check wp-numbering, and for each wp check its properties, note the wpCnt and wpID are not in the same order!
             if mission["id" + String(wpCnt)].exists()
             {
                 // Check for geofence violation
-//                guard withinLimit(value: subJson["lat"].doubleValue, lowerLimit: missionGeoFenceLat[0], upperLimit: missionGeoFenceLat[1])
-//                    else {return (false, "GeofenceLat or Lat missing")}
-//                guard withinLimit(value: subJson["lon"].doubleValue, lowerLimit: missionGeoFenceLon[0], upperLimit: missionGeoFenceLon[1])
-//                    else {return (false, "GeofenceLon or Lon missing")}
-//                guard withinLimit(value: subJson["alt"].doubleValue, lowerLimit: missionGeoFenceAlt[0], upperLimit: missionGeoFenceAlt[1])
-//                    else {return (false, "GeofenceAlt or Alt missing")}
-//                guard withinLimit(value: subJson["heading"].doubleValue, lowerLimit: 0.0, upperLimit: 360.0) || subJson["heading"].doubleValue == -1
-//                    else {return (false, "heading out of bounds or missing")}
-                // Check if any wp-action is supported, otherwise reject.
-                if subJson["action"].exists() {
-                    if subJson["action"].stringValue != "take_photo"{
-                        return(false, "Faulty wp action")
+                if !tempStartLocation.geofenceOK(wp: tempWP){
+                    return(false, "Geofence violation " + wpID)
+                }
+                
+                // If there is a wp.action, check that it is one of the approved.
+                if tempWP.action != ""{
+                    if tempWP.action == "take_photo"{
+                        _ = "ok"
+                    }
+                    else {
+                        return(false, "WP action not supported " + wpID)
                     }
                 }
+                
                 // Check that any speed setting is positive
                 if subJson["speed"].exists() {
                     if subJson["speed"].doubleValue < 0.1 {
-                        return(false, "Too low speed")
+                        return(false, "Too low speed " + wpID)
                     }
                 }
+                
+                // Check if given heading is in range [-1-359]
+                var tempHeading:Double = 0
+                if subJson["local_yaw"].exists() {
+                    tempHeading = subJson["local_yaw"].doubleValue
+                }
+                else if subJson["heading"].exists() {
+                    tempHeading = subJson["heading"].doubleValue
+                }
+                if tempHeading < -1 || tempHeading > 360 {
+                    return(false, "Heading violation " + wpID)
+                }
+                
+                // Continue the for loop
                 wpCnt += 1
                 continue
             }
             else{
-                return (false, "Wp numbering faulty")
+                return (false, "Wp numbering faulty, missing id" + String(wpCnt))
             }
         }
         self.pendingMission = mission
         return (true, "")
     }
+
     
     //**********************************
     // Returns the wp action of wp idNum

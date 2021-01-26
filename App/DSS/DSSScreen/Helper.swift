@@ -96,6 +96,8 @@ class MyLocation: NSObject{
         return (northing, easting, dAlt, distance2D, distance3D, bearing)
     }
     
+   
+   
     // This function should be used from the startMyLocation
     func geofenceOK(wp: MyLocation)->Bool{
         // To make sure function is only used from startlocation.
@@ -110,7 +112,7 @@ class MyLocation: NSObject{
             printToScreen("geofenceOK: Radius violation")
             return false
         }
-        if dAlt < self.geoFence.height[0] && self.geoFence.height[1] < dAlt {
+        if dAlt < self.geoFence.height[0] || self.geoFence.height[1] < dAlt {
             printToScreen("geofenceOK: Height violation")
             return false
         }

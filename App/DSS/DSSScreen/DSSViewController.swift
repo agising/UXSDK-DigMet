@@ -1052,34 +1052,37 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "upload_mission_XYZ":
                     self.printSL("Received cmd: upload_mission_XYZ")
                     
-                    let (success, arg) = copter.uploadMissionXYZ(mission: json_m["arg"])
+                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_XYZ")
                     }
                     else{
                         json_r = createJsonNack("upload_mission_XYZ")
-                        print("Mission upload failed: " + arg)
+                        json_r["arg2"] = JSON(arg)
+                        self.printSL("Mission upload failed: " + arg)
                     }
                 case "upload_mission_NED":
                     self.printSL("Received cmd: upload_mission_NED")
                     
-                    let (success, arg) = copter.uploadMissionNED(mission: json_m["arg"])
+                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_NED")
                     }
                     else{
                         json_r = createJsonNack("upload_mission_NED")
+                        json_r["arg2"] = JSON(arg)
                         print("Mission upload failed: " + arg)
                     }
                 case "upload_mission_LLA":
                     self.printSL("Received cmd: upload_mission_LLA")
                     
-                    let (success, arg) = copter.uploadMissionLLA(mission: json_m["arg"])
+                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_LLA")
                     }
                     else{
                         json_r = createJsonNack("upload_mission_LLA")
+                        json_r["arg2"] = JSON(arg)
                         print("Mission upload failed: " + arg)
                     }
                     
