@@ -771,7 +771,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "arm_take_off":
                     self.printSL("Received cmd: arm_take_off")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        json_r = createJsonNack("arm_take_off")
+                        json_r = createJsonNack(fcn: "arm_take_off", arg2: "State is flying")
                     }
                     else{
                         let toAlt = json_m["arg"]["height"].doubleValue
@@ -782,7 +782,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             copter.takeOff()
                         }
                         else{
-                            json_r = createJsonNack("arm_take_off")
+                            json_r = createJsonNack(fcn: "arm_take_off", arg2: "Take-off height out of limit")
                         }
                     }
                 case "data_stream":
@@ -799,7 +799,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             self.subscriptions.setWpId(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
                         default:
-                            json_r = createJsonNack("data_stream")
+                            json_r = createJsonNack(fcn: "data_stream", arg2: "Attribute not supported" + json_m["arg"].stringValue)
                     }
                 case "disconnect":
                     json_r = createJsonAck("disconnect")
@@ -817,17 +817,17 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
-                                Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                                }
-                                json_r = createJsonAck("gogo_LLA")
+                            Dispatch.main{
+                                _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
                             }
-                            else{
-                                json_r = createJsonNack("gogo_LLA")
-                            }
+                            json_r = createJsonAck("gogo_LLA")
                         }
+                        else{
+                            json_r = createJsonNack(fcn: "gogo_LLA", arg2: "WP id does not exist")
+                        }
+                    }
                     else{
-                         json_r = createJsonNack("gogo_LLA")
+                        json_r = createJsonNack(fcn: "gogo_LLA", arg2: "State is not flying")
                     }
 
                 case "gogo_NED":
@@ -841,11 +841,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 json_r = createJsonAck("gogo_NED")
                             }
                             else{
-                                json_r = createJsonNack("gogo_NED")
+                                json_r = createJsonNack(fcn: "gogo_NED", arg2: "WP id does not exist")
                             }
                         }
                     else{
-                         json_r = createJsonNack("gogo_NED")
+                        json_r = createJsonNack(fcn: "gogo_NED", arg2: "State is not flying")
                     }
 
                 case "gogo_XYZ":
@@ -859,11 +859,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 json_r = createJsonAck("gogo_XYZ")
                             }
                             else{
-                                json_r = createJsonNack("gogo_XYZ")
+                                json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "WP id does not exist")
                             }
                         }
                     else{
-                         json_r = createJsonNack("gogo_XYZ")
+                        json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "State is not flying")
                     }
 
                 case "heart_beat": // DONE
@@ -902,12 +902,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 json_r["arg3"] = self.jsonMetaData[String(describing: sessionIndex)]
                             }
                             else{
-                                json_r = createJsonNack("No such index for metadata")
+                                json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
                             }
                         }
                     default:
-                        json_r = createJsonNack("info_request")
-                        json_r["arg2"].stringValue = "Attribute not supported: " + json_m["arg"].stringValue
+                        json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
                     }
                 case "land":
                     self.printSL("Received cmd: land")
@@ -917,7 +916,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         copter.land()
                     }
                     else{
-                        json_r = createJsonNack("land")
+                        json_r = createJsonNack(fcn: "land", arg2: "State is not flying")
                     }
                 case "photo":
                     switch json_m["arg"]["cmd"]{
@@ -930,7 +929,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 takePhotoCMD()
                             }
                             else{ // camera resource busy
-                                json_r = createJsonNack("photo")
+                                json_r = createJsonNack(fcn: "photo", arg2: "Camera resource busy")
                             }
                         case "download":
                             self.printSL("Received cmd: photo, with arg download")
@@ -938,9 +937,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             let sessionIndex = json_m["arg"]["index"].intValue
                             // Index does not exist
                             if sessionIndex > self.sessionLastIndex {
-                                self.printSL("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + String(self.sessionLastIndex))
-                                json_r = createJsonNack("photo")
-                                json_r["arg2"] = JSON("index does not exist")
+                                let tempStr = String(self.sessionLastIndex)
+                                self.printSL("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
+                                json_r = createJsonNack(fcn: "photo", arg2: "Requested index does not exist, last index is: " + tempStr)
                                 // Done
                             }
                             else if sessionIndex == -1 {
@@ -955,16 +954,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                     }
                                 }
                                 else {
-                                    json_r = createJsonNack("photo")
-                                    json_r["arg2"] = JSON("download all already running")
+                                    json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
                                     self.printSL("Dowload all nacked, already running")
                                 }
                             }
                             // Index is 0 or less (but not -1 since it is already tested)
                             else if sessionIndex < 1 {
                                 self.printSL("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
-                                json_r = createJsonNack("photo")
-                                json_r["arg2"] = JSON("bad index")
+                                json_r = createJsonNack(fcn: "photo", arg2: "Bad index, first possible index is 1")
                                 // Done
                             }
                             // Index must be ok, download the index
@@ -979,17 +976,15 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             }
                         default:
                             self.printSL("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
-                            json_r = createJsonNack("photo")
+                            json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
                         }
                 case "rtl":
                     self.printSL("Received cmd: rtl")
                     // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
                     // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
                   
-                    if copter.getIsFlying() == false {
-                        json_r = createJsonNack("rtl")
-                    }
-                    else {
+                    if copter.getIsFlying() ?? false { // Default to false to handle nil
+                        // Activate the rtl, the figure if the command whent through or not
                         copter.rtl()
                         
                         // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
@@ -1005,7 +1000,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             else {
                                 // We tried many times, it must have failed somehow -> nack
                                 print("ReadSocket: RTL did not go through. Debug.")
-                                json_r = createJsonNack("rtl")
+                                json_r = createJsonNack(fcn: "rtl", arg2: "RTL did not go through, debug")
                                 break
                             }
                         }
@@ -1013,81 +1008,98 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             json_r = createJsonAck("rtl")
                         }
                     }
+                    // Copter is not flying
+                    else {
+                        json_r = createJsonNack(fcn: "rtl", arg2: "State is not flying")
+                    }
+               
                 case "dss_srtl":
                     // Once activated it should be possible to interfere TODO
                     self.printSL("Received comd: dss srtl")
-                    json_r = createJsonAck("dss_srtl")
-                    Dispatch.main{
-                        self.copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                    if copter.getIsFlying() ?? false { // Default to false to handle nil
+                        json_r = createJsonAck("dss_srtl")
+                        Dispatch.main{
+                            self.copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                        }
+                    }
+                    else {
+                        json_r = createJsonNack(fcn: "dss_srtl", arg2: "State is not flying")
                     }
                 case "save_dss_home_position":
-                    // Function saves dss smart rtl home position
+                    // Function saves dss home position, not used for anything yet..
                     self.printSL("Received cmd: save_dss_home_position")
                     if copter.saveCurrentPosAsDSSHome(){
                         json_r = createJsonAck("save_dss_home_position")
                     }
                     else {
-                        json_r = createJsonNack("save_dss_home_position")
-                        json_r["arg2"].stringValue = "Position not available"
+                        json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
                     }
                 case "set_vel_body":
                     self.printSL("Received cmd: set_vel_body")
-                    json_r = createJsonAck("set_vel_body")
+                    if copter.getIsFlying() ?? false { // Defiault to false to handle nil
+                        json_r = createJsonAck("set_vel_body")
 
-                    // Set velocity code
-                    // parse
-                    let velX = Float(json_m["arg"]["vel_X"].stringValue) ?? 0
-                    let velY = Float(json_m["arg"]["vel_Y"].stringValue) ?? 0
-                    let velZ = Float(json_m["arg"]["vel_Z"].stringValue) ?? 0
-                    let yawRate = Float(json_m["arg"]["yaw_rate"].stringValue) ?? 0
-                    print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
-                    Dispatch.main{
-                        self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
-                        self.printSL("Dutt command sent from readSocket")
+                        // Set velocity code
+                        // parse
+                        let velX = Float(json_m["arg"]["vel_X"].stringValue) ?? 0
+                        let velY = Float(json_m["arg"]["vel_Y"].stringValue) ?? 0
+                        let velZ = Float(json_m["arg"]["vel_Z"].stringValue) ?? 0
+                        let yawRate = Float(json_m["arg"]["yaw_rate"].stringValue) ?? 0
+                        print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
+                        Dispatch.main{
+                            self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
+                            self.printSL("Dutt command sent from readSocket")
+                        }
+                    }
+                    else{
+                        json_r = createJsonNack(fcn: "set_vel_body", arg2: "State is not flying")
                     }
                 case "set_yaw":
                     self.printSL("Received cmd: set_yaw")
-                    json_r = createJsonAck("set_yaw")
-                    // Set yaw code TODO
+                    if copter.getIsFlying() ?? false { // Defiault to false to handle nil
+                        json_r = createJsonAck("set_yaw")
+                        // Set yaw code TODO
+                        json_r = createJsonNack(fcn: "set_yaw", arg2: "Funciton not yet implemented")
+                    }
+                    else{
+                        json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying")
+                    }
                 case "upload_mission_XYZ":
                     self.printSL("Received cmd: upload_mission_XYZ")
                     
-                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
+                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_XYZ")
                     }
                     else{
-                        json_r = createJsonNack("upload_mission_XYZ")
-                        json_r["arg2"] = JSON(arg)
-                        self.printSL("Mission upload failed: " + arg)
+                        json_r = createJsonNack(fcn: "upload_mission_XYZ", arg2: mess)
+                        self.printSL("Mission upload failed: " + mess)
                     }
                 case "upload_mission_NED":
                     self.printSL("Received cmd: upload_mission_NED")
                     
-                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
+                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_NED")
                     }
                     else{
-                        json_r = createJsonNack("upload_mission_NED")
-                        json_r["arg2"] = JSON(arg)
-                        print("Mission upload failed: " + arg)
+                        json_r = createJsonNack(fcn: "upload_mission_NED", arg2: mess)
+                        print("Mission upload failed: " + mess)
                     }
                 case "upload_mission_LLA":
                     self.printSL("Received cmd: upload_mission_LLA")
                     
-                    let (success, arg) = copter.uploadMission(mission: json_m["arg"])
+                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
                         json_r = createJsonAck("upload_mission_LLA")
                     }
                     else{
-                        json_r = createJsonNack("upload_mission_LLA")
-                        json_r["arg2"] = JSON(arg)
-                        print("Mission upload failed: " + arg)
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", arg2: mess)
+                        print("Mission upload failed: " + mess)
                     }
                     
                 default:
-                    json_r = createJsonNack("API call not recognized")
+                    json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")
                     self.printSL("API call not recognized: " + json_m["fcn"].stringValue)
                     // Code to handle faulty message
                 }
@@ -1098,10 +1110,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 if json_r["fcn"].stringValue == "nack"{
                     print(json_r)
                 }
-                if json_r["arg"].stringValue != "heart_beat" && json_r["arg"].stringValue != "info_request"{
+                else if json_r["arg"].stringValue != "heart_beat" && json_r["arg"].stringValue != "info_request"{
                     print("Reply:")
-                   // print(json_r)
-                    print(reply_str)
+                    print(json_r)
+                    //print(reply_str)
                 }
                 
                }
