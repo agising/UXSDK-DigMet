@@ -27,6 +27,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var activeWP: MyLocation = MyLocation()
     var missionIsActive = false
     var wpActionExecuting = false
+    var hoverTime: Int = 0                          // Hovertime to wait prior to landing in dssSRTL. TODO, make parameter in mission.
 
     var localYaw: Double = -1                   // localYaw used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
     
@@ -647,6 +648,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // ******************************************************************************************************************
     // dssSrtl activates the DSS smart rtl function that backtracks the flow mission. It includes landing after hovertime
     func dssSrtl(hoverTime: Int){
+        // Store hovertime globally. Should implement hovertime as parameter in action: "landing" and just update the smartRTL mission.
+        self.hoverTime = hoverTime
         // Reverse the dssSmartRtlMission and activate it
         // Find the last element
         let last_wp = dssSmartRtlMission.count - 1
@@ -961,7 +964,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     return
                 }
                 if action == "land"{
-                    let secondsSleep: UInt32 = 5*1000000
+                    let secondsSleep: UInt32 = UInt32(self.hoverTime*1000000)
                     usleep(secondsSleep)
                     NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
                     self.missionIsActive = false
