@@ -353,6 +353,9 @@ class Allocator: NSObject{
 class Subscriptions: NSObject{
     var XYZ = false
     var photoXYZ = false
+    var LLA = false
+    var photoLLA = false
+    var NED = false
     var WpId = false
     
     func setXYZ(bool: Bool){
@@ -364,12 +367,26 @@ class Subscriptions: NSObject{
         photoXYZ = bool
         print("Subscription photoXYZ set to: " + String(describing: bool))
     }
-    
+
+    func setLLA(bool: Bool){
+        LLA = bool
+        print("Subscription LLA set to: " + String(describing: bool))
+    }
+
+    func setPhotoLLA(bool: Bool){
+        photoLLA = bool
+        print("Subscription photoLLA set to: " + String(describing: bool))
+    }
+
+    func setNED(bool: Bool){
+        NED = bool
+        print("Subscription NED set to: " + String(describing: bool))
+    }
+
     func setWpId(bool: Bool){
         WpId = bool
         print("Subscription WP_ID set to: " + String(describing: bool))
     }
-
 }
 
 

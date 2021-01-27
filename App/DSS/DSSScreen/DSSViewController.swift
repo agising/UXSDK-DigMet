@@ -63,7 +63,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var sessionLastIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
     var transferring: Bool = false
-    var jsonMetaData: JSON = JSON()                 // All the photo metadata
+    var jsonMetaDataXYZ: JSON = JSON()                 // All the photo metadata XYZ
+    var jsonMetaDataLLA: JSON = JSON()                 // All the photo metadata LLA
     var jsonPhotos: JSON = JSON()                   // Photos filename and downloaded status
         
     
@@ -166,21 +167,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     }
     
     //**************************************************************************************************
-    // Writes metadata to json. startLoc for the calulations, if it is not, set ut to current pos
-    func writeMetaDataXYZ()->Bool{
+    // Writes metadata to json. Use startLoc for the calulations, if it is not set, set ut to current pos
+    func writeMetaData()->Bool{
         // Make sure startWP is set in order to be able to calc the local XYZ
         if !self.copter.startLoc.isStartLocation {
             // StartLocation is not set. Try to set it!
             if copter.setStartLocation(){
                 print("writeMetaData: setStartLocation set from here")
-                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to the it right in simulation too.
+                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to get it right in simulation too.
                 guard let heading = self.copter.getHeading() else {
-                   print("writeMetaDataXYZ: Error updating heading")
+                   print("writeMetaData: Error updating heading")
                    return false}
                 self.copter.loc.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
                 
                 // Start location is set, call the function again, return true because problem is fixed.
-                _ = writeMetaDataXYZ()
+                _ = writeMetaData()
                 return true
             }
             else{
@@ -189,29 +190,45 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
         }
 
-        var jsonMeta = JSON()
-        jsonMeta["filename"] = JSON("")
-        jsonMeta["x"] = JSON(self.copter.loc.pos.x)
-        jsonMeta["y"] = JSON(self.copter.loc.pos.y)
-        jsonMeta["z"] = JSON(self.copter.loc.pos.z)
-        jsonMeta["agl"] = JSON(-1)
+        // XYZ metadata
+        var metaXYZ = JSON()
+        metaXYZ["filename"] = JSON("")
+        metaXYZ["x"] = JSON(self.copter.loc.pos.x)
+        metaXYZ["y"] = JSON(self.copter.loc.pos.y)
+        metaXYZ["z"] = JSON(self.copter.loc.pos.z)
+        metaXYZ["agl"] = JSON(-1)
         // In sim loc.gimbalYaw does not update while on ground exept for first photo.
-        jsonMeta["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
-        jsonMeta["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-        jsonMeta["index"] = JSON(self.sessionLastIndex)
+        metaXYZ["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
+        metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+        metaXYZ["index"] = JSON(self.sessionLastIndex)
 
+        // LLA metadata
+        var metaLLA = JSON()
+        metaLLA["filename"] = JSON("")
+        metaLLA["index"] = JSON(self.sessionLastIndex)
+        metaLLA["lat"] = JSON(self.copter.loc.coordinate.latitude)
+        metaLLA["lon"] = JSON(self.copter.loc.coordinate.longitude)
+        metaLLA["alt"] = JSON(self.copter.loc.altitude)
+        metaLLA["agl"] = JSON(-1)
+        metaLLA["yaw"] = JSON(self.copter.loc.gimbalYaw)
+        metaLLA["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+
+        
         var jsonPhoto = JSON()
         jsonPhoto["filename"] = JSON("")
         jsonPhoto["stored"].boolValue = false
         
-        self.jsonMetaData[String(self.sessionLastIndex)] = jsonMeta
+        // Separate or squash XYZ and LLA metadata, TODO
+        self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        self.jsonMetaDataLLA[String(self.sessionLastIndex)] = metaLLA
         self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
         
+        // Check for subscriptions
         if self.subscriptions.photoXYZ{
-            _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: jsonMeta)
+            _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
         }
         else{
-            print(jsonMeta)
+            print(metaXYZ)
         }
         return true
     }
@@ -280,7 +297,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         self.capturePhoto(completion: {(success) in
                 if success{
                     self.sessionLastIndex += 1
-                    if self.writeMetaDataXYZ(){
+                    // Write JSON meta data
+                    if self.writeMetaData(){
                             // Metadata was successfully written
                             print("Metadata written")
                         }
@@ -407,16 +425,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             // Update Metadata with filename for the n last pictures without a filename added already
             for i in stride(from: self.sessionLastIndex, to: 0, by: -1){
                 if files.count < self.sdFirstIndex + i{
-                    self.sessionLastIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but sessionLastIndex is increased. This 'fixes' this issue..
-                    print("SessionIndex faulty. Some images were not saved on sdCard..")
+                    self.sessionLastIndex =  files.count - self.sdFirstIndex // In early bug photo was not always saved on SDcard, but sessionLastIndex is increased. This quickfix should not be needed now thanks to allocator.
+                    print("SessionIndex faulty. Some images were not saved on sdCard.. DEBUG if printed!")
                 }
-                if self.jsonMetaData[String(i)]["filename"] == ""{
-                    self.jsonMetaData[String(i)]["filename"].stringValue = files[self.sdFirstIndex + i - 1].fileName
-                    self.jsonPhotos[String(i)]["filename"].stringValue = files[self.sdFirstIndex + i - 1].fileName
-                    print("Added filename: " + files[self.sdFirstIndex + i - 1].fileName + " to sessionIndex: " + String(i))
+                let indx = String(i)
+                if self.jsonMetaDataXYZ[indx]["filename"] == ""{
+                    let filename = files[self.sdFirstIndex + i - 1].fileName
+                    
+                    self.jsonMetaDataXYZ[indx]["filename"].stringValue = filename
+                    self.jsonMetaDataLLA[indx]["filename"].stringValue = filename
+                    
+                    self.jsonPhotos[indx]["filename"].stringValue = filename
+                    print("Added filename: " + filename + " to sessionIndex: " + indx)
                 }
                 else{
-                    // Picture n has a filename -> so does n+1, +2, +3 etc break!
+                    // Picture n has a filename -> so does n-1, -2, -3 etc -> break!
                     break
                 }
             }
@@ -636,7 +659,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         self.printSL("transferIndex: Publish photo " + String(sessionIndex) + " on PUB-socket")
                         var json_photo = JSON()
                         json_photo["photo"].stringValue = getBase64utf8(data: photoData)
-                        json_photo["metadata"] = self.jsonMetaData[String(sessionIndex)]
+                        // What metadata to add, XYZ or LLA? TODO
+                        json_photo["metadata"] = self.jsonMetaDataXYZ[String(sessionIndex)]
                         _ = self.publish(socket: self.dataPublisher, topic: "photo", json: json_photo)
                         completionHandler(true)
                     }
@@ -795,6 +819,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         case "photo_XYZ":
                             self.subscriptions.setPhotoXYZ(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
+                            
                         case "WP_ID":
                             self.subscriptions.setWpId(bool: json_m["arg"]["enable"].boolValue)
                             json_r = createJsonAck("data_stream")
@@ -895,11 +920,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r["arg2"].stringValue = "metadata"
                         let sessionIndex = json_m["arg2"].intValue
                         if  sessionIndex == -1{
-                            json_r["arg3"] = self.jsonMetaData
+                            json_r["arg3"] = self.jsonMetaDataXYZ
                         }
                         else{
-                            if self.jsonMetaData[String(describing: sessionIndex)].exists(){
-                                json_r["arg3"] = self.jsonMetaData[String(describing: sessionIndex)]
+                            if self.jsonMetaDataXYZ[String(describing: sessionIndex)].exists(){
+                                json_r["arg3"] = self.jsonMetaDataXYZ[String(describing: sessionIndex)]
                             }
                             else{
                                 json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
