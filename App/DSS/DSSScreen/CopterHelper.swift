@@ -160,7 +160,12 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     return
                 }
                 
-                self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc)
+                self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc) {
+                        // The completionBock called upon succsessful update of pos.
+                        NotificationCenter.default.post(name: .didPosUpdate, object: nil)
+                    }
+                
+                // Run pos updated notification as a completion block. In the notification, look for subscriptions XYZ, NED and LLA
             }
         })
     }
@@ -221,7 +226,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // If start location is not yet set and we are flying, set start location to here.
                 if !self.startLoc.isStartLocation && self.getIsFlying() == true {
                     // Save current postion as the start position. Geofence (radius and height) will be evaluated relative to this pos. getHeading()! TODO guard and handle this.
-                    self.startLoc.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc)
+                    self.startLoc.setPosition(pos: checkedNewValue.value as! CLLocation, heading: self.getHeading()!, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc){} //Empty completionBlock}
                     self.startLoc.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
                     self.startLoc.printLocation(sentFrom: "startListenToHomePosUpated")
                 }
@@ -261,13 +266,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 
         // Gimbal yaw is included in heading for the startpoint since the cameras sets the reference if startpoint is not automatically set. GimbalYawRelativeToHeading is forced to 0
         let startHeading = heading + self.gimbal.yawRelativeToHeading
-        self.startLoc.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc)
+        self.startLoc.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: self.startLoc){}
         self.startLoc.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
         self.startLoc.printLocation(sentFrom: "setStartLocation")
         // Not sure if sleep is needed, but loc.setPosition uses startLoc. Completion handler could be used.
         usleep(200000)
         
-        self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc)
+        self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, startWP: self.startLoc){
+            NotificationCenter.default.post(name: .didPosUpdate, object: nil)
+        }
                 
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "StartLocation set to here including gimbalYaw."])
         
@@ -684,7 +691,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
         else if let pos = self.getCurrentLocation(){
             // If current position is available, create a temporary startLocation at the current position
-            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation)
+            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation){}
             tempStartLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
         }
         else {
@@ -1038,7 +1045,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             var speed = self.activeWP.speed
             let vel = sqrt(pow(self.loc.vel.bodyX,2)+pow(self.loc.vel.bodyY ,2))
             
-            //hdrano:
+            //hdrpano:
             //decellerate at 2m/s/s
             // at distance_to_wp = Speed/2 -> brake
             if Float(distance2D) < etaLimit * vel {

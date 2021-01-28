@@ -227,8 +227,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         if self.subscriptions.photoXYZ{
             _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
         }
+        if self.subscriptions.photoLLA{
+            _ = self.publish(socket: self.infoPublisher, topic: "photo_LLA", json: metaLLA)
+        }
         else{
             print(metaXYZ)
+            print(metaLLA)
         }
         return true
     }
@@ -812,16 +816,29 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "data_stream":
                     self.printSL("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
+                    let enable = json_m["arg"]["enable"].boolValue
                     switch json_m["arg"]["attribute"]{
+                        case "ATT":
+                            self.subscriptions.setATT(bool: enable)
+                            printSL("ATT subscription not supported yet!")
+                            json_r = createJsonNack(fcn: "data_stream", arg2: "ATT not supported for DJI")
                         case "XYZ":
-                            self.subscriptions.setXYZ(bool: json_m["arg"]["enable"].boolValue)
+                            self.subscriptions.setXYZ(bool: enable)
                             json_r = createJsonAck("data_stream")
                         case "photo_XYZ":
-                            self.subscriptions.setPhotoXYZ(bool: json_m["arg"]["enable"].boolValue)
+                            self.subscriptions.setPhotoXYZ(bool: enable)
                             json_r = createJsonAck("data_stream")
-                            
+                        case "LLA":
+                            self.subscriptions.setLLA(bool: enable)
+                            json_r = createJsonAck("data_stream")
+                        case "photo_LLA":
+                            self.subscriptions.setPhotoLLA(bool: enable)
+                            json_r = createJsonAck("data_stream")
+                        case "NED":
+                            self.subscriptions.setNED(bool: enable)
+                            json_r = createJsonAck("data_stream")
                         case "WP_ID":
-                            self.subscriptions.setWpId(bool: json_m["arg"]["enable"].boolValue)
+                            self.subscriptions.setWpId(bool: enable)
                             json_r = createJsonAck("data_stream")
                         default:
                             json_r = createJsonNack(fcn: "data_stream", arg2: "Attribute not supported" + json_m["arg"].stringValue)
@@ -918,16 +935,32 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r["arg3"].stringValue = copter.missionNextWp.description
                     case "metadata":
                         json_r["arg2"].stringValue = "metadata"
-                        let sessionIndex = json_m["arg2"].intValue
+                        let frame = json_m["arg2"].stringValue
+                        let sessionIndex = json_m["arg3"].intValue
                         if  sessionIndex == -1{
-                            json_r["arg3"] = self.jsonMetaDataXYZ
+                            if frame == "XYZ"{
+                                json_r["arg3"] = self.jsonMetaDataXYZ
+                            }
+                            else if frame == "LLA"{
+                                json_r["arg3"] = self.jsonMetaDataLLA
+                            }
                         }
                         else{
-                            if self.jsonMetaDataXYZ[String(describing: sessionIndex)].exists(){
-                                json_r["arg3"] = self.jsonMetaDataXYZ[String(describing: sessionIndex)]
+                            if frame == "XYZ"{
+                                if self.jsonMetaDataXYZ[String(describing: sessionIndex)].exists(){
+                                    json_r["arg3"] = self.jsonMetaDataXYZ[String(describing: sessionIndex)]
+                                }
+                                else{
+                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
+                                }
                             }
-                            else{
-                                json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
+                            else if frame == "LLA"{
+                                if self.jsonMetaDataLLA[String(describing: sessionIndex)].exists(){
+                                    json_r["arg3"] = self.jsonMetaDataLLA[String(describing: sessionIndex)]
+                                }
+                                else{
+                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
+                                }
                             }
                         }
                     default:
@@ -1043,8 +1076,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     self.printSL("Received comd: dss srtl")
                     if copter.getIsFlying() ?? false { // Default to false to handle nil
                         json_r = createJsonAck("dss_srtl")
+                        var hoverT = json_m["arg"]["hover_time"].intValue
+                        // If not within 0-300, use default of 5
+                        if !(0 <= hoverT && hoverT < 300){
+                                hoverT = 5
+                        }
                         Dispatch.main{
-                            self.copter.dssSrtl(hoverTime: json_m["arg"]["hover_time"].intValue)
+                            self.copter.dssSrtl(hoverTime: hoverT)
                         }
                     }
                     else {
@@ -1273,17 +1311,40 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
     //*************************************************
     // Update gui when nofication didposupdate happened
-    @objc func onDidXYZUpdate(_ notification: Notification){
+    @objc func onDidPosUpdate(_ notification: Notification){
+        // These fields should perhaps be configurable to use.
         self.posXLabel.text = String(format: "%.1f", copter.loc.pos.x)
         self.posYLabel.text = String(format: "%.1f", copter.loc.pos.y)
         self.posZLabel.text = String(format: "%.1f", copter.loc.pos.z)
         
-        // If subscribed to XYZ updates, also get local_yaw and publish
+        // Check subscriptions and publish if enabled
+        // LLA
+        if subscriptions.LLA{
+            var json = JSON()
+            json["lat"].doubleValue = copter.loc.coordinate.latitude
+            json["lon"].doubleValue = copter.loc.coordinate.longitude
+            json["alt"].doubleValue = round(100 * copter.loc.altitude) / 100
+            json["yaw"].doubleValue = copter.loc.heading
+            json["agl"].doubleValue = -1
+            _ = self.publish(socket: self.infoPublisher, topic: "LLA", json: json)
+        }
+        // NED
+        if subscriptions.NED {
+            var json = JSON()
+            json["north"].doubleValue = round(100 * copter.loc.pos.north) / 100
+            json["east"].doubleValue = round(100 * copter.loc.pos.east) / 100
+            json["down"].doubleValue = round(100 * copter.loc.pos.down) / 100
+            json["yaw"].doubleValue = copter.loc.heading
+            json["agl"].doubleValue = -1
+            _ = self.publish(socket: self.infoPublisher, topic: "NED", json: json)
+        }
+        // XYZ
         if subscriptions.XYZ{
             var json = JSON()
             json["x"].doubleValue = round(100 * copter.loc.pos.x) / 100
             json["y"].doubleValue = round(100 * copter.loc.pos.y) / 100
             json["z"].doubleValue = round(100 * copter.loc.pos.z) / 100
+            json["agl"].doubleValue = -1
             json["local_yaw"].doubleValue =
                 round(100 * (copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)) / 100
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
@@ -1459,7 +1520,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
 
         // Notification center,https://learnappmaking.com/notification-center-how-to-swift/
-        NotificationCenter.default.addObserver(self, selector: #selector(onDidXYZUpdate(_:)), name: .didXYZUpdate, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onDidPosUpdate(_:)), name: .didPosUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidVelUpdate(_:)), name: .didVelUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidPrintThis(_:)), name: .didPrintThis, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)

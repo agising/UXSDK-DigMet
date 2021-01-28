@@ -24,7 +24,7 @@ class MyLocation: NSObject{
     var coordinate = MyCoordinate()
     var geoFence = GeoFence()
     var vel = Vel()
-    var pos = XYZ()
+    var pos = POS()
 
     // Reset all values.
     func reset(){
@@ -46,6 +46,9 @@ class MyLocation: NSObject{
         self.pos.x = 0
         self.pos.y = 0
         self.pos.z = 0
+        self.pos.north = 0
+        self.pos.east = 0
+        self.pos.down = 0
     }
     
     
@@ -120,7 +123,7 @@ class MyLocation: NSObject{
     }
     
     // Set up wp properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isStartWP: Bool=false, startWP: MyLocation){
+    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isStartWP: Bool=false, startWP: MyLocation, completionBlock: ()->Void){
         self.altitude = pos.altitude
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
@@ -139,13 +142,16 @@ class MyLocation: NSObject{
             return
         }
         // Lat-, lon-, alt-diff
-        let lat_diff = pos.coordinate.latitude - startWP.coordinate.latitude
-        let lon_diff = pos.coordinate.longitude - startWP.coordinate.longitude
-        let alt_diff = pos.altitude - startWP.altitude
+        let latDiff = pos.coordinate.latitude - startWP.coordinate.latitude
+        let lonDiff = pos.coordinate.longitude - startWP.coordinate.longitude
+        let altDiff = pos.altitude - startWP.altitude
 
         // posN, posE
-        let posN = lat_diff * 1852 * 60
-        let posE = lon_diff * 1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi)
+        let posN = latDiff * 1852 * 60
+        let posE = lonDiff * 1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi)
+        self.pos.north = posN
+        self.pos.east = posE
+        self.pos.down = -altDiff
         
         // X direction definition
         let alpha = (startWP.gimbalYaw)/180*Double.pi
@@ -153,9 +159,11 @@ class MyLocation: NSObject{
         // Coordinate transformation, from (N, E) to (X,Y)
         self.pos.x =  posN * cos(alpha) + posE * sin(alpha)
         self.pos.y = -posN * sin(alpha) + posE * cos(alpha)
-        self.pos.z = -alt_diff
-                
-        NotificationCenter.default.post(name: .didXYZUpdate, object: nil)
+        self.pos.z = -altDiff  // Same as pos.down..
+             
+        completionBlock()
+        // Suitable completionblock:
+        // {NotificationCenter.default.post(name: .didPosUpdate, object: nil)}
     }
     
     func setGeoFence(radius: Double, height: [Double]){
@@ -270,11 +278,14 @@ class Vel: NSObject{
     var yawRate: Float = 0
 }
 
-// SubClass to MyLocation. Body class for body velocities
-class XYZ: NSObject{
+// SubClass to MyLocation.
+class POS: NSObject{
     var x: Double = 0
     var y: Double = 0
     var z: Double = 0
+    var north: Double = 0
+    var east: Double = 0
+    var down: Double = 0
 }
 
 //
@@ -351,13 +362,19 @@ class Allocator: NSObject{
 }
 
 class Subscriptions: NSObject{
+    var ATT = false
     var XYZ = false
     var photoXYZ = false
     var LLA = false
     var photoLLA = false
     var NED = false
     var WpId = false
-    
+
+    func setATT(bool: Bool){
+        ATT = bool
+        print("Subscription ATT set to: " + String(describing: bool))
+    }
+
     func setXYZ(bool: Bool){
         XYZ = bool
         print("Subscription XYZ set to: " + String(describing: bool))
