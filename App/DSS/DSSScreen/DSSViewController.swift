@@ -1148,13 +1148,15 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                 case "set_yaw":
                     self.printSL("Received cmd: set_yaw")
-                    if copter.getIsFlying() ?? false { // Defiault to false to handle nil
+                    // Make sure we are fluying and are not on mission.
+                    if copter.getIsFlying() ?? false && !copter.missionIsActive{
                         json_r = createJsonAck("set_yaw")
-                        // Set yaw code TODO
-                        json_r = createJsonNack(fcn: "set_yaw", arg2: "Funciton not yet implemented")
+                        Dispatch.main{
+                            self.copter.setYaw(targetYaw: json_m["arg"]["yaw"].doubleValue)
+                        }
                     }
                     else{
-                        json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying")
+                        json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying AND not mission")
                     }
                 case "upload_mission_XYZ":
                     self.printSL("Received cmd: upload_mission_XYZ")

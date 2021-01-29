@@ -594,10 +594,21 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             self.activeWP.coordinate.latitude = self.loc.coordinate.latitude
             self.activeWP.coordinate.longitude = self.loc.coordinate.longitude
             self.activeWP.speed = 0
-            goto(wp: self.activeWP)
+            goto()
         default:
             print("setAlt: Altitude reference not known")
         }
+    }
+
+    
+    func setYaw(targetYaw: Double){
+        print("setYaw: Target yaw:", targetYaw, "current yaw: ", self.loc.heading)
+        self.activeWP.altitude = self.loc.altitude
+        self.activeWP.heading = targetYaw
+        self.activeWP.coordinate.latitude = self.loc.coordinate.latitude
+        self.activeWP.coordinate.longitude = self.loc.coordinate.longitude
+        self.activeWP.speed = 0
+        goto()
     }
     
     // ***************************************************
@@ -870,7 +881,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
             self.activeWP.printLocation(sentFrom: "gogo")
 
-            self.goto(wp: self.activeWP)
+            self.goto()
             //self.gotoXYZ(refPosX: x, refPosY: y, refPosZ: z, localYaw: yaw, speed: speed)
 
             // Notify about going to startWP
@@ -884,10 +895,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     }
     
     // *********************************************************************************
-    // Activate posCtrl towards a MyLocation object, independent of ref (LLA, NED, XYZ).
-    private func goto(wp: MyLocation){
+    // Activate posCtrl towards a self.activeWP, independent of ref (LLA, NED, XYZ).
+    func goto(){
         // Check some Geo fence stuff. Ask start location if the wp is within the geofence.
-        if !startLoc.geofenceOK(wp: wp){
+        if !startLoc.geofenceOK(wp: self.activeWP){
             print("The WP violates the geofence!")
             return
         }
@@ -986,7 +997,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     
                     self.activeWP.printLocation(sentFrom: "gogo")
                     
-                    goto(wp: self.activeWP)
+                    goto()
                 }
                 else{
                     print("id is -1")
