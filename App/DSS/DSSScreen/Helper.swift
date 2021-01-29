@@ -406,6 +406,40 @@ class Subscriptions: NSObject{
     }
 }
 
+class HeartBeat: NSObject{
+    var lastBeat = CACurrentMediaTime()
+    var degradedLimit: Double = 2               // Time limit for link to be considered degraded
+    var lostLimit: Double = 10                  // Time limit for link to be considered lost
+    var beatDetected = false                    // Flag for first received heartBeat
+    
+    func newBeat(){
+        if !beatDetected{
+            beatDetected = true
+        }
+        self.lastBeat = CACurrentMediaTime()
+    }
+    
+    func elapsed()->Double{
+        return CACurrentMediaTime() - self.lastBeat
+    }
+    
+    func alive()->Bool{
+        let elapsedTime = self.elapsed()
+        if elapsedTime < degradedLimit{
+            return true
+        }
+        else if elapsedTime < lostLimit{
+            print("Link degraded, elapsed time since last heartBeat: ", elapsedTime)
+            return true
+        }
+        else{
+            print("Link lost, elapsed time since last heartBeat: ", elapsedTime)
+            return false
+        }
+    }
+    
+}
+
 
 // https://www.hackingwithswift.com/books/ios-swiftui/how-to-save-images-to-the-users-photo-library
 class imageSaver: NSObject {

@@ -48,6 +48,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     let dataPublishEndPoint = "tcp://*:5559"
     //var sshAllocator = Allocator(name: "ssh")
     var subscriptions = Subscriptions()
+    var heartBeat = HeartBeat()
     var inControls = "USER"
     
     var pitchRangeExtension_set: Bool = false
@@ -758,7 +759,32 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-
+    
+    //
+    // Heart beat thread
+    func startHeartBeatThread(){
+        Dispatch.background{
+            self.heartBeats()
+        }
+    }
+    
+    func heartBeats() {
+        // Wait for first heartbeat
+        while !self.heartBeat.beatDetected {
+            usleep(1000000)
+        }
+        print("heartBeats: Starting to monitor heartBests")
+        // Monitor heartbeats
+        while self.heartBeat.alive() {
+            usleep(150000)
+        }
+        
+        // Recover the aircraft and stop the replyThread
+        print("Link is to appliciton is lost. Activating autopilot rtl and stopping comminication with application")
+        self.copter.rtl()
+        self.replyEnable = false
+    }
+    
     // ******************************
     // Initiate the zmq reply thread.
     func startReplyThread()->Bool{
@@ -789,8 +815,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 let _message: String? = try socket.recv()!
                 if self.replyEnable == false{ // Since code can halt on socket.recv(), check if input is still desired
                     return
-                }   
-
+                }
+                // A message is received.
+                var messageQualifiesForHeartBeat = true
+                
                 // Parse and create an ack/nack
                 let json_m = getJsonObject(uglyString: _message!)
                 var json_r = JSON()
@@ -846,6 +874,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "disconnect":
                     json_r = createJsonAck("disconnect")
                     self.printSL("Received cmd: disconnect")
+                    self.copter.dssSrtl(hoverTime: 5)
                     // Disconnect code
                     return
                 case "gimbal_set":
@@ -1164,8 +1193,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 default:
                     json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")
                     self.printSL("API call not recognized: " + json_m["fcn"].stringValue)
-                    // Code to handle faulty message
+                    messageQualifiesForHeartBeat = false
                 }
+                if messageQualifiesForHeartBeat{
+                    self.heartBeat.newBeat()
+                }
+                
                 // Create string from json and send reply
                 let reply_str = getJsonString(json: json_r)
                 try socket.send(string: reply_str)
@@ -1529,6 +1562,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         _ = initPublisher()
         if startReplyThread(){
             print("Reply thread successfully started")
+            self.startHeartBeatThread()
         }
         else{
             setupOk = false
