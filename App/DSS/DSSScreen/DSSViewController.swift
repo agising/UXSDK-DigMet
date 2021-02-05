@@ -15,7 +15,7 @@
 import UIKit
 import DJIUXSDK
 import DJIWidget
-import SwiftyZeroMQ // https://github.com/azawawi/SwiftyZeroMQ  good examples in readme
+import SwiftyZeroMQ5 // https://github.com/azawawi/SwiftyZeroMQ  good examples in readme
 import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in readme
 
 // ZeroMQ https://stackoverflow.com/questions/49204713/zeromq-swift-code-with-swiftyzeromq-recv-still-blocks-gui-text-update-even-a
@@ -40,13 +40,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
     //var acks = 0
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
+    var poller = SwiftyZeroMQ.Poller()
     var infoPublisher: SwiftyZeroMQ.Socket?
     var dataPublisher: SwiftyZeroMQ.Socket?
+    var endPointDict:[String : SwiftyZeroMQ.Socket] = [ : ]                     // For subscribing to gps-strams or other streams, key = enPoint, value = socket
     var replyEnable = false
     let replyEndpoint = "tcp://*:5557"
     let infoPublishEndPoint = "tcp://*:5558"
     let dataPublishEndPoint = "tcp://*:5559"
-    //var sshAllocator = Allocator(name: "ssh")
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
     var inControls = "USER"
@@ -760,7 +761,133 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     }
     
     
-    //
+    //**************************************************
+    // Initiate socket and start the subscription thread
+    func startGpsSubThread(endPoint: String, topic: String)->Bool{
+        // Only one socket per unique ip and port.
+        //Create a list of endpoints and sockets. [String : swiftZeroMQ.Socket]
+        if let socket = endPointDict[endPoint]{
+            print("Reconnecting to " + endPoint)
+            do{
+                try socket.setSubscribe(topic)
+                try poller.register(socket: socket, flags: .pollIn)
+            }
+            catch{
+                print("Cannot connect to socket")
+                return false
+            }
+            // Start the thread
+            Dispatch.background{
+                self.gpsSubThread(endPoint: endPoint)
+            }
+        }
+        else{
+            print("Connecting to " + endPoint)
+            do{
+                let subscribe = try context.socket(.subscribe)
+                try subscribe.connect(endPoint)
+                // Add socket to dictionary with key endPoint
+                endPointDict[endPoint] = subscribe
+                try subscribe.setSubscribe(topic)
+                try poller.register(socket: subscribe, flags: .pollIn)
+            }
+            catch{
+                print("startGpsSubThread: Could not connect to socket.")
+                return false
+            }
+            print("startGpsSubThread")
+            Dispatch.background{
+                self.gpsSubThread(endPoint: endPoint)
+            }
+        }
+        return true
+    }
+        
+    func gpsSubThread(endPoint: String){
+        if let socket = endPointDict[endPoint]{
+            while copter.followStream {             // TODO, shold be other criter
+                let (success,jsonString) = pollAndRecv(socket: socket)
+                if success{
+                    print("Received message: " + jsonString)
+                    let (topic,json_m) = getJsonObject(uglyString: jsonString, stringIncludesTopic: true)
+                    if topic == nil{
+                        print("Found no topic, the parsed json_m: ", json_m)
+                    }
+                    print("The topic: ", topic!, " The parsed json_m: ", json_m)
+                }
+                print("Subscribe: Nothing to receive")
+            }
+            print("Exiting subscribe thread")
+        }
+    }
+    
+    func pollAndRecv(socket: SwiftyZeroMQ.Socket)->(Bool, String) {
+        do{
+            let regSockets = try poller.poll(timeout: 500)
+            print(regSockets)
+            if regSockets[socket] == SwiftyZeroMQ.PollFlags.pollIn {
+                let message: String? = try socket.recv(options: .dontWait)
+                return (true, String(message!))
+            }
+        }
+        catch{
+            // We'll return (false, "") below
+        }
+        return (false, "")
+    }
+    
+    //*************
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+//    func startGpsSubThread(endPoint: String, topic: String)->Bool{
+//        do{
+//            let subscribe = try context.socket(.subscribe)
+//            try subscribe.connect("tcp://192.168.1.249:5560")
+//            try subscribe.setSubscribe(nil)
+//            Dispatch.background{
+//                self.gpsSubThread(socket: subscribe)
+//            }
+//            return true
+//        }
+//        catch{
+//            self.printSL("startGpsSubThread: Could not connect to socket.")
+//            return false
+//        }
+//    }
+//
+//    func gpsSubThread(socket: SwiftyZeroMQ.Socket){
+//        while copter.followStream{
+//            do{
+////                let jsonString: String? = try socket.recv()!
+////                print(jsonString!)
+//                print("Getting stuck waiting for message..")
+//                let jsonString: String = try socket.recv()!
+//                print("Received message")
+//                print(jsonString)
+//
+//                if let dataFromString = jsonString.data(using: .utf8, allowLossyConversion: false) {
+//                    let jsonObj: JSON = try JSON(data: dataFromString)
+//                    print(jsonObj)
+//                }
+//
+//            }
+//            catch{
+//                print("catching subThread error..")
+//            }
+//        }
+//        print("gpsSubThread exited, copter.followStream == false")
+//    }
+    
+    // *****************
     // Heart beat thread
     func startHeartBeatThread(){
         Dispatch.background{
@@ -820,7 +947,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 var messageQualifiesForHeartBeat = true
                 
                 // Parse and create an ack/nack
-                let json_m = getJsonObject(uglyString: _message!)
+                let (_, json_m) = getJsonObject(uglyString: _message!)
                 var json_r = JSON()
             
                 switch json_m["fcn"]{
@@ -882,6 +1009,16 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     json_r = createJsonAck("gimbal_set")
                     self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
+                
+                case "follow_stream":
+                    self.printSL("Received cmd: follow_stream")
+                    json_r = createJsonAck("follow_stream")
+                    // Subscribe/unsubscribe to IP and port
+                    
+                        // Parse incoming stream to activeWP
+                
+                    // Activate followStream..
+                    
                     
                 case "gogo_LLA":
                     self.printSL("Received cpmd: gogo_LLA")
@@ -1203,6 +1340,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 
                 // Create string from json and send reply
                 let reply_str = getJsonString(json: json_r)
+                print(reply_str)
                 try socket.send(string: reply_str)
                                 
                 if json_r["fcn"].stringValue == "nack"{
@@ -1298,8 +1436,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
         // Set the control command
-        copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-        
+        //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
+        copter.followStream = false
         
     }
 
@@ -1307,7 +1445,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Sends a command to go body left for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
-        copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
+        //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
+        
+        copter.followStream = true
+        let endPoint = "tcp://192.168.1.249:5560"
+        let topic = "REMOTE1"
+        if startGpsSubThread(endPoint: endPoint, topic: topic){
+            self.printSL("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+        }
         
         
     }

@@ -32,22 +32,84 @@ func uglyfyString(string: String)->String{
    return str1
 }
 
+////*************************************
+//// Get the json-object from json-string
+//func getJsonObject(uglyString: String) -> JSON {
+//   let str = cleanUpString(str: uglyString)
+//   guard let data = str.data(using: .utf8) else {return JSON()}
+//   guard let json = try? JSON(data: data) else {return JSON()}
+//   return json
+//}
+
 //*************************************
 // Get the json-object from json-string
-func getJsonObject(uglyString: String) -> JSON {
-   let str = cleanUpString(str: uglyString)
-   guard let data = str.data(using: .utf8) else {return JSON()}
-   guard let json = try? JSON(data: data) else {return JSON()}
-   return json
+func getJsonObject(uglyString: String, stringIncludesTopic: Bool = false) -> (String?, JSON) {
+    var topic: String? = nil
+    var message = uglyString
+    if stringIncludesTopic{
+        // Incoming messages from iOS and python are a bit different. From python there are whitespaces between key: and value. For iOS no such whitespaces occur.
+        // Start by getting topic, slice string on every whitespace. First occurance is topic:
+        let strArray = message.components(separatedBy: " ")
+        topic = strArray[0]
+        
+        // Start over, drop the first topic characters including the whitespace after topic
+        message = String(message.dropFirst(topic!.count))
+        // Remove all whitespaces
+        message = message.replacingOccurrences(of: " ", with: "")
+    }
+    else{
+        // Messages received on REQ socket needs to be modified before parsing.
+        //Clean up leading, trailing and replace som backslashes
+        message = cleanUpString(str: message)
+    }
+    // Parse string into JSON
+    guard let data = message.data(using: .utf8) else {return (topic, JSON())}
+    guard let json = try? JSON(data: data) else {return (topic,JSON())}
+    return (topic, json)
 }
+
+////*************************************
+//// Get the json-object from json-string
+//func getJsonObject(uglyString: String, stringIncludesTopic: Bool = false) -> (String?, JSON) {
+//    var topic: String? = nil
+//    var message = uglyString
+//    if stringIncludesTopic{
+//        // Split at the whitespace, the cherry pick the message. Topic is avalable at strArray[0]
+//        let strArray = message.components(separatedBy: " ")
+//        // If parsing does not work for some reason the Array gets the wrong size, if so return JSON().
+//        if strArray.endIndex != 2{
+//            return (topic, JSON())
+//        }
+//        topic = strArray[0]
+//        message = strArray[1]
+//    }
+//    else{
+//        // Clean up leading, trailing and replace som backslashes
+//        message = cleanUpString(str: message)
+//    }
+//    // Parse string into JSON
+//    guard let data = message.data(using: .utf8) else {return (topic, JSON())}
+//    guard let json = try? JSON(data: data) else {return (topic,JSON())}
+//    return (topic, json)
+//}
+
 
 //**********************************************************************
 // Get ZMQ string consisting of the topic and the serialized json-object
 func getJsonStringAndTopic(topic: String, json: JSON) -> String{
     let str1 = json.rawString(.utf8, options: .withoutEscapingSlashes)!
-    //str1 = uglyfyString(string: str1)
-    let str3 = topic + " " + str1
-    return str3
+    let str2 = topic + " " + str1
+    return str2
+}
+
+
+//*************************************************
+// Get the ZMQ string of the serialized json-object
+// Sending replies in the same format as publish messages does not work..
+// reply and publish uses different format from iOS in order for python to recieive it
+func getJsonStringLENNART_DETTA_FUNKAR_INTE(json: JSON) -> String{
+    let str1 = json.rawString(.utf8, options: .sortedKeys)!
+    return str1
 }
 
 //*************************************************

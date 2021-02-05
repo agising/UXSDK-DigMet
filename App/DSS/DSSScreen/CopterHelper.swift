@@ -19,6 +19,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var geoFenceRadius: Double = 50                 // Geofence radius relative start location (startLoc)
     var geoFenceHeight: [Double] = [2, 20]          // Geofence height relative start location
     
+    // Mission stuff
     var pendingMission = JSON()
     var mission = JSON()
     var missionNextWp = -1
@@ -28,8 +29,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var missionIsActive = false
     var wpActionExecuting = false
     var hoverTime: Int = 0                          // Hovertime to wait prior to landing in dssSRTL. TODO, make parameter in mission.
+    var followStream: Bool = false
 
-    var localYaw: Double = -1                   // localYaw used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
+   // var localYaw: Double = -1                       // localYaw used for storing the localYaw arg aka mission. -1 means course, 0-360 means heading relative to x axis.
     
     var refVelBodyX: Float = 0.0
     var refVelBodyY: Float = 0.0
@@ -950,16 +952,21 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
     }
     
-    
+    // *****************************************************************************************
+    // Timer function that executes the position controller. It flies towards the self.activeWP.
     @objc func firePosCtrlTimer(_ timer: Timer) {
         posCtrlLoopCnt += 1
-        // Test if WP is tracked or not
-        if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
-            print("firePosCtrlTimer: Wp", self.missionNextWp, " is tracked")
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-            
-            if self.missionNextWp != -1{
-                if  self.missionNextWp != -1{
+        // Test if activeWP is tracked or not
+        if followStream {
+            //special setup for followStream
+            _ = 1
+        }
+        else if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
+                print("firePosCtrlTimer: Wp", self.missionNextWp, " is tracked")
+                sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+                
+                // Add tracked wp to smartRTL. TODO, should add last wp too. Think of flying two missions after each other.
+                if self.missionNextWp != -1{
                     if self.appendLocToDssSmartRtlMission(){
                         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
                     }
@@ -967,123 +974,119 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Caution: Current location was NOT added to DSS smart rtl"])
                     }
                 }
-            }
-            
-            // WP is tracked. If we are on a mission
-            if self.missionIsActive{
-                // check for wp action
-                let action = self.activeWP.action
-                if action == "take_photo"{
-                    // Notify action to be executed
-                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-                    // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
-                    self.missionIsActive = false
-                    self.posCtrlTimer?.invalidate()
-                    return
+                
+                // activeWP is tracked. Now, if we are on a mission:
+                if self.missionIsActive{
+                    // check for wp action
+                    let action = self.activeWP.action
+                    if action == "take_photo"{
+                        // Notify action to be executed
+                        NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+                        // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
+                        self.missionIsActive = false
+                        self.posCtrlTimer?.invalidate()
+                        return
+                    }
+                    if action == "land"{
+                        let secondsSleep: UInt32 = UInt32(self.hoverTime*1000000)
+                        usleep(secondsSleep)
+                        NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
+                        self.missionIsActive = false
+                        self.posCtrlTimer?.invalidate()
+                        return
+                    }
+                    // Note that the current mission is stoppped (paused) if there is a wp action.
+                    self.setMissionNextWp(num: self.missionNextWp + 1)
+                    if self.missionNextWp != -1{
+                        let id = "id" + String(self.missionNextWp)
+                        self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startLoc)
+                        
+                        self.activeWP.printLocation(sentFrom: "firePosCtrlTimer")
+                        goto()
+                        // self.posCtrlTimer?.invalidate() this code is run in goto() fcn.
+                    }
+                    else{
+                        print("id is -1")
+                        self.missionIsActive = false
+                        posCtrlTimer?.invalidate() // dont fire timer again
+                    }
+                    NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_???"])
                 }
-                if action == "land"{
-                    let secondsSleep: UInt32 = UInt32(self.hoverTime*1000000)
-                    usleep(secondsSleep)
-                    NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
-                    self.missionIsActive = false
-                    self.posCtrlTimer?.invalidate()
-                    return
+                else {
+                    print("No mission is active")
+                    posCtrlTimer?.invalidate()
                 }
-                // Note that the current mission is stoppped (paused) if there is a wp action.
-                self.setMissionNextWp(num: self.missionNextWp + 1)
-                if self.missionNextWp != -1{
-                    let id = "id" + String(self.missionNextWp)
-                    self.activeWP.setUpFromJsonWp(jsonWP: self.mission[id], defaultSpeed: self.defaultHVel, startWP: self.startLoc)
-                    
-                    self.activeWP.printLocation(sentFrom: "gogo")
-                    
-                    goto()
-                }
-                else{
-                    print("id is -1")
-                    self.missionIsActive = false
-                    posCtrlTimer?.invalidate() // dont fire timer again
-                }
-                NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_???"])
-            }
-            else {
-                print("No mission is active")
-                posCtrlTimer?.invalidate()
-            }
-        }
-        // WP is not tracked
-        // The controller
-        else {
-            // Calculate BODY control commands from lat long reference frame
-            
-            // Get distance and bearing from here to wp
-            let (northing, easting, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.activeWP)
-            
-            // Set reference Yaw. Heading equals bearing or manually set? Only check once per wp. If bearing becomes exactly -1 it will be evaluated agian, that is ok.
-            if self.activeWP.heading == -1{
-                self.activeWP.heading = bearing
-            }
-            self.refYawLLA = self.activeWP.heading
-            
-            // Calculate yaw-error, use shortest way (right or left?)
-            let yawError = getFloatWithinAngleRange(angle: (Float(self.loc.heading - self.refYawLLA)))
-            // P-controller for Yaw
-            self.refYawRate = -yawError*yawKP
-            // Feedforward TBD
-            //let yawFF = self.refYawRate*yawFFKP*0
-            
-            //print("bearing: ", bearing, "reYawLLa: ", self.refYawLLA, "refYawRate: ", self.refYawRate)
-            
-            // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
-            var turnFactor: Float = 1                    //let turnFactor2 = pow(180/(abs(yawError)+180),2) - did not work without feed forward
-            if abs(yawError) > 10 {
-                turnFactor = 0
-            }
-            else{
-                turnFactor = 1
-            }
-            
-            guard let checkedHeading = self.getHeading() else {return}
-            //let alphaRad = (checkedHeading + Double(yawFF))/180*Double.pi
-            
-            // Rotate from NED to Body
-            let alphaRad = checkedHeading/180*Double.pi
-            // xDiffBody is in body coordinates
-            let xDiffBody = Float(northing * cos(alphaRad) + easting * sin(alphaRad))
-            let yDiffBody = Float(-northing * sin(alphaRad) + easting * cos(alphaRad))
+            } // end if trackingWP
 
-            // If ETA is low, reduce speed (brake in time)
-            var speed = self.activeWP.speed
-            let vel = sqrt(pow(self.loc.vel.bodyX,2)+pow(self.loc.vel.bodyY ,2))
-            
-            //hdrpano:
-            //decellerate at 2m/s/s
-            // at distance_to_wp = Speed/2 -> brake
-            if Float(distance2D) < etaLimit * vel {
-                // Slow down to half speed (dont limit more than to 1.5 though) or use wp speed if it is lower.
-                speed = min(max(vel/2,1.5), speed)
-                //print("Braking!")
-            }
-            // Calculate a divider for derivative part used close to target, avoid zero..
-            var xDivider = abs(xDiffBody) + 1
-            if xDiffBody < 0 {
-                xDivider = -xDivider
-            }
-            var yDivider = abs(yDiffBody) + 1
-            if yDiffBody < 0 {
-                yDivider = -yDivider
-            }
-
-            // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
-            self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.loc.vel.bodyX/xDivider)*turnFactor
-            self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.loc.vel.bodyY/yDivider)*turnFactor
-            
-            // Calc refVelZ
-            self.refVelBodyZ = Float(-dAlt) * vPosKP
+        // The controller: Calculate BODY control commands from lat long reference frame:
+        // Get distance and bearing from here to wp
+        let (northing, easting, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.activeWP)
         
-            // TODO, do not store reference values globally?
-            self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
+        // Set reference Yaw. Heading equals bearing or manually set? Only check once per wp. If bearing becomes exactly -1 it will be evaluated agian, that is ok.
+        if self.activeWP.heading == -1{
+            self.activeWP.heading = bearing
         }
+        self.refYawLLA = self.activeWP.heading
+        
+        // Calculate yaw-error, use shortest way (right or left?)
+        let yawError = getFloatWithinAngleRange(angle: (Float(self.loc.heading - self.refYawLLA)))
+        // P-controller for Yaw
+        self.refYawRate = -yawError*yawKP
+        // Feedforward TBD
+        //let yawFF = self.refYawRate*yawFFKP*0
+        
+        //print("bearing: ", bearing, "reYawLLa: ", self.refYawLLA, "refYawRate: ", self.refYawRate)
+        
+        // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
+        var turnFactor: Float = 1                    //let turnFactor2 = pow(180/(abs(yawError)+180),2) - did not work without feed forward
+        if abs(yawError) > 10 {
+            turnFactor = 0
+        }
+        else{
+            turnFactor = 1
+        }
+        
+        guard let checkedHeading = self.getHeading() else {return}
+        //let alphaRad = (checkedHeading + Double(yawFF))/180*Double.pi
+        
+        // Rotate from NED to Body
+        let alphaRad = checkedHeading/180*Double.pi
+        // xDiffBody is in body coordinates
+        let xDiffBody = Float(northing * cos(alphaRad) + easting * sin(alphaRad))
+        let yDiffBody = Float(-northing * sin(alphaRad) + easting * cos(alphaRad))
+
+        // If ETA is low, reduce speed (brake in time)
+        var speed = self.activeWP.speed
+        let vel = sqrt(pow(self.loc.vel.bodyX,2)+pow(self.loc.vel.bodyY ,2))
+        
+        //hdrpano:
+        //decellerate at 2m/s/s
+        // at distance_to_wp = Speed/2 -> brake
+        if Float(distance2D) < etaLimit * vel {
+            // Slow down to half speed (dont limit more than to 1.5 though) or use wp speed if it is lower.
+            speed = min(max(vel/2,1.5), speed)
+            //print("Braking!")
+        }
+        // Calculate a divider for derivative part used close to target, avoid zero..
+        var xDivider = abs(xDiffBody) + 1
+        if xDiffBody < 0 {
+            xDivider = -xDivider
+        }
+        var yDivider = abs(yDiffBody) + 1
+        if yDiffBody < 0 {
+            yDivider = -yDivider
+        }
+
+        // Calculate the horizontal reference speed. (Proportional - Derivative)*turnFactor
+        self.refVelBodyX = (xDiffBody*hPosKP - hPosKD*self.loc.vel.bodyX/xDivider)*turnFactor
+        self.refVelBodyY = (yDiffBody*hPosKP - hPosKD*self.loc.vel.bodyY/yDivider)*turnFactor
+        
+        // Calc refVelZ
+        self.refVelBodyZ = Float(-dAlt) * vPosKP
+    
+        // TODO, do not store reference values globally?
+        self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
+    
         // Maxtime for flying to wp
         if posCtrlLoopCnt >= posCtrlLoopTarget{
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)

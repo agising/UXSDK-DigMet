@@ -9,6 +9,6 @@ target 'DSS-APP' do
   pod 'DJI-UXSDK-iOS', '4.13'
   pod 'DJIWidget', '~> 1.6.3'
   pod 'DJIFlySafeDatabaseResource', '~> 01.00.01.17'
-  pod 'SwiftyZeroMQ'
+  pod 'SwiftyZeroMQ5'
   pod 'SwiftyJSON'
 end
