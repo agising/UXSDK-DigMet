@@ -814,6 +814,16 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         print("Found no topic, the parsed json_m: ", json_m)
                     }
                     print("The topic: ", topic!, " The parsed json_m: ", json_m)
+                    print("CODE FOR TESTING IN SIM ONLY")
+                    copter.activeWP.coordinate.latitude = json_m["lat"].doubleValue
+                    copter.activeWP.coordinate.longitude = json_m["lon"].doubleValue
+                    copter.activeWP.altitude = 10 // 30json_m["alt"].doubleValue + 30
+                    copter.activeWP.speed = 3
+                    // goto is likely called to often..
+                    copter.activeWP.printLocation(sentFrom: "gpsSubThread")
+                    Dispatch.main{
+                        self.copter.goto()
+                    }
                 }
                 print("Subscribe: Nothing to receive")
             }
