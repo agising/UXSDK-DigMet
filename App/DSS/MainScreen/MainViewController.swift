@@ -28,6 +28,7 @@
 
 import UIKit
 import DJISDK
+import SwiftyJSON
 
 func simulatorLocationNumberFormatter() -> NumberFormatter {
     let nf = NumberFormatter()
@@ -307,8 +308,9 @@ extension UIViewController {
 
 // Return IP address of WiFi interface (en0) as a String, or `nil` https://stackoverflow.com/questions/30748480/swift-get-devices-wifi-ip-address
 func getIPAddress() -> String {
-    var address: String?
+    var address = ""
     var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
+    var interfaces = JSON()
     if getifaddrs(&ifaddr) == 0 {
         var ptr = ifaddr
         while ptr != nil {
@@ -326,17 +328,53 @@ func getIPAddress() -> String {
 
                 let name: String = String(cString: (interface.ifa_name))
                 //print("name: ",name)
-                if  name == "en0" || name == "pdp_ip0" || name == "utun3" {
+                if  name == "en0" || name == "pdp_ip0" || name == "utun0" || name == "utun1" || name == "utun2" || name == "utun3" {
                     var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                     getnameinfo(interface.ifa_addr, socklen_t((interface.ifa_addr.pointee.sa_len)), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
-                    address = String(cString: hostname)
-                    print("Name: ", name, " Address: :", address ?? "empty")
+                    let hostnameStr = String(cString: hostname)
+                    // If the identified interface is not a mac address (conatins :), suggest it as an ip
+                    if !hostnameStr.contains(":"){
+                        // Inferface is VPN
+                        if name.contains("utun"){
+                            interfaces["utun"] = JSON(hostnameStr)
+                        }
+                        // Interface is local network
+                        else if name.contains("en"){
+                            interfaces["en"] = JSON(hostnameStr)
+                        }
+                        // Interface is mobile network
+                        else if name.contains("pdp") {
+                            interfaces["pdp"] = JSON(hostnameStr)
+                        }
+                        // For debug, set if statement to true
+                        else{
+                            address = hostnameStr
+                            print("Name: ", name, " Address: :", address)
+                        }
+                    }
                 }
             }
         }
         freeifaddrs(ifaddr)
     }
-    return address ?? ""
+    
+    // prioritize return string as: 1. VPN 2. Local network 3. mobile connection
+    if interfaces["utun"].exists(){
+        print("VPN connection")
+        return interfaces["utun"].stringValue
+    }
+    else if interfaces["en"].exists(){
+        print("Wifi connection")
+        return interfaces["en"].stringValue
+    }
+    else if interfaces["pdp"].exists(){
+        print("Cellular connection")
+        return interfaces["pdp"].stringValue
+    }
+    else{
+        print("Connection not identified")
+        return "??: " + address
+    }
 }
 
 

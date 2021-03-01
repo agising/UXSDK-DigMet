@@ -949,7 +949,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     func readSocket(_ socket: SwiftyZeroMQ.Socket){
         while self.replyEnable{
             do {
-                let _message: String? = try socket.recv()!
+                let _message: String? = try socket.recv(bufferLength: 4096, options: .none)
                 if self.replyEnable == false{ // Since code can halt on socket.recv(), check if input is still desired
                     return
                 }
