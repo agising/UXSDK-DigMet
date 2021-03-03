@@ -105,18 +105,18 @@ class MyLocation: NSObject{
     func geofenceOK(wp: MyLocation)->Bool{
         // To make sure function is only used from startlocation.
         if !isStartLocation {
-            print("geofenceOK: WP used for reference is not a start location.")
+            print("geofence: WP used for reference is not a start location.")
             return false
         }
         let (_, _, dAlt, dist2D, _, _) = self.distanceTo(wpLocation: wp)
-        print("geofenceOK: dAlt:", dAlt," dist2D: ", dist2D)
+        print("geofence: OK, dAlt:", dAlt," dist2D: ", dist2D)
 
         if dist2D > self.geoFence.radius {
-            printToScreen("geofenceOK: Radius violation")
+            printToScreen("geofence: Radius violation")
             return false
         }
         if dAlt < self.geoFence.height[0] || self.geoFence.height[1] < dAlt {
-            printToScreen("geofenceOK: Height violation")
+            printToScreen("geofence: Height violation")
             return false
         }
         return true
@@ -302,8 +302,8 @@ class Allocator: NSObject{
         self.name = name
     }
     
-    // ******************************************************************************************************************************************
-    // Set additional lock prevent the lock from beeing released prior to all clients are using the resource. Specifically made for sdCard access
+    // **********************************************************************************************************************************************************
+    // Set additional lock prevent the lock from beeing released prior to all clients that are using the resource has let go. Specifically made for sdCard access
     func setAuxOccopier(boolValue: Bool){
         self.auxOccupier = boolValue
         print("sdCard occupied: " + String(describing: boolValue))
@@ -450,6 +450,12 @@ class imageSaver: NSObject {
         print("Save Finished")
     }
 }
+
+
+
+
+
+
 
 
 //*****************************************************************************

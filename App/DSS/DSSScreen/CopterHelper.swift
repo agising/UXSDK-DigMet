@@ -52,6 +52,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var homeHeading: Double?                    // Heading of last updated homewaypoint
     var homeLocation: CLLocation?               // Location of last updated homewaypoint (autopilot home)
     var dssSmartRtlMission: JSON = JSON()       // JSON LLA wayopints to follow in smart rtl
+    var dssSrtlActive: Bool = false
 
     // keep or use in smartRTL
   //  var dssHomeHeading: Double?               // Home heading of DSS
@@ -686,7 +687,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
         self.pendingMission = tempMission
         
-        _ = self.gogo(startWp: 0, useCurrentMission: false)
+        _ = self.gogo(startWp: 0, useCurrentMission: false, isDssSrtl: true)
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "DSS Smart RTL activated"])
     }
 
@@ -848,7 +849,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
     // *************************************************************************************************
     // Prepare a MyLocation for mission execution, then call goto. New implementeation of gogo
-    func gogo(startWp: Int, useCurrentMission: Bool)->Bool{
+    func gogo(startWp: Int, useCurrentMission: Bool, isDssSrtl: Bool = false)->Bool{
+        // Set dssSrtlActive flag here since it is only missions that adds wp to dssSrtl (exept start wp). Check flag when reaching a wp.
+        if isDssSrtl {
+            dssSrtlActive = true
+        }
+        else{
+            dssSrtlActive = false
+        }
+        
         // useCurrentMission?
         if useCurrentMission {
             self.setMissionNextWp(num: self.missionNextWp + 1)
@@ -965,8 +974,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 print("firePosCtrlTimer: Wp", self.missionNextWp, " is tracked")
                 sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
                 
-                // Add tracked wp to smartRTL. TODO, should add last wp too. Think of flying two missions after each other.
-                if self.missionNextWp != -1{
+                // Add tracked wp to smartRTL if not on smartRTL mission.
+                if self.missionNextWp != -1 && !dssSrtlActive{
                     if self.appendLocToDssSmartRtlMission(){
                         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Location was added to DSS smart RTL mission"])
                     }

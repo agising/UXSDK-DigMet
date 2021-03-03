@@ -93,7 +93,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBOutlet weak var previewImageView: UIImageView!
     
     @IBOutlet weak var controlsButton: UIButton!
-    @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var DuttLeftButton: UIButton!
     @IBOutlet weak var DuttRightButton: UIButton!
     @IBOutlet weak var getDataButton: UIButton!
@@ -103,6 +102,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBOutlet weak var previewButton: UIButton!
     @IBOutlet weak var savePhotoButton: UIButton!
 
+    // TableView (failed to set corner radius, not used now.
+    @IBOutlet weak var logTableView: UIView!
     
     
     // Just to test an init function
@@ -187,7 +188,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 return true
             }
             else{
-                self.printSL("writeMetaData: Could not setStartLocation, Aircraft ready?")
+                self.log("writeMetaData: Could not setStartLocation, Aircraft ready?")
                 return false
             }
         }
@@ -353,12 +354,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
     // Function could be redefined to send a notification that updates the GUI
     //****************************************************
-    // Print to terminal and update status label on screen
-    func printSL(_ str: String){
-        Dispatch.main{
-            self.statusLabel.text = str
-        }
+    // Print to terminal and display
+    func log(_ str: String){
+       // Dispatch.main{
+       //     self.statusLabel.text = str
+       // }
         print(str)
+        NotificationCenter.default.post(name: .didNewLogItem, object: self, userInfo: ["logItem": str])
     }
     
     func printDB(_ str: String){
@@ -366,7 +368,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             print(str)
         }
         if debug == 2 {
-            self.printSL(str)
+            self.log(str)
         }
     }
     
@@ -409,13 +411,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             print("Refreshing file list...")
             if error != nil {
                 completionHandler(false)
-                self.printSL("Refresh file list Failed")
+                self.log("Refresh file list Failed")
                 return
             }
             
             // Get file references
             guard let files = manager?.sdCardFileListSnapshot() else {
-                self.printSL("No photos on sdCard")
+                self.log("No photos on sdCard")
                 completionHandler(false)
                 return
             }
@@ -487,7 +489,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             files[cameraIndex].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
                 if error != nil{
                     // This happens if download is triggered to close to taking a picture. Is the allocator used?
-                    self.printSL("Error, set camera mode first: " + String(error!.localizedDescription))
+                    self.log("Error, set camera mode first: " + String(error!.localizedDescription))
                     completionHandler(false)
                 }
                 else if isComplete {
@@ -497,7 +499,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         completionHandler(true)
                         }
                     else{
-                        self.printSL("Fetch photo from sdCard Failed")
+                        self.log("Fetch photo from sdCard Failed")
                         completionHandler(false)
                     }
                 }
@@ -531,7 +533,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 self.jsonPhotos[String(theSessionIndex)]["stored"].boolValue = true
                 self.printDB("savePhotoDataToApp: The write fileURL points at: " + fileURL.description)
             } catch {
-                self.printSL("savePhotoDataToApp: Could not write photoData to App: " + String(describing: error))
+                self.log("savePhotoDataToApp: Could not write photoData to App: " + String(describing: error))
             }
         }
     }
@@ -559,7 +561,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             // If no more photos in que, report result to user, deallocate transferAll and return.
             else {
-                self.printSL("downloadAllHelper: Caution: " + String(skipped + 1) + " photos not transferred")
+                self.log("downloadAllHelper: Caution: " + String(skipped + 1) + " photos not transferred")
                 self.transferAllAllocator.deallocate()
                 return
             }
@@ -570,10 +572,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     // If no more photos in que, report result to user, deallocate transferAll and return
                     if sessionIndex == 1{
                         if skipped == 0 {
-                            self.printSL("downloadAllHelper: All photos transferred")
+                            self.log("downloadAllHelper: All photos transferred")
                         }
                         else {
-                            self.printSL("downloadAllHelper: Caution: " + String(skipped) + " photos not transferred")
+                            self.log("downloadAllHelper: Caution: " + String(skipped) + " photos not transferred")
                         }
                         self.transferAllAllocator.deallocate()
                         return
@@ -600,10 +602,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success) in
             if success{
-                self.printSL("downloadSingle: Photo index: " + String(sessionIndex) + ", transferred")
+                self.log("downloadSingle: Photo index: " + String(sessionIndex) + ", transferred")
             }
             else{
-                self.printSL("downloadSingle: Filed to transfer index: " + String(sessionIndex))
+                self.log("downloadSingle: Filed to transfer index: " + String(sessionIndex))
                 // Sleep to give user a chance to read the message..
                 usleep(500000)
                 self.transferSingle(sessionIndex: sessionIndex, attempt: attempt + 1)
@@ -615,10 +617,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Transfer a photo with sessionIndex [1,2...n].
     func transferIndex(sessionIndex: Int, completionHandler: @escaping (Bool) -> Void){
         //print("transferIndex: jsonPhotos: ", self.jsonPhotos)
-        printSL("Transfer index: " + String(sessionIndex))
+        log("Transfer index: " + String(sessionIndex))
         if self.jsonPhotos[String(sessionIndex)].exists(){
             if jsonPhotos[String(sessionIndex)]["stored"] == false{
-                printSL("transferIndex: Download photo: " + String(sessionIndex))
+                log("transferIndex: Download photo: " + String(sessionIndex))
                 // Allocate resource
                 var maxTime = 41
                 while !self.cameraAllocator.allocate("download", maxTime: 40){
@@ -627,7 +629,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     maxTime -= 1
                     if maxTime < 0 {
                         // Give up attempt to download index
-                        self.printSL("transferIndex: Error, could not allocate cameraAllocator")
+                        self.log("transferIndex: Error, could not allocate cameraAllocator")
                         completionHandler(false)
                     }
                 }
@@ -635,7 +637,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 self.savePhoto(sessionIndex: sessionIndex, completionHandler: {(saveSuccess) in
                     self.cameraAllocator.deallocate()
                     if saveSuccess {
-                        self.printSL("transferIndex: Photo " + String(sessionIndex) + " downloaded to App")
+                        self.log("transferIndex: Photo " + String(sessionIndex) + " downloaded to App")
                         self.transferIndex(sessionIndex: sessionIndex, completionHandler: {(success: Bool) in
                             // Completion handler on first call depends on the second call, child process.
                             if success{
@@ -647,7 +649,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         })
                     }
                     else{
-                        self.printSL("transferIndex: Error, failed to download index " + String(sessionIndex))
+                        self.log("transferIndex: Error, failed to download index " + String(sessionIndex))
                         completionHandler(false)
                     }
                 })
@@ -662,7 +664,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     do{
                         //print("The read fileURL points at: ", fileURL)
                         let photoData = try Data(contentsOf: fileURL)
-                        self.printSL("transferIndex: Publish photo " + String(sessionIndex) + " on PUB-socket")
+                        self.log("transferIndex: Publish photo " + String(sessionIndex) + " on PUB-socket")
                         var json_photo = JSON()
                         json_photo["photo"].stringValue = getBase64utf8(data: photoData)
                         // What metadata to add, XYZ or LLA? TODO
@@ -678,7 +680,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
         }
         else{
-            self.printSL("transferIndex: Index has not been produced yet: " + String(sessionIndex))
+            self.log("transferIndex: Index has not been produced yet: " + String(sessionIndex))
             completionHandler(false)
         }
     }
@@ -693,18 +695,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             print("Refreshing file list...")
             if error != nil {
                 completionHandler(false)
-                self.printSL("Refreshing file list failed.")
+                self.log("Refreshing file list failed.")
             }
             else{
                 guard let files = manager?.sdCardFileListSnapshot() else {
-                    self.printSL("No photos on sdCard")
+                    self.log("No photos on sdCard")
                     completionHandler(true)
                     return
                 }
                 let cameraIndex = files.count - 1
                 files[cameraIndex].fetchThumbnail(completion: {(error) in
                     if error != nil{
-                        self.printSL("Error downloading thumbnail")
+                        self.log("Error downloading thumbnail")
                         completionHandler(false)
                     }
                     else{
@@ -836,7 +838,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             let regSockets = try poller.poll(timeout: 500)
             print(regSockets)
             if regSockets[socket] == SwiftyZeroMQ.PollFlags.pollIn {
-                let message: String? = try socket.recv(options: .dontWait)
+                
+                
+                //TODO, changed buffer size. Have not tested
+                let message: String? = try socket.recv(bufferLength: 4096, options: .dontWait) //recv(options: .dontWait)
                 return (true, String(message!))
             }
         }
@@ -869,7 +874,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 //            return true
 //        }
 //        catch{
-//            self.printSL("startGpsSubThread: Could not connect to socket.")
+//            self.log("startGpsSubThread: Could not connect to socket.")
 //            return false
 //        }
 //    }
@@ -938,7 +943,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             return true
         }
         catch{
-            self.printSL("Could not bind to socket")
+            self.log("Could not bind to socket")
             return false
         }
     }
@@ -962,7 +967,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             
                 switch json_m["fcn"]{
                 case "arm_take_off":
-                    self.printSL("Received cmd: arm_take_off")
+                    self.log("Received cmd: arm_take_off")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         json_r = createJsonNack(fcn: "arm_take_off", arg2: "State is flying")
                     }
@@ -979,13 +984,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         }
                     }
                 case "data_stream":
-                    self.printSL("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
+                    self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
                     let enable = json_m["arg"]["enable"].boolValue
                     switch json_m["arg"]["attribute"]{
                         case "ATT":
                             self.subscriptions.setATT(bool: enable)
-                            printSL("ATT subscription not supported yet!")
+                            log("ATT subscription not supported yet!")
                             json_r = createJsonNack(fcn: "data_stream", arg2: "ATT not supported for DJI")
                         case "XYZ":
                             self.subscriptions.setXYZ(bool: enable)
@@ -1010,18 +1015,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                 case "disconnect":
                     json_r = createJsonAck("disconnect")
-                    self.printSL("Received cmd: disconnect")
+                    self.log("Received cmd: disconnect")
                     self.copter.dssSrtl(hoverTime: 5)
                     // Disconnect code
                     return
                 case "gimbal_set":
-                    self.printSL("Received cmd: gimbal_set")
+                    self.log("Received cmd: gimbal_set")
                     json_r = createJsonAck("gimbal_set")
                     self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
                 
                 case "follow_stream":
-                    self.printSL("Received cmd: follow_stream")
+                    self.log("Received cmd: follow_stream")
                     json_r = createJsonAck("follow_stream")
                     // Subscribe/unsubscribe to IP and port
                     
@@ -1031,7 +1036,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     
                     
                 case "gogo_LLA":
-                    self.printSL("Received cpmd: gogo_LLA")
+                    self.log("Received cmd: gogo_LLA")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
@@ -1049,7 +1054,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
 
                 case "gogo_NED":
-                    self.printSL("Received cpmd: gogo_NED")
+                    self.log("Received cmd: gogo_NED")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
@@ -1067,7 +1072,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
 
                 case "gogo_XYZ":
-                    self.printSL("Received cpmd: gogo_XYZ")
+                    self.log("Received cmd: gogo_XYZ")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         let next_wp = json_m["arg"]["next_wp"].intValue
                         if copter.pendingMission["id" + String(next_wp)].exists(){
@@ -1143,7 +1148,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
                     }
                 case "land":
-                    self.printSL("Received cmd: land")
+                    self.log("Received cmd: land")
                     json_r = createJsonAck("land")
                     if copter.getIsFlying() ?? false{ // Default to false to handle nil
                         json_r = createJsonAck("land")
@@ -1155,7 +1160,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 case "photo":
                     switch json_m["arg"]["cmd"]{
                         case "take_photo":
-                            self.printSL("Received cmd: photo, with arg take_photo")
+                            self.log("Received cmd: photo, with arg take_photo")
                             
                             if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
                                 json_r = createJsonAck("photo")
@@ -1166,13 +1171,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 json_r = createJsonNack(fcn: "photo", arg2: "Camera resource busy")
                             }
                         case "download":
-                            self.printSL("Received cmd: photo, with arg download")
+                            self.log("Received cmd: photo, with arg download")
                             // Check if argument is ok, send reply and do actions in the background
                             let sessionIndex = json_m["arg"]["index"].intValue
                             // Index does not exist
                             if sessionIndex > self.sessionLastIndex {
                                 let tempStr = String(self.sessionLastIndex)
-                                self.printSL("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
+                                self.log("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
                                 json_r = createJsonNack(fcn: "photo", arg2: "Requested index does not exist, last index is: " + tempStr)
                                 // Done
                             }
@@ -1183,18 +1188,18 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                     // Transfer all in background, transferAll handles the allcoator
                                     Dispatch.background {
                                         // Transfer function handles the allocator
-                                        self.printSL("Downloading all photos...")
+                                        self.log("Downloading all photos...")
                                         self.transferAll()
                                     }
                                 }
                                 else {
                                     json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
-                                    self.printSL("Dowload all nacked, already running")
+                                    self.log("Dowload all nacked, already running")
                                 }
                             }
                             // Index is 0 or less (but not -1 since it is already tested)
                             else if sessionIndex < 1 {
-                                self.printSL("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
+                                self.log("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
                                 json_r = createJsonNack(fcn: "photo", arg2: "Bad index, first possible index is 1")
                                 // Done
                             }
@@ -1204,16 +1209,16 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                 json_r["arg2"].stringValue = "download"
                                 Dispatch.background{
                                     // Download function handles the allocator
-                                    self.printSL("Download photo index " + String(sessionIndex))
+                                    self.log("Download photo index " + String(sessionIndex))
                                     self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
                                 }
                             }
                         default:
-                            self.printSL("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
+                            self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
                             json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
                         }
                 case "rtl":
-                    self.printSL("Received cmd: rtl")
+                    self.log("Received cmd: rtl")
                     // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
                     // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
                   
@@ -1249,7 +1254,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                
                 case "dss_srtl":
                     // Once activated it should be possible to interfere TODO
-                    self.printSL("Received comd: dss srtl")
+                    self.log("Received comd: dss srtl")
                     if copter.getIsFlying() ?? false { // Default to false to handle nil
                         json_r = createJsonAck("dss_srtl")
                         var hoverT = json_m["arg"]["hover_time"].intValue
@@ -1266,7 +1271,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                 case "save_dss_home_position":
                     // Function saves dss home position, not used for anything yet..
-                    self.printSL("Received cmd: save_dss_home_position")
+                    self.log("Received cmd: save_dss_home_position")
                     if copter.saveCurrentPosAsDSSHome(){
                         json_r = createJsonAck("save_dss_home_position")
                     }
@@ -1274,7 +1279,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
                     }
                 case "set_vel_body":
-                    self.printSL("Received cmd: set_vel_body")
+                    self.log("Received cmd: set_vel_body")
                     if copter.getIsFlying() ?? false { // Defiault to false to handle nil
                         json_r = createJsonAck("set_vel_body")
 
@@ -1287,14 +1292,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
                         Dispatch.main{
                             self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
-                            self.printSL("Dutt command sent from readSocket")
+                            print("Dutt command sent from readSocket")
                         }
                     }
                     else{
                         json_r = createJsonNack(fcn: "set_vel_body", arg2: "State is not flying")
                     }
                 case "set_yaw":
-                    self.printSL("Received cmd: set_yaw")
+                    self.log("Received cmd: set_yaw")
                     // Make sure we are fluying and are not on mission.
                     if copter.getIsFlying() ?? false && !copter.missionIsActive{
                         json_r = createJsonAck("set_yaw")
@@ -1306,7 +1311,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying AND not mission")
                     }
                 case "upload_mission_XYZ":
-                    self.printSL("Received cmd: upload_mission_XYZ")
+                    self.log("Received cmd: upload_mission_XYZ")
                     
                     let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
@@ -1314,10 +1319,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     else{
                         json_r = createJsonNack(fcn: "upload_mission_XYZ", arg2: mess)
-                        self.printSL("Mission upload failed: " + mess)
+                        self.log("Mission upload failed: " + mess)
                     }
                 case "upload_mission_NED":
-                    self.printSL("Received cmd: upload_mission_NED")
+                    self.log("Received cmd: upload_mission_NED")
                     
                     let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
@@ -1325,10 +1330,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     else{
                         json_r = createJsonNack(fcn: "upload_mission_NED", arg2: mess)
-                        print("Mission upload failed: " + mess)
+                        self.log("Mission upload failed: " + mess)
                     }
                 case "upload_mission_LLA":
-                    self.printSL("Received cmd: upload_mission_LLA")
+                    self.log("Received cmd: upload_mission_LLA")
                     
                     let (success, mess) = copter.uploadMission(mission: json_m["arg"])
                     if success{
@@ -1336,12 +1341,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     else{
                         json_r = createJsonNack(fcn: "upload_mission_LLA", arg2: mess)
-                        print("Mission upload failed: " + mess)
+                        self.log("Mission upload failed: " + mess)
                     }
                     
                 default:
                     json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")
-                    self.printSL("API call not recognized: " + json_m["fcn"].stringValue)
+                    self.log("API call not recognized: " + json_m["fcn"].stringValue)
                     messageQualifiesForHeartBeat = false
                 }
                 if messageQualifiesForHeartBeat{
@@ -1350,21 +1355,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 
                 // Create string from json and send reply
                 let reply_str = getJsonString(json: json_r)
-                print(reply_str)
+                //print(reply_str)
                 try socket.send(string: reply_str)
                                 
                 if json_r["fcn"].stringValue == "nack"{
                     print(json_r)
                 }
                 else if json_r["arg"].stringValue != "heart_beat" && json_r["arg"].stringValue != "info_request"{
-                    print("Reply:")
+                    //print("Reply:")
                     print(json_r)
                     //print(reply_str)
                 }
                 
                }
             catch {
-                self.printSL(String(describing: error))
+                self.log(String(describing: error))
             }
         }
         return
@@ -1393,7 +1398,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Exit view, but first deactivate Sticks (which invalidates fireTimer-timer to stop any joystick command)
  
     @IBAction func xClose(_ sender: UIButton) {
-        print("xclose: Closing view an related tasks")
+        print("xclose: Closing view and related tasks")
+        
+        // Allow display do be dimmed
+        UIApplication.shared.isIdleTimerDisabled = false
         
         deactivateSticks()
         print("xClose: Sticks deactivated")
@@ -1430,7 +1438,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             // Prepare button text for next toggle
             controlsButton.setTitle("TAKE Controls", for: .normal)
             activateSticks()
-            self.printSL("CLIENT has the Controls")
+            self.log("CLIENT has the Controls")
         }
         else{
             // TAKE back the controls from CLIENT
@@ -1438,7 +1446,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             inControls = "USER"
             // Prepare button text for next toggle
             controlsButton.setTitle("GIVE Controls", for: .normal)
-            self.printSL("USER has the Controls")
+            self.log("USER has the Controls")
         }
     }
 
@@ -1461,7 +1469,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         let endPoint = "tcp://192.168.1.249:5560"
         let topic = "REMOTE1"
         if startGpsSubThread(endPoint: endPoint, topic: topic){
-            self.printSL("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
         }
         
         
@@ -1478,12 +1486,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         print("Preview downloaded and displayed.")
                     }
                     else{
-                        self.printSL("Download preview Failed")
+                        self.log("Download preview Failed")
                         }
                     })
             }
             else{
-                self.printSL("Set camera mode failed")
+                self.log("Set camera mode failed")
             }
         })
     }
@@ -1493,7 +1501,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @IBAction func savePhotoButton(_ sender: Any) {
         savePhoto(sessionIndex: -1){(success) in
             if success{
-                self.printSL("Photo saved to app memory")
+                self.log("Photo saved to app memory")
             }
         }
     }
@@ -1550,10 +1558,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     }
     
     //******************************************************************************
-    // Prints notification to statuslabel. Notifications can be sent from everywhere
+    // Prints notification to log. Notifications can be sent from everywhere
     @objc func onDidPrintThis(_ notification: Notification){
         let strToPrint = String(describing: notification.userInfo!["printThis"]!)
-        self.printSL(strToPrint)
+        self.log(strToPrint)
     }
     
     //*************************************************
@@ -1566,7 +1574,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             
             // print to screen
-            printSL("Going to WP " + json_o["next_wp"].stringValue)
+            log("Going to WP " + json_o["next_wp"].stringValue)
 
             // Publish if subscribed
             if self.subscriptions.WpId {
@@ -1580,7 +1588,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     @objc func onDidWPAction(_ notification: Notification){
         if let data = notification.userInfo as? [String: String]{
             if data["wpAction"] == "take_photo"{
-                self.printSL("wpAction: take photo")
+                self.log("wpAction: take photo")
                 // Wait for allocator, allocate
                 // must be in background to not halt everything.
                 Dispatch.background {
@@ -1606,7 +1614,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 Dispatch.background {
                     var hover = 5
                     while hover > 0 {
-                        self.printSL("Hover at home, landing in: " + String(describing: hover))
+                        self.log("Hover at home, landing in: " + String(describing: hover))
                         hover -= 1
                         usleep(1000000)
                     }
@@ -1633,6 +1641,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         //        modViewController.fpvView?.showCameraDisplayName.toggle()
         //        print("Flag is now: ", modViewController.fpvView?.showCameraDisplayName.description)
         //        self.contentViewController = modViewController
+        
+        // Prevent display from dimming. Will cause battery drain, but flight control is lost if display is dimmed..
+        UIApplication.shared.isIdleTimerDisabled = true
         
         // Init steppers
         leftStepperStackView.isHidden = true
@@ -1661,7 +1672,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         putDataButton.isHidden = true
         
         
-        printSL("Setting up aircraft")
+        log("Setting up aircraft")
     
         // Setup aircraft
         var setupOk = true
@@ -1676,7 +1687,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             else{
                 setupOk = false
-                self.printSL("Flight controller not loaded")
+                self.log("Flight controller not loaded")
             }
             
             // Store the camera refence
@@ -1684,14 +1695,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 self.camera = cam
                 self.camera?.setPhotoAspectRatio(DJICameraPhotoAspectRatio.ratio4_3, withCompletion: {(error) in
                     if error != nil{
-                        self.printSL("Aspect ratio 4:3 could not be set")
+                        self.log("Aspect ratio 4:3 could not be set")
                     }
                 })
                 self.startListenToCamera()
             }
             else{
                 setupOk = false
-                self.printSL("Camera not loaded")
+                self.log("Camera not loaded")
             }
             // Store the gimbal reference
             if let gimbalReference = self.aircraft?.gimbal {
@@ -1700,12 +1711,12 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             else{
                 setupOk = false
-                self.printSL("Gimbal not loaded")
+                self.log("Gimbal not loaded")
             }
         }
         else{
             setupOk = false
-            self.printSL("Aircraft not loaded")
+            self.log("Aircraft not loaded")
         }
         
 
@@ -1723,15 +1734,38 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         else{
             setupOk = false
-            self.printSL("Reply thread could not be started")
+            self.log("Reply thread could not be started")
         }
         
         if setupOk == true{
-            printSL("Aircraft componentes set up OK")
+            log("Aircraft componentes set up OK")
         }
         else{
-            printSL("Setup failed. Close and reload this view")
+            log("Setup failed. Close and reload this view")
         }
+        
+        
 
+
+    }
+    
+    override public func viewWillAppear(_ animated: Bool) {
+        //print("will appear")
+        super.viewWillAppear(animated)
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        //print("did appear")
+        super.viewDidAppear(animated)
+    }
+    
+    override public func viewWillLayoutSubviews() {
+        //print("Will layout subviews")
+        super.viewWillLayoutSubviews()
+    }
+    
+    override public func viewDidLayoutSubviews() {
+        //print("Did layout subviews")
+        super.viewDidLayoutSubviews()
     }
 }

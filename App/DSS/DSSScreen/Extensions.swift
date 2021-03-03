@@ -114,5 +114,5 @@ extension Notification.Name {
     static let didPrintThis = Notification.Name("didPrintThis")
     static let didNextWp = Notification.Name("didNextWp")
     static let didWPAction = Notification.Name("didWPAction")
-    
+    static let didNewLogItem = Notification.Name("didNewLogItem")
 }

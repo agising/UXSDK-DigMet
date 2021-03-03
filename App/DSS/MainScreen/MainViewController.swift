@@ -190,6 +190,9 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
             self.connect.isHidden = false
             startDSSButton.backgroundColor = UIColor.lightGray
             startDSSButton.isEnabled = false
+
+            // FOR TESTING ONLY, set to true to get through without drone..
+            //startDSSButton.isEnabled = true
         }
     }
     

@@ -16,7 +16,7 @@ import UIKit
 //                           //let image = UIImage(data: imageData)
 //                           //self.lastImage = image!
 //                           //self.lastImageFilename = files[index].fileName
-//                           //self.printSL("UIImage saved to self, showing image preview. Filename:" + self.lastImageFilename)
+//                           //self.log("UIImage saved to self, showing image preview. Filename:" + self.lastImageFilename)
 //                           completionHandler(true)
 //                           }
 
@@ -42,7 +42,7 @@ import UIKit
 //        let docs: String = paths[0]
 //        let fullPath = docs + filename + ".png"
 //        self.lastImageURL = fullPath
-//        self.printSL(fullPath)
+//        self.log(fullPath)
 //        png.write(toFile: fullPath, atomically: true)
 //        return fullPath
 //    }
@@ -57,7 +57,7 @@ import UIKit
 //        let docs: String = paths[0]
 //        let fullPath = docs + filename + ".JPG"
 //        self.lastImageURL = fullPath
-//        self.printSL(fullPath)
+//        self.log(fullPath)
 //        png.write(toFile: fullPath, atomically: true)
 //        return fullPath
 //    }
