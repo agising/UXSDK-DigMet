@@ -61,7 +61,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //var startHeadingXYZ: Double?                // The start heading that defines the XYZ coordinate system
     //var startLocationXYZ: CLLocation?           // The start location that defines the XYZ coordinate system
     var loc: MyLocation = MyLocation()
-    var startLoc: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.
+    var startLoc: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.   TODO NAME IT INIT POINT
 
     // Tracking wp properties
     var trackingRecord: Int = 0                 // Consequtive loops on correct position
@@ -694,24 +694,32 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     
     //*************************************************************************************************
     // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
-    func uploadMission(mission: JSON)->(success: Bool, arg: String){
-
-
+    func uploadMission(mission: JSON)->(fenceOK: Bool, fenceDescr: String, numberingOK: Bool, numberingDescr){
+        // Valid start location (init point) tested in parser.
         // Create a temo WP to verify any geofence violation against
-        var tempStartLocation = MyLocation()
-        if self.startLoc.isStartLocation {
-            // There is a startLocation set, use it
-            tempStartLocation = self.startLoc
-        }
-        else if let pos = self.getCurrentLocation(){
-            // If current position is available, create a temporary startLocation at the current position
-            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation){}
-            tempStartLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-        }
-        else {
-            // Position cannot be obtained, geofence cannot be checked. Return false
-            return(false, "No startPosition nor Position available. GEO fence fail.")
-        }
+//        var tempStartLocation = MyLocation()
+//
+//
+//
+//
+//
+//        if self.startLoc.isStartLocation {
+//            // There is a startLocation set, use it
+//            tempStartLocation = self.startLoc
+//        }
+//        else if let pos = self.getCurrentLocation(){
+//            // If current position is available, create a temporary startLocation at the current position
+//            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation){}
+//            tempStartLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
+//        }
+//        else {
+//            // Position cannot be obtained, geofence cannot be checked. Return false
+//            return(false, "No startPosition nor Position available. GEO fence fail.")
+//        }
+
+
+
+
 
         // Loop through the wp in the mission
         // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
@@ -719,15 +727,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         let tempWP = MyLocation()
         
         for (wpID,subJson):(String, JSON) in mission {
-            // Temporarily translate from Json to MyLocation
-            tempWP.setUpFromJsonWp(jsonWP: subJson, defaultSpeed: self.defaultHVel, startWP: tempStartLocation)
+            // Temporarily translate from Json to MyLocation. StartWP is used to calc NED and XYZ to LLA
+            tempWP.setUpFromJsonWp(jsonWP: subJson, defaultSpeed: self.defaultHVel, startWP: self.startLoc)
             
             // Check wp-numbering, and for each wp check its properties, note the wpCnt and wpID are not in the same order!
             if mission["id" + String(wpCnt)].exists()
             {
                 // Check for geofence violation
-                if !tempStartLocation.geofenceOK(wp: tempWP){
-                    return(false, "Geofence violation " + wpID)
+                if !self.startLoc.geofenceOK(wp: tempWP){
+                    return(false, "Geofence violation, " + wpID, true, "")
                 }
                 
                 // If there is a wp.action, check that it is one of the approved.
@@ -736,17 +744,19 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                         _ = "ok"
                     }
                     else {
-                        return(false, "WP action not supported " + wpID)
+                        return(false, "WP action not supported, " + wpID, true, "")
                     }
                 }
                 
-                // Check that any speed setting is positive
-                if subJson["speed"].exists() {
-                    if subJson["speed"].doubleValue < 0.1 {
-                        return(false, "Too low speed " + wpID)
-                    }
+                // Check that the speed setting is ok
+                if tempWP.speed < 0.1 {
+                    return(true, "", true, "", false, "Speed below 0.1, " + wpID)
                 }
                 
+                
+                
+                
+                TODO
                 // Check if given heading is in range [-1-359]
                 var tempHeading:Double = 0
                 if subJson["local_yaw"].exists() {
@@ -764,7 +774,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 continue
             }
             else{
-                return (false, "Wp numbering faulty, missing id" + String(wpCnt))
+                return (true, "", false, "Wp numbering faulty, missing id" + String(wpCnt))
             }
         }
         self.pendingMission = mission

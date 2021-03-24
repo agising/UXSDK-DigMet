@@ -1155,7 +1155,56 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             self.copter.setYaw(targetYaw: yaw)
                         }
                     }
-               
+
+                case "upload_mission_LLA":
+                    self.log("Received cmd: upload_mission_LLA")
+                    let (fenceOK, fence_descr, numberingOK, numbering_descr) = copter.uploadMission(mission: json_m["mission"])
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", description: nackOwnerStr)
+                    }
+                    // Nack init point not set
+                    else if !copter.startLoc.isStartLocation{
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", description: "Init point is not set")
+                    }
+                    // Nack wp numbering
+                    else if !numberingOK{
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", description: numbering_descr)
+                    }
+                    // Nack wp violate geofence
+                    else if !fenceOK {
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", description: fence_descr)
+                    }
+                    
+                    json_r = createJsonAck("upload_mission_LLA")
+                    }
+                    else{
+                        json_r = createJsonNack(fcn: "upload_mission_LLA", arg2: mess)
+                        self.log("Mission upload failed: " + mess)
+                    }
+                    
+                case "upload_mission_XYZ":
+                    self.log("Received cmd: upload_mission_XYZ")
+                    
+                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
+                    if success{
+                        json_r = createJsonAck("upload_mission_XYZ")
+                    }
+                    else{
+                        json_r = createJsonNack(fcn: "upload_mission_XYZ", arg2: mess)
+                        self.log("Mission upload failed: " + mess)
+                    }
+                case "upload_mission_NED":
+                    self.log("Received cmd: upload_mission_NED")
+                    
+                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
+                    if success{
+                        json_r = createJsonAck("upload_mission_NED")
+                    }
+                    else{
+                        json_r = createJsonNack(fcn: "upload_mission_NED", arg2: mess)
+                        self.log("Mission upload failed: " + mess)
+                    }
                     
                 case "data_stream":
                     self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
@@ -1394,39 +1443,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
                     }
                 
-                case "upload_mission_XYZ":
-                    self.log("Received cmd: upload_mission_XYZ")
-                    
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_XYZ")
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "upload_mission_XYZ", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
-                    }
-                case "upload_mission_NED":
-                    self.log("Received cmd: upload_mission_NED")
-                    
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_NED")
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "upload_mission_NED", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
-                    }
-                case "upload_mission_LLA":
-                    self.log("Received cmd: upload_mission_LLA")
-                    
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_LLA")
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "upload_mission_LLA", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
-                    }
+
                     
                 default:
                     json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")

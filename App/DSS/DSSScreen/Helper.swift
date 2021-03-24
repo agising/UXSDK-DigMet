@@ -174,7 +174,17 @@ class MyLocation: NSObject{
     func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, startWP: MyLocation){
         // Reset all properties
         self.reset()
-                
+        
+//        var heading: Double = 0
+//        let headingStr = jsonWP["heading"].string
+//        if headingStr == "course"{
+//            heading = -1
+//        }
+//        else{
+//            heading = jsonWP["heading"].doubleValue
+//        }
+        
+        object.type
         // Test if mission is LLA
         if jsonWP["lat"].exists(){
             // Mission is LLA
