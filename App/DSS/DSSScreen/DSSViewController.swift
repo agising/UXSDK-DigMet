@@ -72,6 +72,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
     var idle: Bool = true                   // For future implementation of task que
     
+    var ownerID: String = ""
+    
     
     // Steppers
     @IBOutlet weak var leftStepperStackView: UIStackView!
@@ -948,10 +950,26 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
+    // If function is not used in more than parser, put it in parser.
+    // Function checks if the ownerID and the id from a request matches or not.
+    func isOwner(id: String)->Bool{
+        if id == self.ownerID{
+            // Owner match
+            return true
+        }
+        else{
+            // Owner mismatch
+            return false
+        }
+    }
 
     // ****************************************************
     // zmq reply thread that reads command from applictaion
     func readSocket(_ socket: SwiftyZeroMQ.Socket){
+        var fromOwner = false
+        var requesterID = ""
+        var nackOwnerStr = ""
+
         while self.replyEnable{
             do {
                 let _message: String? = try socket.recv(bufferLength: 4096, options: .none)
@@ -959,30 +977,112 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     return
                 }
                 // A message is received.
-                var messageQualifiesForHeartBeat = true
                 
                 // Parse and create an ack/nack
                 let (_, json_m) = getJsonObject(uglyString: _message!)
                 var json_r = JSON()
-            
+
+                // Update message owner status
+                requesterID = json_r["id"].stringValue
+                if isOwner(id: requesterID){
+                    fromOwner = true
+                }
+                else {
+                    fromOwner = false
+                    nackOwnerStr = "Requester (" + requesterID + ") is not the DSS owner"
+
+                }
+                
+                // Message valud for heartbeat?
+                if fromOwner{
+                    var messageQualifiesForHeartBeat = true
+                }
+                
                 switch json_m["fcn"]{
                 case "arm_take_off":
                     self.log("Received cmd: arm_take_off")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        json_r = createJsonNack(fcn: "arm_take_off", arg2: "State is flying")
+                    let toAlt = json_m["arg"]["height"].doubleValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
                     }
+                    // TODO nsat check
+                    else if false {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Less than 8 satellites")
+                    }
+                    // Nack is flying
+                    else if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "State is flying")
+                    }
+                    // Nack height limits
+                    else if toAlt < 2 || toAlt > 40 {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Height is out of limits")
+                    }
+                    // Accept command
                     else{
-                        let toAlt = json_m["arg"]["height"].doubleValue
-                        if toAlt >= 2 && toAlt <= 40{
-                            json_r = createJsonAck("arm_take_off")
-                            copter.toAlt = toAlt
-                            copter.toReference = "HOME"
-                            copter.takeOff()
-                        }
-                        else{
-                            json_r = createJsonNack(fcn: "arm_take_off", arg2: "Take-off height out of limit")
-                        }
+                        json_r = createJsonAck("arm_take_off")
+                        copter.toAlt = toAlt
+                        copter.toReference = "HOME"     // TODO, Home?
+                        copter.takeOff()
                     }
+                    
+                case "land":
+                    self.log("Received cmd: land")
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "land", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("land")
+                        copter.land()
+                    }
+                    
+                case "rtl":
+                    self.log("Received cmd: rtl")
+                    // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
+                    // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
+                    
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "rtl", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "rtl", description: "Not flying")
+                    }
+                    // Accept command
+                    else{
+                        // Activate the rtl, then figure if the command whent through or not
+                        copter.rtl()
+                        // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
+                        var max_attempts = 8
+                        // while flightMode is neither GPS nor Landing -  wait. If flightMode is GPS or Landing - continue
+                        while copter.flightMode != "GPS" && copter.flightMode != "Landing" {
+                            if max_attempts > 0{
+                                max_attempts -= 1
+                                // Sleep 0.1s
+                                print("ReadSocket: Waiting for rtl to go through before replying.")
+                                usleep(50000)
+                            }
+                            else {
+                                // We tried many times, it must have failed somehow -> nack
+                                print("ReadSocket: RTL did not go through. Debug.")
+                                json_r = createJsonNack(fcn: "rtl", description: "RTL failed, try again")
+                                break
+                            }
+                        }
+                        if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
+                            json_r = createJsonAck("rtl")
+                        }
+                    
+                   
+               
+                    
                 case "data_stream":
                     self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
@@ -1147,16 +1247,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     default:
                         json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
                     }
-                case "land":
-                    self.log("Received cmd: land")
-                    json_r = createJsonAck("land")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        json_r = createJsonAck("land")
-                        copter.land()
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "land", arg2: "State is not flying")
-                    }
+           
                 case "photo":
                     switch json_m["arg"]["cmd"]{
                         case "take_photo":
@@ -1217,41 +1308,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
                             json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
                         }
-                case "rtl":
-                    self.log("Received cmd: rtl")
-                    // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
-                    // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
-                  
-                    if copter.getIsFlying() ?? false { // Default to false to handle nil
-                        // Activate the rtl, the figure if the command whent through or not
-                        copter.rtl()
-                        
-                        // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
-                        var max_attempts = 8
-                        // while flightMode is neither GPS nor Landing -  wait. If flightMode is GPS or Landing - continue
-                        while copter.flightMode != "GPS" && copter.flightMode != "Landing" {
-                            if max_attempts > 0{
-                                max_attempts -= 1
-                                // Sleep 0.1s
-                                print("ReadSocket: Waiting for rtl to go through before replying.")
-                                usleep(50000)
-                            }
-                            else {
-                                // We tried many times, it must have failed somehow -> nack
-                                print("ReadSocket: RTL did not go through. Debug.")
-                                json_r = createJsonNack(fcn: "rtl", arg2: "RTL did not go through, debug")
-                                break
-                            }
-                        }
-                        if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
-                            json_r = createJsonAck("rtl")
-                        }
-                    }
-                    // Copter is not flying
-                    else {
-                        json_r = createJsonNack(fcn: "rtl", arg2: "State is not flying")
-                    }
-               
+                
                 case "dss_srtl":
                     // Once activated it should be possible to interfere TODO
                     self.log("Received comd: dss srtl")
@@ -1728,6 +1785,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         NotificationCenter.default.addObserver(self, selector: #selector(onDidWPAction(_:)), name: .didWPAction, object: nil)
         
         _ = initPublisher()
+        
+        self.ownerID = "da001"
         if startReplyThread(){
             print("Reply thread successfully started")
             self.startHeartBeatThread()
