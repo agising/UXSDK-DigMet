@@ -694,79 +694,56 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     
     //*************************************************************************************************
     // Checks an uploaded mission. If ok it is stored as pending mission. Activate it by sending to wp.
-    func uploadMission(mission: JSON)->(fenceOK: Bool, fenceDescr: String, numberingOK: Bool, numberingDescr){
-        // Valid start location (init point) tested in parser.
-        // Create a temo WP to verify any geofence violation against
-//        var tempStartLocation = MyLocation()
-//
-//
-//
-//
-//
-//        if self.startLoc.isStartLocation {
-//            // There is a startLocation set, use it
-//            tempStartLocation = self.startLoc
-//        }
-//        else if let pos = self.getCurrentLocation(){
-//            // If current position is available, create a temporary startLocation at the current position
-//            tempStartLocation.setPosition(pos: pos, heading: 0, gimbalYawRelativeToHeading: 0, isStartWP: true, startWP: tempStartLocation){}
-//            tempStartLocation.setGeoFence(radius: self.geoFenceRadius, height: self.geoFenceHeight)
-//        }
-//        else {
-//            // Position cannot be obtained, geofence cannot be checked. Return false
-//            return(false, "No startPosition nor Position available. GEO fence fail.")
-//        }
-
-
-
-
-
-        // Loop through the wp in the mission
-        // For the number of wp-keys, check that there is a matching wp id and that the geoFence is not violated
+    func uploadMission(mission: JSON)->(fenceOK: Bool, fenceDescr: String, numberingOK: Bool, numberingDescr: String, speedOK: Bool, speedDescr: String, actionOK: Bool, actionDescr: String, headingOK: Bool, headingDescr: String){
+        // Init return values
+        var fenceOK = true
+        var fenceDescr = ""
+        var numberingOK = true
+        var numberingDescr = ""
+        var speedOK = true
+        var speedDescr = ""
+        var actionOK = true
+        var actionDescr = ""
+        var headingOK = true
+        var headingDescr = ""
+        
         var wpCnt = 0
         let tempWP = MyLocation()
-        
+
+        // Check wp-numbering, and for each wp in mission check its properties, note the wpCnt and wpID are not in the same order!
         for (wpID,subJson):(String, JSON) in mission {
-            // Temporarily translate from Json to MyLocation. StartWP is used to calc NED and XYZ to LLA
+            // Temporarily parse from mission to MyLocation. StartWP is used to calc NED and XYZ to LLA, geofence etc
             tempWP.setUpFromJsonWp(jsonWP: subJson, defaultSpeed: self.defaultHVel, startWP: self.startLoc)
-            
-            // Check wp-numbering, and for each wp check its properties, note the wpCnt and wpID are not in the same order!
+            // Check wp numbering
             if mission["id" + String(wpCnt)].exists()
             {
                 // Check for geofence violation
                 if !self.startLoc.geofenceOK(wp: tempWP){
-                    return(false, "Geofence violation, " + wpID, true, "")
+                    fenceOK = false
+                    fenceDescr = "Geofence violation, " + wpID
                 }
                 
-                // If there is a wp.action, check that it is one of the approved.
+                // Check action ok, if there is an action
                 if tempWP.action != ""{
                     if tempWP.action == "take_photo"{
                         _ = "ok"
                     }
                     else {
-                        return(false, "WP action not supported, " + wpID, true, "")
+                        actionOK = false
+                        actionDescr = "WP action not supported, " + wpID
                     }
                 }
                 
-                // Check that the speed setting is ok
+                // Check speed setting not too low
                 if tempWP.speed < 0.1 {
-                    return(true, "", true, "", false, "Speed below 0.1, " + wpID)
+                    speedOK = false
+                    speedDescr = "Speed below 0.1, " + wpID
                 }
                 
-                
-                
-                
-                TODO
-                // Check if given heading is in range [-1-359]
-                var tempHeading:Double = 0
-                if subJson["local_yaw"].exists() {
-                    tempHeading = subJson["local_yaw"].doubleValue
-                }
-                else if subJson["heading"].exists() {
-                    tempHeading = subJson["heading"].doubleValue
-                }
-                if tempHeading < -1 || tempHeading > 360 {
-                    return(false, "Heading violation " + wpID)
+                // Check for heading error
+                if tempWP.heading == -99{
+                    headingOK = false
+                    headingDescr = "Heading faulty, " + wpID
                 }
                 
                 // Continue the for loop
@@ -774,11 +751,17 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 continue
             }
             else{
-                return (true, "", false, "Wp numbering faulty, missing id" + String(wpCnt))
+                // Oops, wp numbering was faulty
+                numberingOK = false
+                numberingDescr = "Wp numbering faulty, missing id" + String(wpCnt)
             }
         }
-        self.pendingMission = mission
-        return (true, "")
+        // Accept mission as pending mission if everything is ok
+        if fenceOK && numberingOK && speedOK && actionOK && headingOK{
+            self.pendingMission = mission
+        }
+        // Return results
+        return (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr)
     }
 
     

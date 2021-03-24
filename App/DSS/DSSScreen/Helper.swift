@@ -109,7 +109,7 @@ class MyLocation: NSObject{
             return false
         }
         let (_, _, dAlt, dist2D, _, _) = self.distanceTo(wpLocation: wp)
-        print("geofence: OK, dAlt:", dAlt," dist2D: ", dist2D)
+        print("geofenceOK: dAlt:", dAlt," dist2D: ", dist2D)
 
         if dist2D > self.geoFence.radius {
             printToScreen("geofence: Radius violation")
@@ -175,21 +175,11 @@ class MyLocation: NSObject{
         // Reset all properties
         self.reset()
         
-//        var heading: Double = 0
-//        let headingStr = jsonWP["heading"].string
-//        if headingStr == "course"{
-//            heading = -1
-//        }
-//        else{
-//            heading = jsonWP["heading"].doubleValue
-//        }
-        
-        object.type
         // Test if mission is LLA
         if jsonWP["lat"].exists(){
             // Mission is LLA
             self.altitude = jsonWP["alt"].doubleValue
-            self.heading = jsonWP["heading"].doubleValue
+            self.heading = parseHeading(json: jsonWP)
             self.coordinate.latitude = jsonWP["lat"].doubleValue
             self.coordinate.longitude = jsonWP["lon"].doubleValue
         }
@@ -206,7 +196,7 @@ class MyLocation: NSObject{
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
             self.altitude = startWP.altitude - down
-            self.heading = jsonWP["heading"].doubleValue
+            self.heading = parseHeading(json: jsonWP)
             
         }
         else if jsonWP["x"].exists(){
@@ -225,18 +215,17 @@ class MyLocation: NSObject{
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
             self.altitude = startWP.altitude - z
-            if jsonWP["local_yaw"].doubleValue != -1 {
-                self.heading = startWP.gimbalYaw + jsonWP["local_yaw"].doubleValue
-                // Make sure heading is within 0-360 range (mainly to avoid -1 which has other meaning)
+            self.heading = parseHeading(json: jsonWP)
+            // Transform to XYZ
+            if self.heading != -1 && self.heading != -99{
+                self.heading += startWP.gimbalYaw
+                // Make sure heading is within 0-360 range (to avoid -1 and -99 which has other meaning)
                 if self.heading < 0 {
                     self.heading += 360
                 }
                 if self.heading > 360 {
                     self.heading -= 360
                 }
-            }
-            else {
-                self.heading = -1
             }
         }
         
@@ -464,6 +453,31 @@ class imageSaver: NSObject {
 
 
 
+
+// ************************************************************************************************************************Ä*********************************************
+// pasteHeading parses heading that can have valid inputs 0-360 and "course". Valid heading returns the heading, "course" returns -1 and any everything else returns -99.
+func parseHeading(json: JSON)->Double{
+    // If it is not a string its a double..
+    if json["heading"].string == nil{
+        // Check the value for limits
+        let wpHeading = json["heading"].doubleValue
+        if 0 <= wpHeading && 360 < wpHeading {
+            return wpHeading
+        }
+        else {
+            // Internal code for handlig error.
+            return -99
+        }
+    }
+    // It must be a string, check it
+    else if json["heading"].stringValue == "course"{
+            return -1
+    }
+    // Probalby misspelled string
+    else {
+        return -99
+    }
+}
 
 
 
