@@ -479,6 +479,42 @@ func parseHeading(json: JSON)->Double{
     }
 }
 
+// ****************************************
+// Parse index and test if it is ok or not.
+func parseIndex(json: JSON, sessionLastIndex: Int)->Int{
+    // Check for cmd download
+    if json["cmd"].stringValue != "download"{
+        // Its not a download command, index is not used
+        return 0
+    }
+    // If it is not a string its an int..
+    if json["index"].string == nil{
+        // Check the value for limits
+        let cmdIndex = json["index"].intValue
+        if 0 < cmdIndex && cmdIndex <= sessionLastIndex {
+            return cmdIndex
+        }
+        else {
+            // Index out of range, return error code.
+            return -11
+        }
+    }
+    // It must be a string, check it
+    else if json["index"].stringValue == "all"{
+        // Return code for 'all'
+        return -1
+    }
+    else if json["index"].stringValue == "latest"{
+        // Return latest index
+        return sessionLastIndex
+    }
+    // Probalby misspelled string
+    else {
+        // Return index error
+        return -12
+    }
+}
+
 
 
 

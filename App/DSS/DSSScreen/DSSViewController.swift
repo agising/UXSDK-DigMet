@@ -1325,8 +1325,142 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         // Parse incoming stream to activeWP
                         // Activate followStream..
                     }
+               
+                case "set_gimbal":
+                    self.log("Received cmd: set_gimbal")
+                    let roll = json_m["roll"].doubleValue
+                    let pitch = json_m["pitch"].doubleValue
+                    let yaw = json_m["yaw"].doubleValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack out of range
+                    else if pitch < self.copter.gimbal.pitchRange[0] || self.copter.gimbal.pitchRange[1] < pitch {
+                        json_r = createJsonNack(fcn: "set_gimbal", description: "Pitch, roll or yaw is out of range for the gimbal")
+                    }
+                    // Acccept command
+                    else{
+                        json_r = createJsonAck("set_gimbal")
+                        self.copter.gimbal.setPitch(pitch: pitch)
+                    }
                     
+                case "set_gripper":
+                    self.log("Received cmd: set_gripper")
+                    json_r = createJsonNack(fcn: "set_gripper", description: "Not implemented")
+                
+                case "photo":
+                    self.log("Received cmd: photo")
+                    let parsedIndex = parseIndex(json: json_m, sessionLastIndex: self.sessionLastIndex)
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack camera busy
+                    else if self.cameraAllocator.allocated {
+                        json_r = createJsonNack(fcn: "photo", description: "Camera resource is busy")
+                    }
+                    // Nack index out of range (coded from parseIndex)
+                    else if parsedIndex == -11{
+                        json_r = createJsonNack(fcn: "photo", description: "Index out of range, " + String(json_m["index"].intValue))
+                    }
+                    // Nack index faulty (coded from parseIndex)
+                    else if parsedIndex == -12{
+                        json_r = createJsonNack(fcn: "photo", description: "Index string faulty, " + json_m["index"].stringValue)
+                    }
+                    // Accept command:
+                    else {
+                        json_r = createJsonAck("photo")
+                        // Switch cmd
+                        switch json_m["cmd"]{
+                            case "take_photo":
+                                self.log("Received cmd: photo, with arg take_photo")
+                                if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
+                                    // Complete ack message
+                                    json_r["description"] = "take_photo"
+                                    takePhotoCMD()
+                                }
+                                else{
+                                    json_r = createJsonNack(fcn: "photo", description: "Allocator1 denied, report")
+                                    print("DEBUG: Allocator1 denied")
+                                    self.log("Allocator1 denied, report")
+                                }
+                            case "download":
+                                self.log("Received cmd: photo, with arg download")
+                                // Default resolution
+                                var resolution  = "high"
+                                // Check resolution argument
+                                if json_m["resulution"].exists(){
+                                    resolution = json_m["resolution"].stringValue
+                                }
+                                if resolution == "low"{
+                                    print("TODO Low resolution not supported yet, getting high res")
+                                }
+                                // Download all or single index
+                                if parsedIndex == -1 {
+                                    if transferAllAllocator.allocate("transferAll", maxTime: 300) {
+                                        // Complete ack message
+                                        json_r["description"].stringValue = "download all"
+                                        // Transfer all in background, transferAll handles the allcoator
+                                        Dispatch.background {
+                                            // Transfer function handles the allocator
+                                            self.log("Downloading all photos...")
+                                            self.transferAll()
+                                        }
+                                    }
+                                    else {
+                                        json_r = createJsonNack(fcn: "photo", description: "Allocator2 denied, report")
+                                        print("DEBUG: Allocator2 denied")
+                                        self.log("Allocator2 denied, report")
+                                    }
+                                }
+                                // Index must be ok, download the index
+                                else{
+                                    // Complete ack message
+                                    json_r["description"].stringValue = "download " + String(parsedIndex)
+                                    Dispatch.background{
+                                        // Download function handles the allocator
+                                        self.log("Download photo index " + String(parsedIndex))
+                                        self.transferSingle(sessionIndex: parsedIndex, attempt: 1)
+                                    }
+                                }
+                            default:
+                            self.log("Photo cmd faulty: " + json_m["cmd"].stringValue)
+                                json_r = createJsonNack(fcn: "photo", description: "Cmd faulty")
+                        }
+                    }
                     
+                case "get_armed":
+                    self.log("Received cmd: get_armed")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_armed")
+                    if self.copter.getAreMotorsOn(){
+                        json_r["armed"].boolValue = true
+                    }
+                    else{
+                        json_r["armed"].boolValue = false
+                    }
+                    
+                case "get_currentWP":
+                    self.log("received cmd: get_currentWP")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_currentWP")
+                    json_r["currentWP"].intValue = copter.missionNextWp
+                    
+                case "get_flightmode":
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_flightmode")
+                    if copter.flightMode != nil {
+                        json_r["flightmode"].stringValue = copter.flightMode!
+                    }
+                    else{
+                        json_r["flightmode"].stringValue = "No flight mode"
+                    }
+                    
+                
                 case "data_stream":
                     self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
@@ -1363,11 +1497,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     self.copter.dssSrtl(hoverTime: 5)
                     // Disconnect code
                     return
-                case "gimbal_set":
-                    self.log("Received cmd: gimbal_set")
-                    json_r = createJsonAck("gimbal_set")
-                    self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
-                    // No feedback, can't read the gimbal pitch value.
+               
 
                     
                     
@@ -1431,66 +1561,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
                     }
            
-                case "photo":
-                    switch json_m["arg"]["cmd"]{
-                        case "take_photo":
-                            self.log("Received cmd: photo, with arg take_photo")
-                            
-                            if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
-                                json_r = createJsonAck("photo")
-                                json_r["arg2"].stringValue = "take_photo"
-                                takePhotoCMD()
-                            }
-                            else{ // camera resource busy
-                                json_r = createJsonNack(fcn: "photo", arg2: "Camera resource busy")
-                            }
-                        case "download":
-                            self.log("Received cmd: photo, with arg download")
-                            // Check if argument is ok, send reply and do actions in the background
-                            let sessionIndex = json_m["arg"]["index"].intValue
-                            // Index does not exist
-                            if sessionIndex > self.sessionLastIndex {
-                                let tempStr = String(self.sessionLastIndex)
-                                self.log("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
-                                json_r = createJsonNack(fcn: "photo", arg2: "Requested index does not exist, last index is: " + tempStr)
-                                // Done
-                            }
-                            else if sessionIndex == -1 {
-                                if transferAllAllocator.allocate("transferAll", maxTime: 300) {
-                                    json_r = createJsonAck("photo")
-                                    json_r["arg2"].stringValue = "download"
-                                    // Transfer all in background, transferAll handles the allcoator
-                                    Dispatch.background {
-                                        // Transfer function handles the allocator
-                                        self.log("Downloading all photos...")
-                                        self.transferAll()
-                                    }
-                                }
-                                else {
-                                    json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
-                                    self.log("Dowload all nacked, already running")
-                                }
-                            }
-                            // Index is 0 or less (but not -1 since it is already tested)
-                            else if sessionIndex < 1 {
-                                self.log("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
-                                json_r = createJsonNack(fcn: "photo", arg2: "Bad index, first possible index is 1")
-                                // Done
-                            }
-                            // Index must be ok, download the index
-                            else{
-                                json_r = createJsonAck("photo")
-                                json_r["arg2"].stringValue = "download"
-                                Dispatch.background{
-                                    // Download function handles the allocator
-                                    self.log("Download photo index " + String(sessionIndex))
-                                    self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
-                                }
-                            }
-                        default:
-                            self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
-                            json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
-                        }
+                
                 
                 
                 case "save_dss_home_position":
