@@ -72,7 +72,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
     // Timer settings
     let sampleTime: Double = 120                // Sample time in ms
-    let controlPeriod: Double = 750 // 1500     // Number of millliseconds to send dutt command
+    let controlPeriod: Double = 2000            // Number of millliseconds to send dutt command (stated in API)
 
     // Timers for position control
     var duttTimer: Timer?
@@ -517,7 +517,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     }
     
     //******************************************************************************
-    // Sned a velocity command for a short time, dutts the aircraft in x, y, z, yaw.
+    // Sned a velocity command for a 2 second period, dutts the aircraft in x, y, z, yaw.
     func dutt(x: Float, y: Float, z: Float, yawRate: Float){
         // limit to max
         self.refVelBodyX = limitToMax(value: x, limit: xyVelLimit/100)
@@ -949,7 +949,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
 
     //************************************************************************************************************
-    // Timer function that loops every x ms until timer is invalidated. Each loop control data (joystick) is sent.
+    // Timer function that loops every sampleTime ms until timer is invalidated. Each loop control data (joystick) is sent.
     @objc func fireDuttTimer() {
         duttLoopCnt += 1
         if duttLoopCnt >= duttLoopTarget {
@@ -957,7 +957,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             duttTimer?.invalidate()
         }
         else {
-            sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: self.defaultXYVel)
+            // Speed argument acts as an upper limit not intended for this way to call the function. Set it high. Vel limits will apply.
+            sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: 999)
         }
     }
     

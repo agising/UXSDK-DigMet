@@ -1082,6 +1082,79 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         }
                     }
                    
+                case "dss_srtl":
+                    self.log("Received comd: dss srtl")
+                    let hoverT = json_m["arg"]["hover_time"].intValue
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "rtl", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "rtl", description: "Not flying")
+                    }
+                    // Nack hover time out of limits
+                    else if !(0 <= hoverT && hoverT <= 300){
+                        json_r = createJsonNack(fcn: "dss_srtl", description: "Hover_time is out of limits")
+                    }
+                    // Accept command
+                    else {
+                        json_r = createJsonAck("dss_srtl")
+                        Dispatch.main{
+                            self.copter.dssSrtl(hoverTime: hoverT)
+                        }
+                    }
+                    
+                case "set_vel_body":
+                    self.log("Received cmd: set_vel_body")
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: "Not flying")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_vel_body")
+                        let velX = Float(json_m["arg"]["vel_X"].doubleValue)
+                        let velY = Float(json_m["arg"]["vel_Y"].doubleValue)
+                        let velZ = Float(json_m["arg"]["vel_Z"].doubleValue)
+                        let yawRate = Float(json_m["arg"]["yaw_rate"].doubleValue)
+                        print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
+                        Dispatch.main{
+                            self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
+                            print("Dutt command sent from readSocket")
+                        }
+                    }
+                    
+                case "set_yaw":
+                    self.log("Received cmd: set_yaw")
+                    let yaw = json_m["arg"]["yaw"].doubleValue
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: "Not flying")
+                    }
+                    // Nack yaw out of limits
+                    else if yaw < 0 || 360 < yaw {
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Yaw is out of limits")
+                    }
+                    // Nack mission active
+                    else if copter.missionIsActive{
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Mission is active")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_yaw")
+                        Dispatch.main{
+                            self.copter.setYaw(targetYaw: yaw)
+                        }
+                    }
                
                     
                 case "data_stream":
@@ -1310,23 +1383,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
                         }
                 
-                case "dss_srtl":
-                    // Once activated it should be possible to interfere TODO
-                    self.log("Received comd: dss srtl")
-                    if copter.getIsFlying() ?? false { // Default to false to handle nil
-                        json_r = createJsonAck("dss_srtl")
-                        var hoverT = json_m["arg"]["hover_time"].intValue
-                        // If not within 0-300, use default of 5
-                        if !(0 <= hoverT && hoverT < 300){
-                                hoverT = 5
-                        }
-                        Dispatch.main{
-                            self.copter.dssSrtl(hoverTime: hoverT)
-                        }
-                    }
-                    else {
-                        json_r = createJsonNack(fcn: "dss_srtl", arg2: "State is not flying")
-                    }
+                
                 case "save_dss_home_position":
                     // Function saves dss home position, not used for anything yet..
                     self.log("Received cmd: save_dss_home_position")
@@ -1336,38 +1393,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     else {
                         json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
                     }
-                case "set_vel_body":
-                    self.log("Received cmd: set_vel_body")
-                    if copter.getIsFlying() ?? false { // Defiault to false to handle nil
-                        json_r = createJsonAck("set_vel_body")
-
-                        // Set velocity code
-                        // parse
-                        let velX = Float(json_m["arg"]["vel_X"].stringValue) ?? 0
-                        let velY = Float(json_m["arg"]["vel_Y"].stringValue) ?? 0
-                        let velZ = Float(json_m["arg"]["vel_Z"].stringValue) ?? 0
-                        let yawRate = Float(json_m["arg"]["yaw_rate"].stringValue) ?? 0
-                        print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
-                        Dispatch.main{
-                            self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
-                            print("Dutt command sent from readSocket")
-                        }
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "set_vel_body", arg2: "State is not flying")
-                    }
-                case "set_yaw":
-                    self.log("Received cmd: set_yaw")
-                    // Make sure we are fluying and are not on mission.
-                    if copter.getIsFlying() ?? false && !copter.missionIsActive{
-                        json_r = createJsonAck("set_yaw")
-                        Dispatch.main{
-                            self.copter.setYaw(targetYaw: json_m["arg"]["yaw"].doubleValue)
-                        }
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying AND not mission")
-                    }
+                
                 case "upload_mission_XYZ":
                     self.log("Received cmd: upload_mission_XYZ")
                     
