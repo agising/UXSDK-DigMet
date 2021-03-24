@@ -1267,6 +1267,30 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonAck("fcnStr")
                     }
                     
+                case "gogo":
+                    self.log("Received cmd: gogo")
+                    let next_wp = json_m["next_wp"].intValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Nack Wp number is not available in pending mission
+                    else if !copter.pendingMission["id" + String(next_wp)].exists(){
+                        json_r = createJsonNack(fcn: "gogo", description: "Wp number is not available in pending mission")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("gogo")
+                        Dispatch.main{
+                            _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
+                        }
+                    }
+                            
+                
                 case "data_stream":
                     self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
@@ -1319,59 +1343,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     // Activate followStream..
                     
                     
-                case "gogo_LLA":
-                    self.log("Received cmd: gogo_LLA")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                            Dispatch.main{
-                                _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                            }
-                            json_r = createJsonAck("gogo_LLA")
-                        }
-                        else{
-                            json_r = createJsonNack(fcn: "gogo_LLA", arg2: "WP id does not exist")
-                        }
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_LLA", arg2: "State is not flying")
-                    }
-
-                case "gogo_NED":
-                    self.log("Received cmd: gogo_NED")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                                Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                                }
-                                json_r = createJsonAck("gogo_NED")
-                            }
-                            else{
-                                json_r = createJsonNack(fcn: "gogo_NED", arg2: "WP id does not exist")
-                            }
-                        }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_NED", arg2: "State is not flying")
-                    }
-
-                case "gogo_XYZ":
-                    self.log("Received cmd: gogo_XYZ")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                                Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                                }
-                                json_r = createJsonAck("gogo_XYZ")
-                            }
-                            else{
-                                json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "WP id does not exist")
-                            }
-                        }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "State is not flying")
-                    }
 
                 case "heart_beat": // DONE
                     json_r = createJsonAck("heart_beat")

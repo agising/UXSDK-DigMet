@@ -178,10 +178,10 @@ class MyLocation: NSObject{
         // Test if mission is LLA
         if jsonWP["lat"].exists(){
             // Mission is LLA
-            self.altitude = jsonWP["alt"].doubleValue
-            self.heading = parseHeading(json: jsonWP)
             self.coordinate.latitude = jsonWP["lat"].doubleValue
             self.coordinate.longitude = jsonWP["lon"].doubleValue
+            self.altitude = jsonWP["alt"].doubleValue
+            self.heading = parseHeading(json: jsonWP)
         }
         
         // Test if mission NED
