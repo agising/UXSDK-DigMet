@@ -1290,7 +1290,43 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         }
                     }
                             
-                
+                case "set_pattern":
+                    self.log("Received cmd: set_pattern")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_pattern", description: nackOwnerStr)
+                    }
+                    else if true{
+                    }
+                    // Accept command
+                    else {
+                        json_r = createJsonAck("set_pattern")
+                        json_r = createJsonNack(fcn: "set_pattern", description: "Not implemented")
+                        print("TODO: Implement set_pattern")
+                    }
+                    
+                    
+                case "follow_stream":
+                    self.log("Received cmd: follow_stream")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Acccept command
+                    else {
+                        json_r = createJsonAck("follow_stream")
+                        json_r = createJsonNack(fcn: "follow_stream", description: "Not implemented")
+                        print("TODO: Implement follow_stream")
+                        // Subscribe/unsubscribe to IP and port
+                        // Parse incoming stream to activeWP
+                        // Activate followStream..
+                    }
+                    
+                    
                 case "data_stream":
                     self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
                     // Data stream code
@@ -1332,15 +1368,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     json_r = createJsonAck("gimbal_set")
                     self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
                     // No feedback, can't read the gimbal pitch value.
-                
-                case "follow_stream":
-                    self.log("Received cmd: follow_stream")
-                    json_r = createJsonAck("follow_stream")
-                    // Subscribe/unsubscribe to IP and port
-                    
-                        // Parse incoming stream to activeWP
-                
-                    // Activate followStream..
+
                     
                     
 
