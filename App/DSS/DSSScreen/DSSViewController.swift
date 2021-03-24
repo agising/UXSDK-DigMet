@@ -1072,14 +1072,15 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             else {
                                 // We tried many times, it must have failed somehow -> nack
                                 print("ReadSocket: RTL did not go through. Debug.")
-                                json_r = createJsonNack(fcn: "rtl", description: "RTL failed, try again")
+                                json_r = createJsonNack(fcn: "rtl", description: "RTL failed to engage, try again")
                                 break
                             }
                         }
+                        // If RTL is engaged send ack.
                         if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
                             json_r = createJsonAck("rtl")
                         }
-                    
+                    }
                    
                
                     
