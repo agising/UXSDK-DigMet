@@ -519,6 +519,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //******************************************************************************
     // Sned a velocity command for a 2 second period, dutts the aircraft in x, y, z, yaw.
     func dutt(x: Float, y: Float, z: Float, yawRate: Float){
+        // Stop any ongoing mission
+        self.missionIsActive = false
         // limit to max
         self.refVelBodyX = limitToMax(value: x, limit: xyVelLimit/100)
         self.refVelBodyY = limitToMax(value: y, limit: xyVelLimit/100)

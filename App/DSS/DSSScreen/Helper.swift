@@ -410,12 +410,14 @@ class HeartBeat: NSObject{
     var degradedLimit: Double = 2               // Time limit for link to be considered degraded
     var lostLimit: Double = 10                  // Time limit for link to be considered lost
     var beatDetected = false                    // Flag for first received heartBeat
+    var disconnected = true
     
     func newBeat(){
         if !beatDetected{
             beatDetected = true
         }
         self.lastBeat = CACurrentMediaTime()
+        disconnected = false
     }
     
     func elapsed()->Double{
@@ -433,6 +435,7 @@ class HeartBeat: NSObject{
         }
         else{
             print("Link lost, elapsed time since last heartBeat: ", elapsedTime)
+            disconnected = true
             return false
         }
     }
@@ -483,9 +486,17 @@ func parseHeading(json: JSON)->Double{
 // Parse index and test if it is ok or not.
 func parseIndex(json: JSON, sessionLastIndex: Int)->Int{
     // Check for cmd download
-    if json["cmd"].stringValue != "download"{
-        // Its not a download command, index is not used
-        return 0
+    if json["cmd"].exists(){
+        if json["cmd"].stringValue != "download"{
+            // Its not a download command, index is not used
+            return 0
+        }
+    }
+    // Check for ref
+    if json["ref"].exists(){
+        if json["ref"].stringValue != "LLA" || json["ref"].stringValue != "XYZ"{
+            return 0
+        }
     }
     // If it is not a string its an int..
     if json["index"].string == nil{

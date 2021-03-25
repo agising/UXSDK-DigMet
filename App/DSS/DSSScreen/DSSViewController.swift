@@ -51,6 +51,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
     var inControls = "USER"
+    var disconnected = true
+    
     
     var pitchRangeExtension_set: Bool = false
     var nextGimbalPitch: Int = 0
@@ -66,6 +68,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
     var transferring: Bool = false
     var jsonMetaDataXYZ: JSON = JSON()                 // All the photo metadata XYZ
+    var jsonMetaDataNED: JSON = JSON()                 // All th photo metadata NED
     var jsonMetaDataLLA: JSON = JSON()                 // All the photo metadata LLA
     var jsonPhotos: JSON = JSON()                   // Photos filename and downloaded status
         
@@ -203,10 +206,22 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         metaXYZ["z"] = JSON(self.copter.loc.pos.z)
         metaXYZ["agl"] = JSON(-1)
         // In sim loc.gimbalYaw does not update while on ground exept for first photo.
-        metaXYZ["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
+        metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
         metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
         metaXYZ["index"] = JSON(self.sessionLastIndex)
 
+        // NED metadata
+        var metaNED = JSON()
+        metaNED["filename"] = JSON("")
+        metaNED["north"] = JSON(self.copter.loc.pos.north)
+        metaNED["east"] = JSON(self.copter.loc.pos.east)
+        metaNED["down"] = JSON(self.copter.loc.pos.down)
+        metaNED["agl"] = JSON(-1)
+        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+        metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
+        metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+        metaNED["index"] = JSON(self.sessionLastIndex)
+        
         // LLA metadata
         var metaLLA = JSON()
         metaLLA["filename"] = JSON("")
@@ -215,7 +230,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         metaLLA["lon"] = JSON(self.copter.loc.coordinate.longitude)
         metaLLA["alt"] = JSON(self.copter.loc.altitude)
         metaLLA["agl"] = JSON(-1)
-        metaLLA["yaw"] = JSON(self.copter.loc.gimbalYaw)
+        metaLLA["heading"] = JSON(self.copter.loc.gimbalYaw)
         metaLLA["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
 
         
@@ -225,6 +240,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
         // Separate or squash XYZ and LLA metadata, TODO
         self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
         self.jsonMetaDataLLA[String(self.sessionLastIndex)] = metaLLA
         self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
         
@@ -237,6 +253,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         else{
             print(metaXYZ)
+            print(metaNED)
             print(metaLLA)
         }
         return true
@@ -969,6 +986,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         var fromOwner = false
         var requesterID = ""
         var nackOwnerStr = ""
+        var messageQualifiesForHeartBeat = false
 
         while self.replyEnable{
             do {
@@ -993,12 +1011,40 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
                 }
                 
-                // Message valud for heartbeat?
+                // Message valid for heartbeat?
+                messageQualifiesForHeartBeat = false
                 if fromOwner{
-                    var messageQualifiesForHeartBeat = true
+                    messageQualifiesForHeartBeat = true
                 }
                 
                 switch json_m["fcn"]{
+                case "heart_beat":
+                    self.log("Received cmd: heart_beat")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("heart_beat")
+                    }
+                
+                case "set_init_point":
+                    self.log("Received cmd: heart_beat")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                    }
+                    // Nack nav not ready
+                    else if self.copter.loc.coordinate.latitude == 0{
+                        json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_init_pooint")
+                        print("TODO set init point")
+                    }
+                    
                 case "arm_take_off":
                     self.log("Received cmd: arm_take_off")
                     let toAlt = json_m["arg"]["height"].doubleValue
@@ -1347,7 +1393,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     
                 case "set_gripper":
                     self.log("Received cmd: set_gripper")
-                    json_r = createJsonNack(fcn: "set_gripper", description: "Not implemented")
+                    json_r = createJsonNack(fcn: "set_gripper", description: "Not applicable to DJI")
                 
                 case "photo":
                     self.log("Received cmd: photo")
@@ -1459,125 +1505,140 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     else{
                         json_r["flightmode"].stringValue = "No flight mode"
                     }
-                    
-                
-                case "data_stream":
-                    self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
-                    // Data stream code
-                    let enable = json_m["arg"]["enable"].boolValue
-                    switch json_m["arg"]["attribute"]{
-                        case "ATT":
-                            self.subscriptions.setATT(bool: enable)
-                            log("ATT subscription not supported yet!")
-                            json_r = createJsonNack(fcn: "data_stream", arg2: "ATT not supported for DJI")
-                        case "XYZ":
-                            self.subscriptions.setXYZ(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "photo_XYZ":
-                            self.subscriptions.setPhotoXYZ(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "LLA":
-                            self.subscriptions.setLLA(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "photo_LLA":
-                            self.subscriptions.setPhotoLLA(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "NED":
-                            self.subscriptions.setNED(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "WP_ID":
-                            self.subscriptions.setWpId(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        default:
-                            json_r = createJsonNack(fcn: "data_stream", arg2: "Attribute not supported" + json_m["arg"].stringValue)
+                case "get_metadata":
+                    self.log("Received cmd: get_metadata")
+                    let parsedIndex = parseIndex(json: json_m, sessionLastIndex: self.sessionLastIndex)
+                    // Nack reference faulty
+                    if parsedIndex == 0{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Reference faulty, " + json_m["ref"].stringValue)
                     }
-                case "disconnect":
-                    json_r = createJsonAck("disconnect")
-                    self.log("Received cmd: disconnect")
-                    self.copter.dssSrtl(hoverTime: 5)
-                    // Disconnect code
-                    return
-               
-
-                    
-                    
-
-                case "heart_beat": // DONE
-                    json_r = createJsonAck("heart_beat")
-                    //print("Received heart_beat")
-                    // Any heart beat code here
-                    
-                case "info_request":
-                    json_r = createJsonAck("info_request")
-                    // print("Received cmd: info_request", json_m["arg"])
-                    // Info request code
-                    switch json_m["arg"]{
-                    case "operator":
-                        json_r["arg2"].stringValue = "operator"
-                        json_r["arg3"].stringValue = self.inControls
-                    case "posD":
-                        json_r["arg2"].stringValue = "posD"
-                        json_r["arg3"] = JSON(self.copter.loc.pos.z)
-                    case "armed":
-                        json_r["arg2"].stringValue = "armed"
-                        json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
-                    case "idle":
-                        json_r["arg2"].stringValue = "idle"
-                        json_r["arg3"].boolValue = self.idle
-                    case "current_wp":
-                        json_r["arg2"].stringValue = "current_wp"
-                        json_r["arg3"].stringValue = copter.missionNextWp.description
-                    case "metadata":
-                        json_r["arg2"].stringValue = "metadata"
-                        let frame = json_m["arg2"].stringValue
-                        let sessionIndex = json_m["arg3"].intValue
-                        if  sessionIndex == -1{
+                    // Nack index out of range (coded from parseIndex)
+                    else if parsedIndex == -11{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Index out of range, " + String(json_m["index"].intValue))
+                    }
+                    // Nack index faulty (coded from parseIndex)
+                    else if parsedIndex == -12{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Index string faulty, " + json_m["index"].stringValue)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("get_metadata")
+                        let frame = json_m["ref"].stringValue
+                        // All indexes
+                        if  parsedIndex == -1{
                             if frame == "XYZ"{
-                                json_r["arg3"] = self.jsonMetaDataXYZ
+                                json_r["metadata"] = self.jsonMetaDataXYZ
+                            }
+                            else if frame == "NED"{
+                                json_r["metadata"] = self.jsonMetaDataNED
                             }
                             else if frame == "LLA"{
-                                json_r["arg3"] = self.jsonMetaDataLLA
+                                json_r["metadata"] = self.jsonMetaDataLLA
                             }
                         }
+                        // Specific index
                         else{
                             if frame == "XYZ"{
-                                if self.jsonMetaDataXYZ[String(describing: sessionIndex)].exists(){
-                                    json_r["arg3"] = self.jsonMetaDataXYZ[String(describing: sessionIndex)]
-                                }
-                                else{
-                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
-                                }
+                                json_r["metadata"] = self.jsonMetaDataXYZ[String(describing: parsedIndex)]
                             }
+                            else if frame == "NED"{
+                                json_r["metadata"] = self.jsonMetaDataNED[String(describing: parsedIndex)]
+                        }
                             else if frame == "LLA"{
-                                if self.jsonMetaDataLLA[String(describing: sessionIndex)].exists(){
-                                    json_r["arg3"] = self.jsonMetaDataLLA[String(describing: sessionIndex)]
-                                }
-                                else{
-                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
-                                }
+                                    json_r["metadata"] = self.jsonMetaDataLLA[String(describing: parsedIndex)]
                             }
                         }
-                    default:
-                        json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
                     }
+                    
+                case "get_posD":
+                    self.log("Received cmd: get_posD")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_posD")
+                    json_r["posD"].doubleValue = self.copter.loc.pos.down
+                
+                case "get_PWM":
+                    self.log("Received cmd: get_PWM")
+                    json_r = createJsonNack(fcn: "get_PWM", description: "Not applicable to DJI")
+                    
+                case "disconnect":
+                    self.log("Received cmd: disconnect")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("disconnect")
+                        // Stop
+                        copter.dutt(x: 0, y: 0, z: 0, yawRate: 0)
+                        // Prevent wp action to resume mission
+                        self.heartBeat.disconnected = true
+                        // TODO call DSC
+                    }
+                    
+                case "data_stream":
+                    self.log("Received cmd: data_stream with attrubute: " + json_m["stream"].stringValue + " and enable: " + String(json_m["enable"].boolValue))
+                    let enable = json_m["enable"].boolValue
+                    // Nack faulty stream handeled in switch case
+                    // Accept command (and nack later if neccessary)
+                    json_r = createJsonAck("data_stream")
+                    switch json_m["stream"]{
+                        case "ATT":
+                            json_r["stream"].stringValue = "ATT"
+                            self.subscriptions.setATT(bool: enable)
+                            print("TODO: support ATT")
+                        case "LLA":
+                            json_r["stream"].stringValue = "LLA"
+                            self.subscriptions.setLLA(bool: enable)
+                        case "NED":
+                            json_r["stream"].stringValue = "NED"
+                            self.subscriptions.setNED(bool: enable)
+                        case "XYZ":
+                            json_r["stream"].stringValue = "XYZ"
+                            self.subscriptions.setXYZ(bool: enable)
+                        case "photo_LLA":
+                            json_r["stream"].stringValue = "photo_LLA"
+                            self.subscriptions.setPhotoLLA(bool: enable)
+                        case "photo_XYZ":
+                            json_r["stream"].stringValue = "photo_XYZ"
+                            self.subscriptions.setPhotoXYZ(bool: enable)
+                        case "currentWP":
+                            json_r["stream"].stringValue = "currentWP"
+                            self.subscriptions.setWpId(bool: enable)
+                        default:
+                            json_r = createJsonNack(fcn: "data_stream", description: "Stream faulty, " + json_m["stream"].stringValue)
+                    }
+                    
+
+
+                    
+               
+//                    case "operator":
+//                        json_r["arg2"].stringValue = "operator"
+//                        json_r["arg3"].stringValue = self.inControls
+//                    case "idle":
+//                        json_r["arg2"].stringValue = "idle"
+//                        json_r["arg3"].boolValue = self.idle
+                    
            
                 
                 
                 
-                case "save_dss_home_position":
-                    // Function saves dss home position, not used for anything yet..
-                    self.log("Received cmd: save_dss_home_position")
-                    if copter.saveCurrentPosAsDSSHome(){
-                        json_r = createJsonAck("save_dss_home_position")
-                    }
-                    else {
-                        json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
-                    }
+//                case "save_dss_home_position":
+//                    // Function saves dss home position, not used for anything yet..
+//                    self.log("Received cmd: save_dss_home_position")
+//                    if copter.saveCurrentPosAsDSSHome(){
+//                        json_r = createJsonAck("save_dss_home_position")
+//                    }
+//                    else {
+//                        json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
+//                    }
                 
 
                     
                 default:
-                    json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")
+                    json_r = createJsonNack(fcn: json_m["fcn"].stringValue, description: "API call not recognized")
                     self.log("API call not recognized: " + json_m["fcn"].stringValue)
                     messageQualifiesForHeartBeat = false
                 }
@@ -1835,8 +1896,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         usleep(200000)
                         //print("WP action waiting for takePhoto to complete")
                     }
-                    Dispatch.main {
-                        _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
+                    if !self.heartBeat.disconnected{
+                        Dispatch.main {
+                            _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
+                        }
                     }
                 }
             }
