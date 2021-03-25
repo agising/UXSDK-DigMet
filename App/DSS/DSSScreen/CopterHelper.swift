@@ -58,10 +58,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
   //  var dssHomeHeading: Double?               // Home heading of DSS
 
     var flightMode: String?                     // the flight mode as a string
-    //var startHeadingXYZ: Double?                // The start heading that defines the XYZ coordinate system
-    //var startLocationXYZ: CLLocation?           // The start location that defines the XYZ coordinate system
+    //var startHeadingXYZ: Double?              // The start heading that defines the XYZ coordinate system
+    //var startLocationXYZ: CLLocation?         // The start location that defines the XYZ coordinate system
     var loc: MyLocation = MyLocation()
-    var startLoc: MyLocation = MyLocation()      // The start location as a MyLocation. Used for origin of geofence.   TODO NAME IT INIT POINT
+    var startLoc: MyLocation = MyLocation()     // The start location as a MyLocation. Used for origin of geofence.
+    var initLoc: MyLocation = MyLocation()      //
 
     // Tracking wp properties
     var trackingRecord: Int = 0                 // Consequtive loops on correct position
@@ -286,14 +287,14 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     
     //**************************************************************************************************
     // Clears the DSS smart rtl list and adds current location as DSS home location, also saves heading.
-    func saveCurrentPosAsDSSHome()->Bool{
+    func resetDSSSRTLMission()->Bool{
         guard let heading = getHeading() else {
             return false
         }
         guard let pos = self.getCurrentLocation() else {
             return false}
         
-        // Reset dssSmartERtlMission
+        // Reset dssSmartRtlMission
         self.dssSmartRtlMission = JSON()
         let id = "id0"
         dssSmartRtlMission[id] = JSON()
@@ -303,12 +304,12 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         dssSmartRtlMission[id]["heading"] = JSON(heading)
         dssSmartRtlMission[id]["action"] = JSON("land")
         
-        if pos.altitude - self.startLoc.altitude < 2 {
-            print("saveCurrentPosAsDSSHome: Forcing land altitude to 2m")
-            self.dssSmartRtlMission[id]["alt"].doubleValue = self.startLoc.altitude + 2
-        }
+        //if pos.altitude - self.startLoc.altitude < 2 {
+        //    print("reserDSSSRTLMission: Forcing land altitude to 2m min")
+        self.dssSmartRtlMission[id]["alt"].doubleValue = self.startLoc.altitude + 2
+        //}
         
-        print("saveCurrentPosAsDSSHome: DSS home saved: ",self.dssSmartRtlMission)
+        print("resetDSSSRTLMission: DSS SRTL reset: ",self.dssSmartRtlMission)
         return true
     }
     

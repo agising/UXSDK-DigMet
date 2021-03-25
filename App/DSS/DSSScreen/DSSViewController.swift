@@ -50,7 +50,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     let dataPublishEndPoint = "tcp://*:5559"
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
-    var inControls = "USER"
+    var inControls = "PILOT"
     var disconnected = true
     
     
@@ -1028,12 +1028,60 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     else{
                         json_r = createJsonAck("heart_beat")
                     }
+                case "who_controls":
+                    self.log("Received cmd: who_controls")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("who_controls")
+                    json_r["in_controls"].stringValue = self.inControls
                 
+                case "set_geofence":
+                    self.log("Received cmd: set_geofence")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_geofence", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_geofence")
+                        self.copter.geoFenceRadius = json_m["radius"].doubleValue
+                        self.copter.geoFenceHeight[0] = json_m["low_height_low"].doubleValue
+                        self.copter.geoFenceHeight[1] = json_m["height_high"].doubleValue
+                    }
+                case "idle":
+                    self.log("Received cmd: idle")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("idle")
+                    json_r["idle"].boolValue = self.idle // TODO hardcoded to true..
+                                    
+                                
+                case "reset_dss_srtl":
+                    self.log("Received cmd: reset_dss_srtl")
+                    // TODO, what should it do? pop and replace first wp in smart rtl?
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: nackOwnerStr)
+                    }
+                    // Nack nav not ready
+                    else if self.copter.loc.coordinate.latitude == 0{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Navigation not ready")
+                    }
+                    // Accept command
+                    else{
+                        if copter.resetDSSSRTLMission(){
+                            json_r = createJsonAck("reset_dss_srtl")
+                        }
+                        else {
+                            json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Position not available")
+                        }
+                    }
+                    
                 case "set_init_point":
                     self.log("Received cmd: heart_beat")
                     // Nack not fromOwner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: "set_init_point", description: nackOwnerStr)
                     }
                     // Nack nav not ready
                     else if self.copter.loc.coordinate.latitude == 0{
@@ -1610,33 +1658,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             json_r = createJsonNack(fcn: "data_stream", description: "Stream faulty, " + json_m["stream"].stringValue)
                     }
                     
-
-
-                    
-               
-//                    case "operator":
-//                        json_r["arg2"].stringValue = "operator"
-//                        json_r["arg3"].stringValue = self.inControls
-//                    case "idle":
-//                        json_r["arg2"].stringValue = "idle"
-//                        json_r["arg3"].boolValue = self.idle
-                    
-           
-                
-                
-                
-//                case "save_dss_home_position":
-//                    // Function saves dss home position, not used for anything yet..
-//                    self.log("Received cmd: save_dss_home_position")
-//                    if copter.saveCurrentPosAsDSSHome(){
-//                        json_r = createJsonAck("save_dss_home_position")
-//                    }
-//                    else {
-//                        json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
-//                    }
-                
-
-                    
                 default:
                     json_r = createJsonNack(fcn: json_m["fcn"].stringValue, description: "API call not recognized")
                     self.log("API call not recognized: " + json_m["fcn"].stringValue)
@@ -1725,21 +1746,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //************************************************************************************
     // ActivateSticks: Touch down up inside action, ativate when ready (release of button)
     @IBAction func ActivateSticksPressed(_ sender: UIButton) {
-        if inControls == "USER"{
+        if inControls == "PILOT"{
             // GIVE the controls to client
-            inControls = "CLIENT"
+            inControls = "APPLICATION"
             // Prepare button text for next toggle
             controlsButton.setTitle("TAKE Controls", for: .normal)
             activateSticks()
-            self.log("CLIENT has the Controls")
+            self.log("APPLICATION has the Controls")
         }
         else{
             // TAKE back the controls from CLIENT
             deactivateSticks()
-            inControls = "USER"
+            inControls = "PILOT"
             // Prepare button text for next toggle
             controlsButton.setTitle("GIVE Controls", for: .normal)
-            self.log("USER has the Controls")
+            self.log("PILOT has the Controls")
         }
     }
 
