@@ -20,7 +20,7 @@ class MyLocation: NSObject{
     var gimbalYaw: Double = 0
     var gimbalYawRelativeToHeading: Double = 0
     var action: String = ""
-    var isStartLocation: Bool = false
+    var isInitLocation: Bool = false
     var coordinate = MyCoordinate()
     var geoFence = GeoFence()
     var vel = Vel()
@@ -34,7 +34,7 @@ class MyLocation: NSObject{
         self.gimbalYaw = 0
         self.gimbalYawRelativeToHeading = 0
         self.action = ""
-        self.isStartLocation = false
+        self.isInitLocation = false
         self.coordinate.latitude = 0
         self.coordinate.longitude = 0
         self.geoFence.radius = 0
@@ -101,11 +101,11 @@ class MyLocation: NSObject{
     
    
    
-    // This function should be used from the startMyLocation
+    // This function should be used from the initLoc object
     func geofenceOK(wp: MyLocation)->Bool{
-        // To make sure function is only used from startlocation.
-        if !isStartLocation {
-            print("geofence: WP used for reference is not a start location.")
+        // To make sure function is only used from initLoc.
+        if !self.isInitLocation {
+            print("geofence: WP used for reference is not init location.")
             return false
         }
         let (_, _, dAlt, dist2D, _, _) = self.distanceTo(wpLocation: wp)
@@ -122,39 +122,46 @@ class MyLocation: NSObject{
         return true
     }
     
-    // Set up wp properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isStartWP: Bool=false, startWP: MyLocation, completionBlock: ()->Void){
+    // Set up a MyLocation given a CLLocation and other properties
+    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isInitLocation: Bool=false, initLoc: MyLocation, completionBlock: ()->Void){
+        if self.isInitLocation{
+            print("setPosition: Init point already set")
+            return
+        }
         self.altitude = pos.altitude
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
         self.gimbalYaw = heading + gimbalYawRelativeToHeading
         self.coordinate.latitude = pos.coordinate.latitude
         self.coordinate.longitude = pos.coordinate.longitude
-        self.isStartLocation = isStartWP
+        self.isInitLocation = isInitLocation
         
-        // Dont set up XYZ for the startMyLocation it self.
-        if self.isStartLocation{
+        // Dont set up local coordinates for the InitLoc it self.
+        if self.isInitLocation{
             return
         }
-        // If startWP is not setup, return
-        if !startWP.isStartLocation {
-            print("setPosition: Error, cannot update XYZ without a set start position")
+        
+        // If initLoc is not setup, local coordinates cannot be calculated - return
+        if !initLoc.isInitLocation {
+            completionBlock()
+            print("setPosition: Local coordinates not set, init point not set")
             return
         }
+        
         // Lat-, lon-, alt-diff
-        let latDiff = pos.coordinate.latitude - startWP.coordinate.latitude
-        let lonDiff = pos.coordinate.longitude - startWP.coordinate.longitude
-        let altDiff = pos.altitude - startWP.altitude
+        let latDiff = pos.coordinate.latitude - initLoc.coordinate.latitude
+        let lonDiff = pos.coordinate.longitude - initLoc.coordinate.longitude
+        let altDiff = pos.altitude - initLoc.altitude
 
         // posN, posE
         let posN = latDiff * 1852 * 60
-        let posE = lonDiff * 1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi)
+        let posE = lonDiff * 1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi)
         self.pos.north = posN
         self.pos.east = posE
         self.pos.down = -altDiff
         
         // X direction definition
-        let alpha = (startWP.gimbalYaw)/180*Double.pi
+        let alpha = (initLoc.gimbalYaw)/180*Double.pi
 
         // Coordinate transformation, from (N, E) to (X,Y)
         self.pos.x =  posN * cos(alpha) + posE * sin(alpha)
@@ -171,7 +178,7 @@ class MyLocation: NSObject{
         self.geoFence.height = height
     }
     
-    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, startWP: MyLocation){
+    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, initLoc: MyLocation){
         // Reset all properties
         self.reset()
         
@@ -191,11 +198,11 @@ class MyLocation: NSObject{
             let east = jsonWP["east"].doubleValue
             let down = jsonWP["down"].doubleValue
             // Calc dLat, dLon from north east. Add to start location.
-            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
-            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
+            let dLat = initLoc.coordinate.latitude + north/(1852 * 60)
+            let dLon = initLoc.coordinate.longitude + east/(1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = startWP.altitude - down
+            self.altitude = initLoc.altitude - down
             self.heading = parseHeading(json: jsonWP)
             
         }
@@ -205,20 +212,20 @@ class MyLocation: NSObject{
             let y = jsonWP["y"].doubleValue
             let z = jsonWP["z"].doubleValue
             // First calculate northing and easting.
-            let XYZstartHeading = startWP.gimbalYaw
+            let XYZstartHeading = initLoc.gimbalYaw
             let beta = -XYZstartHeading/180*Double.pi
             let north = x * cos(beta) + y * sin(beta)
             let east = -x * sin(beta) + y * cos(beta)
             // Calc dLat, dLon from north east. Add to start location
-            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
-            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
+            let dLat = initLoc.coordinate.latitude + north/(1852 * 60)
+            let dLon = initLoc.coordinate.longitude + east/(1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = startWP.altitude - z
+            self.altitude = initLoc.altitude - z
             self.heading = parseHeading(json: jsonWP)
             // Transform to XYZ
             if self.heading != -1 && self.heading != -99{
-                self.heading += startWP.gimbalYaw
+                self.heading += initLoc.gimbalYaw
                 // Make sure heading is within 0-360 range (to avoid -1 and -99 which has other meaning)
                 if self.heading < 0 {
                     self.heading += 360
@@ -264,11 +271,11 @@ class MyCoordinate:NSObject{
     var latitude: Double = 0
     var longitude: Double = 0
 }
-// SubClass to MyLocation. Geofence properties that are stored in the startMyLocation. Geofence is checked relative to startMyLocation
+// SubClass to MyLocation. Geofence properties that are stored in the initLoc. Geofence is checked relative to initLoc, from initLoc object.
 class GeoFence: NSObject{
-    var radius: Double = 0
-    var height: [Double] = [0, 0]
-}
+    var radius: Double = 50                 // Geofence radius relative initLoc location
+    var height: [Double] = [2, 20]          // Geofence height relative initLoc location
+   }
 // SubClass to MyLocation. Body class for body velocities
 class Vel: NSObject{
     var bodyX: Float = 0

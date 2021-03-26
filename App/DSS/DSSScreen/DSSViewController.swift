@@ -174,53 +174,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-    //**************************************************************************************************
-    // Writes metadata to json. Use startLoc for the calulations, if it is not set, set ut to current pos
+    //********************************************************************************
+    // Writes metadata to json. If init point is not set, XYZ and NED are set to 999.0
     func writeMetaData()->Bool{
-        // Make sure startWP is set in order to be able to calc the local XYZ
-        if !self.copter.startLoc.isStartLocation {
-            // StartLocation is not set. Try to set it!
-            if copter.setStartLocation(){
-                print("writeMetaData: setStartLocation set from here")
-                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to get it right in simulation too.
-                guard let heading = self.copter.getHeading() else {
-                   print("writeMetaData: Error updating heading")
-                   return false}
-                self.copter.loc.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
-                
-                // Start location is set, call the function again, return true because problem is fixed.
-                _ = writeMetaData()
-                return true
-            }
-            else{
-                self.log("writeMetaData: Could not setStartLocation, Aircraft ready?")
-                return false
-            }
-        }
-
-        // XYZ metadata
-        var metaXYZ = JSON()
-        metaXYZ["filename"] = JSON("")
-        metaXYZ["x"] = JSON(self.copter.loc.pos.x)
-        metaXYZ["y"] = JSON(self.copter.loc.pos.y)
-        metaXYZ["z"] = JSON(self.copter.loc.pos.z)
-        metaXYZ["agl"] = JSON(-1)
-        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
-        metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
-        metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-        metaXYZ["index"] = JSON(self.sessionLastIndex)
-
-        // NED metadata
-        var metaNED = JSON()
-        metaNED["filename"] = JSON("")
-        metaNED["north"] = JSON(self.copter.loc.pos.north)
-        metaNED["east"] = JSON(self.copter.loc.pos.east)
-        metaNED["down"] = JSON(self.copter.loc.pos.down)
-        metaNED["agl"] = JSON(-1)
-        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
-        metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
-        metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-        metaNED["index"] = JSON(self.sessionLastIndex)
+        
+        var jsonPhoto = JSON()
+        jsonPhoto["filename"] = JSON("")
+        jsonPhoto["stored"].boolValue = false
+        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
         
         // LLA metadata
         var metaLLA = JSON()
@@ -232,30 +193,104 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         metaLLA["agl"] = JSON(-1)
         metaLLA["heading"] = JSON(self.copter.loc.gimbalYaw)
         metaLLA["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-
         
-        var jsonPhoto = JSON()
-        jsonPhoto["filename"] = JSON("")
-        jsonPhoto["stored"].boolValue = false
-        
-        // Separate or squash XYZ and LLA metadata, TODO
-        self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
-        self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
+        // Append metaLLA
         self.jsonMetaDataLLA[String(self.sessionLastIndex)] = metaLLA
-        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
         
         // Check for subscriptions
-        if self.subscriptions.photoXYZ{
-            _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
-        }
         if self.subscriptions.photoLLA{
             _ = self.publish(socket: self.infoPublisher, topic: "photo_LLA", json: metaLLA)
         }
         else{
-            print(metaXYZ)
-            print(metaNED)
             print(metaLLA)
         }
+        
+        
+        // Local coordinates requires init point.
+        // If init point is set calc XYZ and NED, otherwise set to default
+        if self.copter.initLoc.isInitLocation {
+
+            // XYZ metadata
+            var metaXYZ = JSON()
+            metaXYZ["filename"] = JSON("")
+            metaXYZ["x"] = JSON(self.copter.loc.pos.x)
+            metaXYZ["y"] = JSON(self.copter.loc.pos.y)
+            metaXYZ["z"] = JSON(self.copter.loc.pos.z)
+            metaXYZ["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw - self.copter.initLoc.gimbalYaw)
+            metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaXYZ["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaXYZ
+            self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        
+            // Check for subscriptions
+            if self.subscriptions.photoXYZ{
+                _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
+            }
+            
+            // NED metadata
+            var metaNED = JSON()
+            metaNED["filename"] = JSON("")
+            metaNED["north"] = JSON(self.copter.loc.pos.north)
+            metaNED["east"] = JSON(self.copter.loc.pos.east)
+            metaNED["down"] = JSON(self.copter.loc.pos.down)
+            metaNED["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaNED["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaNED
+            self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
+            
+            // Dont check for subscriptiopns, NED is not subscirbeable.
+        }
+        // No init point, fill empty meta data to not have faulte sizes etc.
+        else{
+            // XYZ metadata
+            var metaXYZ = JSON()
+            metaXYZ["filename"] = JSON("")
+            metaXYZ["x"] = JSON(999.0)
+            metaXYZ["y"] = JSON(999.0)
+            metaXYZ["z"] = JSON(999.0)
+            metaXYZ["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaXYZ["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaXYZ
+            self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        
+            // Check for subscriptions
+            if self.subscriptions.photoXYZ{
+                _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
+            }
+            
+            // NED metadata
+            var metaNED = JSON()
+            metaNED["filename"] = JSON("")
+            metaNED["north"] = JSON(999.0)
+            metaNED["east"] = JSON(999.0)
+            metaNED["down"] = JSON(999.0)
+            metaNED["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaNED["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaNED
+            self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
+            
+            
+            if false{
+                print(metaXYZ)
+                print(metaNED)
+            }
+        }
+        
         return true
     }
     
@@ -1044,10 +1079,15 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     // Accept command
                     else{
                         json_r = createJsonAck("set_geofence")
-                        self.copter.geoFenceRadius = json_m["radius"].doubleValue
-                        self.copter.geoFenceHeight[0] = json_m["low_height_low"].doubleValue
-                        self.copter.geoFenceHeight[1] = json_m["height_high"].doubleValue
+                        // Parse
+                        let radius = json_m["radius"].doubleValue
+                        var height: [Double] = []
+                        height[0] = json_m["low_height_low"].doubleValue
+                        height[1] = json_m["height_high"].doubleValue
+                        // Set Geo fence
+                        self.copter.initLoc.setGeoFence(radius: radius, height: height)
                     }
+                    
                 case "idle":
                     self.log("Received cmd: idle")
                     // No nack reasons
@@ -1087,15 +1127,25 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     else if self.copter.loc.coordinate.latitude == 0{
                         json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
                     }
+                    // Nack init point already set
+                    else if self.copter.initLoc.isInitLocation{
+                        json_r = createJsonNack(fcn: "set_init_point", description: "Init point already set")
+                    }
                     // Accept command
                     else{
                         json_r = createJsonAck("set_init_pooint")
-                        print("TODO set init point")
+                        let headingRef = json_m["heading_ref"].stringValue
+
+                        // Test robustness
+                        if !copter.setInitLocation(headingRef: headingRef){
+                            print("Error: Debug. Something is wrong, should not have passed to here.")
+                            json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
+                        }
                     }
                     
                 case "arm_take_off":
                     self.log("Received cmd: arm_take_off")
-                    let toAlt = json_m["arg"]["height"].doubleValue
+                    let toHeight = json_m["arg"]["height"].doubleValue
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
@@ -1109,14 +1159,17 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "arm_take_off", description: "State is flying")
                     }
                     // Nack height limits
-                    else if toAlt < 2 || toAlt > 40 {
+                    else if toHeight < 2 || toHeight > 40 {
                         json_r = createJsonNack(fcn: "arm_take_off", description: "Height is out of limits")
+                    }
+                    // Nack nit point not set
+                    else if !self.copter.initLoc.isInitLocation {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Init point not set")
                     }
                     // Accept command
                     else{
                         json_r = createJsonAck("arm_take_off")
-                        copter.toAlt = toAlt
-                        copter.toReference = "HOME"     // TODO, Home?
+                        copter.toHeight = toHeight
                         copter.takeOff()
                     }
                     
@@ -1259,7 +1312,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
                     }
                     // Nack init point not set
-                    else if !copter.startLoc.isStartLocation{
+                    else if !copter.initLoc.isInitLocation{
                         json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
                     }
                     // Nack wp violate geofence
@@ -1296,7 +1349,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
                     }
                     // Nack init point not set
-                    else if !copter.startLoc.isStartLocation{
+                    else if !copter.initLoc.isInitLocation{
                         json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
                     }
                     // Nack wp violate geofence
@@ -1333,7 +1386,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
                     }
                     // Nack init point not set
-                    else if !copter.startLoc.isStartLocation{
+                    else if !copter.initLoc.isInitLocation{
                         json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
                     }
                     // Nack wp violate geofence
@@ -1422,9 +1475,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                
                 case "set_gimbal":
                     self.log("Received cmd: set_gimbal")
-                    let roll = json_m["roll"].doubleValue
+                    _ = json_m["roll"].doubleValue
                     let pitch = json_m["pitch"].doubleValue
-                    let yaw = json_m["yaw"].doubleValue
+                    _ = json_m["yaw"].doubleValue
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
@@ -1858,7 +1911,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             json["z"].doubleValue = round(100 * copter.loc.pos.z) / 100
             json["agl"].doubleValue = -1
             json["local_yaw"].doubleValue =
-                round(100 * (copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)) / 100
+                round(100 * (copter.loc.gimbalYaw - self.copter.initLoc.gimbalYaw)) / 100
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
     }
