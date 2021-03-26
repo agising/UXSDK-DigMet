@@ -168,6 +168,17 @@ class MyLocation: NSObject{
         self.pos.y = -posN * sin(alpha) + posE * cos(alpha)
         self.pos.z = -altDiff  // Same as pos.down..
              
+        // Check for geofence violation
+        if -self.pos.z > initLoc.geoFence.height[1]{
+            print("GeoFence: Breaching geo fence high")
+            // Set alt 2m below?
+        }
+        if sqrt(pow(self.pos.x,2)+pow(self.pos.y,2)) > initLoc.geoFence.radius{
+            print("Geofence: Breaching geo fence radius")
+            // Fly mission towards init?
+        }
+        
+        
         completionBlock()
         // Suitable completionblock:
         // {NotificationCenter.default.post(name: .didPosUpdate, object: nil)}
