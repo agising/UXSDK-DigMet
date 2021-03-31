@@ -12,6 +12,7 @@ import UIKit
 class TableViewController: UITableViewController{
     
     var dataSource: [String] = []
+    var logAllocator = Allocator(name: "log")
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -23,8 +24,11 @@ class TableViewController: UITableViewController{
     // Function to scroll to bottom of tableView
     func scrollToBottom(){
         DispatchQueue.main.async {
-            let indexPath = IndexPath(row: self.dataSource.count-1, section: 0)
-            self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
+            // Allocator for scrollable list
+            if self.logAllocator.allocate("scroll", maxTime: 0.1){
+                self.tableView.scrollRectToVisible(CGRect(x: 0, y: self.tableView.contentSize.height - self.tableView.bounds.size.height, width: self.tableView.bounds.size.width, height: self.tableView.bounds.size.height), animated: true)
+                self.logAllocator.deallocate()
+            }
         }
     }
     
@@ -33,19 +37,22 @@ class TableViewController: UITableViewController{
     @objc func onDidNewLogItem(_ notification: Notification){
         let logStr = String(describing: notification.userInfo!["logItem"]!)
         // Limit log to 100 instances
-        if dataSource.count > 100 {
-            dataSource.remove(at: 0)
-            // Remove one more to maintain the visible effect of scrolling when new entries appear
-            dataSource.remove(at: 0)
-        }
+//        if dataSource.count > 100 {
+//            dataSource.remove(at: 0)
+//            // Remove one more to maintain the visible effect of scrolling when new entries appear
+//            dataSource.remove(at: 0)
+//        }
         // Append log str to datasource
         dataSource.append(logStr)
         // Reload and wait a bit to be sure scroll to bottom does not exceed any bounds
         Dispatch.main{
-            self.tableView.reloadData()
+            // Allocator for scrollable list
+            if self.logAllocator.allocate("reloadData", maxTime: 1){
+                self.tableView.reloadData()
+                self.logAllocator.deallocate()
+                self.scrollToBottom()
+            }
         }
-        usleep(1000)
-        scrollToBottom()
     }
    
     
