@@ -544,6 +544,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         // Check if there are any photos to transfer
         if self.sessionLastIndex == 0 {
             print("transferAll: No photos to transfer")
+            self.transferAllAllocator.deallocate()
             return
         }
         self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1, skipped: 0)
@@ -1186,11 +1187,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                                     json_r = createJsonAck("photo")
                                     json_r["arg2"].stringValue = "download"
                                     // Transfer all in background, transferAll handles the allcoator
-                                    Dispatch.background {
-                                        // Transfer function handles the allocator
-                                        self.log("Downloading all photos...")
-                                        self.transferAll()
-                                    }
+                                    self.log("Downloading all photos...")
+                                    // Transfer function handles the allocator
+                                    self.transferAll()
                                 }
                                 else {
                                     json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
@@ -1207,11 +1206,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             else{
                                 json_r = createJsonAck("photo")
                                 json_r["arg2"].stringValue = "download"
-                                Dispatch.background{
-                                    // Download function handles the allocator
-                                    self.log("Download photo index " + String(sessionIndex))
-                                    self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
-                                }
+                                // Download function handles the allocator
+                                self.log("Download photo index " + String(sessionIndex))
+                                self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
                             }
                         default:
                             self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
