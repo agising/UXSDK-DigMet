@@ -27,7 +27,7 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 // Generate App icons: https://appicon.co/
 
 
-public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewController {
+public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentViewController{//DUXDefaultLayoutViewController { //DUXFPVViewController {
     //**********************
     // Variable declarations
     
@@ -56,7 +56,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var nextGimbalPitch: Int = 0
     
     //var gimbalcapability: [AnyHashable: Any]? = [:]
-    var cameraModeAcitve: DJICameraMode = DJICameraMode.playback //shootPhoto
     var cameraAllocator = Allocator(name: "camera")
     var transferAllAllocator = Allocator(name: "transferAll")
     
@@ -263,6 +262,44 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         })
     }
     
+    //*****************************************************************************************************
+    // Monitor camera mode, DUXDeafaultLayoutView seems to override cameramode if not set to photo or video
+    func startListenToCameraMode(){
+        guard let cameraKey = DJICameraKey(param: DJICameraParamMode) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.startListeningForChanges(on: cameraKey, withListener: self, andUpdate: { (oldValue: DJIKeyedValue?, newValue: DJIKeyedValue?) in
+            if let checkedValue = newValue{
+                let mode = checkedValue.intValue
+                var modeStr = ""
+                switch mode {
+                case 0:
+                    modeStr = "Shoot photo"
+                case 1:
+                    modeStr = "Record video"
+                case 2:
+                    modeStr = "Playback"
+                case 3:
+                    modeStr = "Media download"
+                case 4:
+                    modeStr = "Broadcast"
+                case 255:
+                    modeStr = "Unknown"
+                default:
+                    modeStr = "Error"
+                }
+                print("Camera mode changed to: ", modeStr)
+            }
+        })
+    }
+    
     
     //*************************************************************
     // capturePhoto sets up the camera if needed and takes a photo.
@@ -334,10 +371,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
              return
          }
                      
-         // Cameramode seems to automatically be reset to single photo. We cannot use local variable to store the mode. Hence getting and setting the current mode should intefere equally, it is better to set directly than first getting, checking and then setting.
+         // Cameramode seems to automatically be reset to single photo?
          // Set mode to newCameraMode.
          self.camera?.setMode(newCameraMode, withCompletion: {(error: Error?) in
              if error != nil {
+                print("Failed setting camera mode")
                  self.cameraSetMode(newCameraMode, attempts - 1 , completionHandler: {(success: Bool) in
                  if success{
                      completionHandler(true)
@@ -483,39 +521,47 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
             // Create a photo container for this scope
             var photoData: Data?
-            var i: Int?
-            
-            // Download batchhwise, append data. Closure is called each time data is updated.
-            files[cameraIndex].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
-                if error != nil{
-                    // This happens if download is triggered to close to taking a picture. Is the allocator used?
-                    self.log("Error, set camera mode first: " + String(error!.localizedDescription))
-                    completionHandler(false)
-                }
-                else if isComplete {
-                    if let photoData = photoData{
-                        //self.lastPhotoData = photoData
-                        self.savePhotoDataToApp(photoData: photoData, filename: files[cameraIndex].fileName, sessionIndex: theSessionIndex)
-                        completionHandler(true)
-                        }
-                    else{
-                        self.log("Fetch photo from sdCard Failed")
+            var i = 0
+            self.cameraSetMode(DJICameraMode.mediaDownload, 2, completionHandler: { (success) in
+                if success {
+              
+                // Download batchhwise, append data. Closure is called each time data is updated.
+                files[cameraIndex].fetchData(withOffset: 0, update: DispatchQueue.main, update: {(_ data: Data?, _ isComplete: Bool, error: Error?) -> Void in
+                    if error != nil{
+                        // This happens if download is triggered to close to taking a picture. Is the allocator used?
+                        self.log("Error, set camera mode first: " + String(error!.localizedDescription))
                         completionHandler(false)
                     }
-                }
-                else {
-                    // If photo has been initialized, append the updated data to it
-                    if let _ = photoData, let data = data {
-                        photoData?.append(data)
-                        i! += 1
-                        // TODO - progress bar
+                    else if isComplete {
+                        if let photoData = photoData{
+                            print("Number of packages:", i)
+                            //self.lastPhotoData = photoData
+                            self.savePhotoDataToApp(photoData: photoData, filename: files[cameraIndex].fileName, sessionIndex: theSessionIndex)
+                            completionHandler(true)
+                            }
+                        else{
+                            self.log("Fetch photo from sdCard Failed")
+                            completionHandler(false)
+                        }
                     }
-                    else {// initialize the photo data
-                        photoData = data
-                        i = 1
+                    else {
+                        // If photo has been initialized, append the updated data to it
+                        if let _ = photoData, let data = data {
+                            photoData?.append(data)
+                            i += 1
+                            // TODO - progress bar
+                            if i % 100 == 0{
+                                let progress = Double(i)/7000
+                                print(progress)
+                            }
+                        }
+                        else {// initialize the photo data
+                            photoData = data
+                            i = 1
+                        }
                     }
-                }
-            })
+                })
+            }})
         })
     }
     
@@ -1453,7 +1499,47 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
         copter.followStream = false
+        self.camera?.stopShootPhoto(completion: {(error) in
+            if error != nil{
+                print("Could not stop shoot photo")
+            }
+            else {
+                print("Stopped shoot photo")
+            }
+        })
+//        self.camera?.stopShootPhoto(completion: { (error) in
+//            if error != nil{
+//                completion(false)
+//            }
+//            else{
+//                completion(true)
+//            }
+//        })
+//        if let visionWidget = self.statusViewController?.widget(with: DUXPictureVideoSwitchWidge()) {
+//                self.statusViewController?.removeWidget(visionWidget)
+//            }
+        //removeRightVersatileViewController()
+        // check if we can download images with the product
+        if !(camera?.isMediaDownloadModeSupported())! {
+                print("Media download not supported..")
+             }
+        //DUXTrailingBarViewController
+        //        removeRightVersatileViewController()
+//        //DUXTrailingBarViewController.removeWidget(DUXTrailingBarViewController)
+//        guard let cameraKey = DJICameraKey(param: DJICameraParamMode) else {
+//            NSLog("Couldn't create the key")
+//            return
+//        }
+//        DUXWidgetItem.removeObserver(self, forKeyPath: DJICameraParamMode)
         
+        cameraSetMode(DJICameraMode.recordVideo, 2, completionHandler: { (success) in
+            if success {
+                print(" changed mode..")
+            }
+            else {
+                print("did not change mode?")
+            }
+        })
     }
 
     //***************************************************************************************************************
@@ -1671,6 +1757,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
         log("Setting up aircraft")
     
+        
+        
         // Setup aircraft
         var setupOk = true
         if let product = DJISDKManager.product() as? DJIAircraft {
@@ -1724,6 +1812,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         NotificationCenter.default.addObserver(self, selector: #selector(onDidNextWp(_:)), name: .didNextWp, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onDidWPAction(_:)), name: .didWPAction, object: nil)
         
+        // Monitor camera mode changes
+        startListenToCameraMode()
+        
         _ = initPublisher()
         if startReplyThread(){
             print("Reply thread successfully started")
@@ -1759,6 +1850,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     override public func viewWillLayoutSubviews() {
         //print("Will layout subviews")
         super.viewWillLayoutSubviews()
+        //removeRightVersatileViewController()
     }
     
     override public func viewDidLayoutSubviews() {
