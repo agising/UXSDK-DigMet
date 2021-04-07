@@ -189,6 +189,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             }
             else{
                 self.log("writeMetaData: Could not setStartLocation, Aircraft ready?")
+                // TODO Write empty metadata?
                 return false
             }
         }

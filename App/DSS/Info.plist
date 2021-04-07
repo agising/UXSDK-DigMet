@@ -32,13 +32,13 @@
 		<true/>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>It's not being used by the app but part of a convenience method in the DJI SDK</string>
+	<string>It&apos;s not being used by the app but part of a convenience method in the DJI SDK</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>It's not being used by the app but part of a convenience method in the DJI SDK</string>
+	<string>It&apos;s not being used by the app but part of a convenience method in the DJI SDK</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>It's not being used by the app but part of a convenience method in the DJI SDK</string>
+	<string>It&apos;s not being used by the app but part of a convenience method in the DJI SDK</string>
 	<key>NSCameraUsageDescription</key>
-	<string>It's not being used by the app but part of a convenience method in the DJI SDK</string>
+	<string>It&apos;s not being used by the app but part of a convenience method in the DJI SDK</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Needs location services</string>
 	<key>NSLocationAlwaysUsageDescription</key>
