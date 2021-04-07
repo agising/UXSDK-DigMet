@@ -29,6 +29,7 @@ import UIKit
 import DJISDK
 
 let ProductCommunicationServiceStateDidChange = "ProductCommunicationServiceStateDidChange"
+let ProductRegisterDidError = "ProductRegisterDidError"
 
 // Automatically set default to bridge when on iOS simulator
 func defaultUseBridgeSetting() -> Bool {
@@ -162,6 +163,7 @@ class ProductCommunicationService: NSObject, DJISDKManagerDelegate {
     
     var registered = false
     var connected = false
+    var regError = ""
     
     var bridgeAppIP = fetchCachedBridgeAppIP() {
         didSet {
@@ -230,7 +232,11 @@ class ProductCommunicationService: NSObject, DJISDKManagerDelegate {
             self.simulatorControl.startListeningToProductState()
             self.connectToProduct()
         } else {
+            // Print and notify MainViewController 
             NSLog("Error Registrating App: \(String(describing: error))")
+            print("Error Registrating App: ", String(describing: error))
+            postNotificationNamed(ProductRegisterDidError, dispatchOntoMainQueue: true)
+            self.regError = String(describing: error)
         }
     }
     
