@@ -296,13 +296,119 @@ class Vel: NSObject{
 }
 
 // SubClass to MyLocation.
-class POS: NSObject{
+class POS: NSObject {
     var x: Double = 0
     var y: Double = 0
     var z: Double = 0
     var north: Double = 0
     var east: Double = 0
     var down: Double = 0
+}
+
+// An object to carry any flight pattern
+class PatternHolder: NSObject{
+    let radiusLimit: Double = 2
+    var pattern: Pattern = Pattern()
+    var stream: MyLocation = MyLocation()
+    var reference: MyLocation = MyLocation()
+    
+    func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
+        self.stream.coordinate.latitude = lat
+        self.stream.coordinate.longitude = lon
+        self.stream.altitude = alt
+        self.stream.heading = yaw
+        
+        //self.applyPattern(currentPos: currentPos)
+        
+        
+        
+        
+        
+        
+        // How to (where from) to activate the controller?
+        // What should keep it alive?
+        
+        
+        
+        
+        
+        
+        
+    }
+    
+    //
+    // Set a new pattern
+    func setPattern(pattern: String, relAlt: Double, heading: Double, radius: Double = 0, yawRate: Double = 0){
+        self.pattern.name = pattern
+        self.pattern.relAlt = relAlt
+        
+        if radius != 0{
+            self.pattern.radius = radius
+        }
+        if yawRate != 0{
+            self.pattern.yawRate = yawRate
+        }
+        // Identify heading mode
+        switch heading {
+        case -1:
+            self.pattern.headingMode = "course"
+            self.pattern.heading = -1
+        case -2:
+            self.pattern.headingMode = "poi"
+            // Heading is updated when stream.updateReference
+        default:
+            self.pattern.headingMode = "absolute"
+            self.pattern.heading = heading
+        }
+        
+    }
+    
+    // ********************************************************************
+    // Apply the pattern to the stream to calculate the reference to follow
+//    func applyPattern(currentPos: MyLocation){
+//        // The "Above" - pattern
+//        if pattern.name == "above"{
+//            reference.altitude = stream.altitude + pattern.relAlt
+//            reference.coordinate.latitude = stream.coordinate.latitude + 0
+//            reference.coordinate.longitude = stream.coordinate.longitude + 0
+//            if pattern.headingMode == "poi"{
+//                // Get bearing from current pos to poi
+//                let (_, _, _, _, _, bearing) = currentPos.distanceTo(wpLocation: self.stream)
+//                if bearing < 0{
+//                    print("Bearing is negative, can trigger the course-heading. ROBUSTIFY distanceTo")
+//                }
+//                reference.heading = bearing
+//            }
+//            else {
+//                // Heading is either absolute or course
+//                reference.heading = pattern.heading
+//            }
+//        }
+//        else if pattern.name == "circle" {
+//            // Algorithm: Go to radius, move along circle (90 deg from radius), track heading, track radius, track altitude in velocity commands.
+//            // Phase 1, go straight to radius
+//            let (northing, easting, dAlt, dist2D, dist3D, bearing) = currentPos.distanceTo(wpLocation: self.stream)
+//            if fabs(dist2D - pattern.radius) > radiusLimit{
+//                // Go straigt towars target (backwards or forwards..?)
+//            }
+//            else {
+//
+//
+//            }
+//
+//        }
+//    }
+}
+
+class Pattern: NSObject {
+    var name: String = ""
+    var relAlt: Double = 5
+    var headingMode: String = ""        // Absolute/course/poi
+    var heading: Double = 10
+    var radius: Double = 10
+    var yawRate: Double = 10
+    var startTime = CACurrentMediaTime()
+
 }
 
 //
@@ -486,13 +592,16 @@ func parseHeading(json: JSON)->Double{
             return wpHeading
         }
         else {
-            // Internal code for handlig error.
+            // Internal code for handling error.
             return -99
         }
     }
     // It must be a string, check it
     else if json["heading"].stringValue == "course"{
             return -1
+    }
+    else if json["heading"].stringValue == "poi"{
+        return -2
     }
     // Probalby misspelled string
     else {

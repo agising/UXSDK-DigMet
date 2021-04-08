@@ -26,6 +26,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var missionNextWpId = "id-1"
     var missionType = ""
     var activeWP: MyLocation = MyLocation()
+    var pattern: PatternHolder = PatternHolder()
     var missionIsActive = false
     var wpActionExecuting = false
     var hoverTime: Int = 0                          // Hovertime to wait prior to landing in dssSRTL. TODO, make parameter in mission.
@@ -75,9 +76,13 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var duttTimer: Timer?
     var duttLoopCnt: Int = 0
     var duttLoopTarget: Int = 0                     // Set in init
-    var posCtrlTimer: Timer?
-    var posCtrlLoopCnt: Int = 0
-    var posCtrlLoopTarget: Int = 250
+    var posCtrlTimer: Timer?                        // Position control Timer
+    var posCtrlLoopCnt: Int = 0                     // Position control loop counter
+    var posCtrlLoopTarget: Int = 250                // Position control loop counter max
+    var velCtrlTimer: Timer?                        // Velocity control Timer
+    var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
+    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+    
     
     // Control paramters, acting on errors in meters, meters per second and degrees
     var hPosKP: Float = 0.75
@@ -87,6 +92,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     private let vVelKD: Float = 0
     private let yawKP: Float = 1
     private let yawFFKP: Float = 0.05
+    private let radKP: Double = 1                    // KP for radius tracking
     
     
     override init(){
@@ -1139,6 +1145,189 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
             NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "myLocationController max time exeeded"])
             posCtrlTimer?.invalidate()
+        }
+    }
+    
+    
+    
+    // *****************************************************************************************
+    // Timer function that executes the velocity controller. It flies towards the self.pattern.
+    @objc func fireVelCtrlTimer(_ timer: Timer) {
+        let pattern = self.pattern.pattern.name
+        let headingMode = self.pattern.pattern.headingMode
+        var refYaw: Double = 0
+        var _refYawRate: Double = 0
+        var refXVel: Double = 0
+        var refYVel: Double = 0
+        var refZVel: Double = 0
+        let headingRangeLimit: Double = 3
+        
+        velCtrlLoopCnt += 1
+        // Test if activeWP is tracked or not
+    
+        // Get distance and bearing from here to stream
+        let (northing, easting, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.pattern.stream)
+        
+        switch pattern{
+        case "circle":
+            // Desired yaw rate and radius gives the speed.
+            let desYawRate = self.pattern.pattern.yawRate
+            let radius = self.pattern.pattern.radius
+            let radiusError = distance2D - radius
+            let speed = 0.01745 * radius * desYawRate// 2*math.pi*radius*desYawRate/360 ~ 0.01745* r* desYawRate
+            var CCW = false     // CounterClockWise rotation true or false?
+            if desYawRate < 0{
+                CCW = true
+            }
+            
+            // For each headingMode, calculate the refYaw, refXVel and refYVel
+            switch headingMode{
+            case "poi":
+                refYaw = bearing
+                if CCW {
+                    refYVel = -speed
+                }
+                // Radius tracking
+                refXVel = radKP*radiusError
+            case "absolute":
+                // Ref yaw defined in pattern
+                refYaw = self.pattern.pattern.heading
+                
+                // Calc direction of travel as perpedicular to bearing towards poi.
+                var direction: Double = 0
+                if CCW {
+                    direction = bearing + 90.0
+                }
+                else {
+                    direction = bearing - 90.0
+                }
+                
+                // Calc body velocitites based on speed direction and refYaw
+                let alphaRad = (direction-refYaw)/180*Double.pi
+                refXVel = speed*cos(alphaRad)
+                refYVel = speed*sin(alphaRad)
+                
+                // Radius tracking, add components to x and y
+                let betaRad = (bearing-refYaw)/180*Double.pi
+                refXVel += radKP*radiusError*cos(betaRad)
+                refYVel += radKP*radiusError*sin(betaRad)
+                
+            case "course":
+                // Special case of absolute where heading is same as direction of travel.
+                // Calc direction of travel as perpedicular to bearing towards poi.
+                var direction: Double = 0
+                if CCW {
+                    direction = bearing + 90.0
+                }
+                else {
+                    direction = bearing - 90.0
+                }
+                
+                // Ref yaw is same as direction of travel
+                refYaw = direction
+                
+                
+                // Calc body velocitites based on speed direction and refYaw
+                let alphaRad = (direction-refYaw)/180*Double.pi
+                refXVel = speed*cos(alphaRad)
+                refYVel = speed*sin(alphaRad)
+                
+                // Radius tracking, add components to x and y
+                let betaRad = (bearing-refYaw)/180*Double.pi
+                refXVel += radKP*radiusError*cos(betaRad)
+                refYVel += radKP*radiusError*sin(betaRad)
+                
+            default:
+                print("Circle heading mode not supported. Stop follower TODO")
+                refYaw = 180
+            }
+        case "above":
+            // For each headingMode, calculate the refYaw, refXVel and refYVel
+            switch headingMode{
+            case "poi":
+                // If 'far' away, set heading to bearing
+                if distance2D > headingRangeLimit{
+                    refYaw = bearing
+                }
+                // Else, maintain heading
+                else{
+                    refYaw = self.loc.heading
+                }
+                
+                // Set speed to half the distance to target
+                let speed = distance2D/2
+                
+                // Direction of travel is bearing
+                let direction = bearing
+                
+                // Calc body velocities based on speed, direction of travel and refYaw
+                let alphaRad = (direction-refYaw)/180*Double.pi
+                refXVel = speed*cos(alphaRad)
+                refYVel = speed*sin(alphaRad)
+            case "absolute":
+                // Heading is defined in pattern
+                refYaw = self.pattern.pattern.heading
+                
+                // Set speed to half the distance to target
+                let speed = distance2D/2
+                
+                // Direction of travel is bearing
+                let direction = bearing
+                
+                // Calc body velocities based on speed, direction of travel and refYaw
+                let alphaRad = (direction-refYaw)/180*Double.pi
+                refXVel = speed*cos(alphaRad)
+                refYVel = speed*sin(alphaRad)
+
+            case "course":
+                // The heading will appear erratic if following a point standing still. Consider using "poi" code instead.
+                refYaw = bearing
+                // Set speed to half the distance to target
+                let speed = distance2D/2
+                refXVel = speed
+                
+            default:
+                print("Above heading mode not supported. Stop follower TODO")
+                
+            }
+        default:
+            print("Pattern not supported Stop follower TODO")
+        }
+        
+        // Calculate yaw-error, use shortest way (right or left?)
+        let yawError = getDoubleWithinAngleRange(angle: (self.loc.heading - refYaw))
+        // P-controller for Yaw
+        _refYawRate = -yawError*Double(yawKP)
+
+        // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
+        var turnFactor: Double = 1
+        if abs(yawError) > 10 {
+            turnFactor = 0
+        }
+        else{
+            turnFactor = 1
+        }
+        
+        // Limit speeds while turning
+        refXVel *= turnFactor
+        refYVel *= turnFactor
+        
+        // Altitude trackign
+        let desAltDiff = self.pattern.pattern.relAlt
+        let altDiff = -dAlt - desAltDiff
+        refZVel = altDiff*Double(vPosKP)
+
+        // Set up a speed limit. Use global limit for now, it is given in cm/s..
+        let speed = xyVelLimit/100
+        
+        self.sendControlData(velX: Float(refXVel), velY: Float(refYVel), velZ: Float(refZVel), yawRate: Float(_refYawRate), speed: speed)
+    
+        // Maxtime for flying to wp
+        if velCtrlLoopCnt >= velCtrlLoopTarget{
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "VelocityController max time exeeded"])
+            velCtrlTimer?.invalidate()
         }
     }
 }

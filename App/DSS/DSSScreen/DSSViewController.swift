@@ -870,13 +870,24 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         print("Found no topic, the parsed json_m: ", json_m)
                     }
                     print("The topic: ", topic!, " The parsed json_m: ", json_m)
-                    print("CODE FOR TESTING IN SIM ONLY")
-                    copter.activeWP.coordinate.latitude = json_m["lat"].doubleValue
-                    copter.activeWP.coordinate.longitude = json_m["lon"].doubleValue
-                    copter.activeWP.altitude = 10 // 30json_m["alt"].doubleValue + 30
-                    copter.activeWP.speed = 3
-                    // goto is likely called to often..
-                    copter.activeWP.printLocation(sentFrom: "gpsSubThread")
+                    
+                    // Decode the stream message and apply pattern
+                    let lat = json_m["lat"].doubleValue
+                    let lon = json_m["lon"].doubleValue
+                    let alt = json_m["alt"].doubleValue
+                    let yaw = json_m["yaw"].doubleValue
+                    
+                    self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw, currentPos: self.copter.loc)
+                    
+                    // Update the activeWP
+                    self.copter.activeWP.coordinate.latitude = self.copter.pattern.reference.coordinate.latitude
+                    self.copter.activeWP.coordinate.longitude = self.copter.pattern.reference.coordinate.longitude
+                    self.copter.activeWP.altitude = self.copter.pattern.reference.altitude
+                    
+                    // Speed TODO
+                    self.copter.activeWP.speed = 3
+                    
+                    self.copter.activeWP.printLocation(sentFrom: "gpsSubThread")
                     Dispatch.main{
                         self.copter.goto()
                     }
@@ -1439,17 +1450,30 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             
                 case "set_pattern":
                     self.log("Received cmd: set_pattern")
+                    let heading = parseHeading(json: json_m)
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "set_pattern", description: nackOwnerStr)
                     }
-                    else if true{
+                    // Nack faulty heading
+                    else if heading == -99{
+                        // heading faulty
+                        json_r = createJsonNack(fcn: "set_pattern", description: "Heading faulty")
                     }
                     // Accept command
                     else {
-                        json_r = createJsonAck("set_pattern")
-                        json_r = createJsonNack(fcn: "set_pattern", description: "Not implemented")
-                        print("TODO: Implement set_pattern")
+                        // Parse and set pattern
+                        let pattern = json_m["pattern"].stringValue
+                        let relAlt = json_m["rel_alt"].doubleValue
+                        if pattern == "above"{
+                            copter.pattern.setPattern(pattern: pattern, relAlt: relAlt, heading: heading)
+                            json_r = createJsonAck("set_pattern")
+                        }
+                        else if pattern == "circle"{
+                            let radius = json_m["radius"].doubleValue
+                            let yawRate = json_m["yaw_rate"].doubleValue
+                            copter.pattern.setPattern(pattern: pattern, relAlt: relAlt, heading: heading, radius: radius, yawRate: yawRate)
+                        }
                     }
                     
                     
@@ -1463,11 +1487,32 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
                         json_r = createJsonNack(fcn: "land", description: "Not flying")
                     }
+                    // Nack pattern not set
+                    else if copter.pattern.pattern.name == "" {
+                        json_r = createJsonNack(fcn: "follow_stream", description: "Pattern not set")
+                    }
                     // Acccept command
                     else {
+                        let enable = json_m["enable"].boolValue
+                        let endPoint = json_m["endpoint"].stringValue
+                        if enable {
+                            let topic = "LLA"
+                            if startGpsSubThread(endPoint: endPoint, topic: topic) {
+                                self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+                                copter.followStream = enable
+                            }
+                            else{
+                                self.log("Cannot subscribe to stream: " + endPoint)
+                                json_r = createJsonNack(fcn: "follow_stream", description: "Cannot connect to stream")
+                                copter.followStream = false
+                            }
+                        }
+                        else {
+                            // If enable is false, the subscription thread is exited.
+                            copter.followStream = enable
+                        }
+                        
                         json_r = createJsonAck("follow_stream")
-                        json_r = createJsonNack(fcn: "follow_stream", description: "Not implemented")
-                        print("TODO: Implement follow_stream")
                         // Subscribe/unsubscribe to IP and port
                         // Parse incoming stream to activeWP
                         // Activate followStream..
