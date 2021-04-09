@@ -1500,6 +1500,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             if startGpsSubThread(endPoint: endPoint, topic: topic) {
                                 self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
                                 copter.followStream = enable
+                                copter.startFollowStream()
+                                
                             }
                             else{
                                 self.log("Cannot subscribe to stream: " + endPoint)
@@ -1509,13 +1511,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         }
                         else {
                             // If enable is false, the subscription thread is exited.
-                            copter.followStream = enable
+                            copter.followStream = false
                         }
                         
                         json_r = createJsonAck("follow_stream")
-                        // Subscribe/unsubscribe to IP and port
-                        // Parse incoming stream to activeWP
-                        // Activate followStream..
                     }
                
                 case "set_gimbal":

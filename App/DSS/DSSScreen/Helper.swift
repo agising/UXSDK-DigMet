@@ -311,6 +311,10 @@ class PatternHolder: NSObject{
     var pattern: Pattern = Pattern()
     var stream: MyLocation = MyLocation()
     var reference: MyLocation = MyLocation()
+    var velCtrlTimer: Timer?                        // Velocity control Timer
+    var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
+    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+
     
     func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
         self.stream.coordinate.latitude = lat

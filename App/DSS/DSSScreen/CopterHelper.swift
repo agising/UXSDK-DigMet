@@ -79,9 +79,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var posCtrlTimer: Timer?                        // Position control Timer
     var posCtrlLoopCnt: Int = 0                     // Position control loop counter
     var posCtrlLoopTarget: Int = 250                // Position control loop counter max
-    var velCtrlTimer: Timer?                        // Velocity control Timer
-    var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
-    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+    // Velocity Ctrl Timers (stream and patterns) are stored within Pattern object
     
     
     // Control paramters, acting on errors in meters, meters per second and degrees
@@ -532,9 +530,19 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //**************************************************************************************************
     // Stop ongoing stick command, invalidate all related timers. TODO: handle all modes, stop is stop..
     func stop(){
+        invalidateTimers()
+        sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+    }
+    
+    // *****************************************************
+    // Invalidates the control timers, resets their counters
+    func invalidateTimers(){
         duttTimer?.invalidate()
         posCtrlTimer?.invalidate()
-        sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+        pattern.velCtrlTimer?.invalidate()
+        duttLoopCnt = 0
+        posCtrlLoopCnt = 0
+        pattern.velCtrlLoopCnt = 0
     }
     
     //********************************
@@ -583,9 +591,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         self.refYawRate = limitToMax(value: yawRate, limit: yawRateLimit)
         
         // Schedule the timer at 20Hz while the default specified for DJI is between 5 and 25Hz. DuttTimer will execute control commands for a period of time
-        posCtrlTimer?.invalidate() // Cancel any posControl
-        duttTimer?.invalidate()
-        duttLoopCnt = 0
+//        posCtrlTimer?.invalidate() // Cancel any posControl
+//        duttTimer?.invalidate()
+//        duttLoopCnt = 0
+        invalidateTimers()
         duttTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(fireDuttTimer), userInfo: nil, repeats: true)
        }
     
@@ -957,9 +966,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
         
         // Fire posCtrl
-        duttTimer?.invalidate()
-        posCtrlTimer?.invalidate()
-        posCtrlLoopCnt = 0
+        invalidateTimers()
+        
+//        duttTimer?.invalidate()
+//        posCtrlTimer?.invalidate()
+//        posCtrlLoopCnt = 0
         self.posCtrlTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(self.firePosCtrlTimer), userInfo: nil, repeats: true)
     }
 
@@ -988,6 +999,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         }
     }
     
+    func startFollowStream(){
+        self.followStream = true
+
+        // Fire velCtrl towards stream and pattern
+        invalidateTimers()
+        self.pattern.velCtrlTimer = Timer.scheduledTimer(timeInterval: sampleTime/1000, target: self, selector: #selector(self.fireVelCtrlTimer), userInfo: nil, repeats: true)
+
+    }
+    
 
 
     //************************************************************************************************************
@@ -996,7 +1016,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         duttLoopCnt += 1
         if duttLoopCnt >= duttLoopTarget {
             sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-            duttTimer?.invalidate()
+            invalidateTimers()
+            //duttTimer?.invalidate()
         }
         else {
             // Speed argument acts as an upper limit not intended for this way to call the function. Set it high. Vel limits will apply.
@@ -1008,11 +1029,17 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Timer function that executes the position controller. It flies towards the self.activeWP.
     @objc func firePosCtrlTimer(_ timer: Timer) {
         posCtrlLoopCnt += 1
-        // Test if activeWP is tracked or not
-        if followStream {
-            //special setup for followStream
-            _ = 1
+        
+        // Abort due to Maxtime for flying to wp
+        if posCtrlLoopCnt >= posCtrlLoopTarget{
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "myLocationController max time exeeded"])
+            //posCtrlTimer?.invalidate()
+            invalidateTimers()
         }
+        
+        // Test if activeWP is tracked or not
         else if trackingWP(posLimit: trackingPosLimit, yawLimit: trackingYawLimit, velLimit: trackingVelLimit){
                 print("firePosCtrlTimer: Wp", self.missionNextWp, " is tracked")
                 sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
@@ -1036,7 +1063,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                         NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
                         // Stop mission, Notifier function will re-activate the mission and send gogo with next wp as reference
                         self.missionIsActive = false
-                        self.posCtrlTimer?.invalidate()
+                        //self.posCtrlTimer?.invalidate()
+                        invalidateTimers()
                         return
                     }
                     if action == "land"{
@@ -1044,7 +1072,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                         usleep(secondsSleep)
                         NotificationCenter.default.post(name: .didWPAction, object: self, userInfo: ["wpAction": action])
                         self.missionIsActive = false
-                        self.posCtrlTimer?.invalidate()
+                        //self.posCtrlTimer?.invalidate()
+                        invalidateTimers()
                         return
                     }
                     // Note that the current mission is stoppped (paused) if there is a wp action.
@@ -1060,13 +1089,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     else{
                         print("id is -1")
                         self.missionIsActive = false
-                        posCtrlTimer?.invalidate() // dont fire timer again
+                        // posCtrlTimer?.invalidate()
+                        invalidateTimers()
                     }
                     NotificationCenter.default.post(name: .didNextWp, object: self, userInfo: ["next_wp": String(self.missionNextWp), "final_wp": String(mission.count-1), "cmd": "gogo_???"])
                 }
                 else {
                     print("No mission is active")
-                    posCtrlTimer?.invalidate()
+                    // posCtrlTimer?.invalidate()
+                    invalidateTimers()
                 }
             } // end if trackingWP
 
@@ -1139,22 +1170,20 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // TODO, do not store reference values globally?
         self.sendControlData(velX: self.refVelBodyX, velY: self.refVelBodyY, velZ: self.refVelBodyZ, yawRate: self.refYawRate, speed: speed)
     
-        // Maxtime for flying to wp
-        if posCtrlLoopCnt >= posCtrlLoopTarget{
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
 
-            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "myLocationController max time exeeded"])
-            posCtrlTimer?.invalidate()
-        }
     }
     
     
     
-    // *****************************************************************************************
-    // Timer function that executes the velocity controller. It flies towards the self.pattern.
+    // **************************************************************************************************************************************************************************
+    // Timer function that executes the velocity controller in pattern mode. It flies towards the stream plus the self.pattern. (Stream is updating the pattern property .stream)
     @objc func fireVelCtrlTimer(_ timer: Timer) {
         let pattern = self.pattern.pattern.name
+        let desAltDiff = self.pattern.pattern.relAlt
         let headingMode = self.pattern.pattern.headingMode
+        let desHeading = self.pattern.pattern.heading
+        let desYawRate = self.pattern.pattern.yawRate
+        let radius = self.pattern.pattern.radius
         var refYaw: Double = 0
         var _refYawRate: Double = 0
         var refXVel: Double = 0
@@ -1162,17 +1191,26 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         var refZVel: Double = 0
         let headingRangeLimit: Double = 3
         
-        velCtrlLoopCnt += 1
-        // Test if activeWP is tracked or not
+        self.pattern.velCtrlLoopCnt += 1
     
+        // TODO, integrate gimbal control in patterns
+        
+        // Abort follow stream?
+        if self.followStream == false{
+            invalidateTimers()
+        }
+        else if self.pattern.velCtrlLoopCnt >= self.pattern.velCtrlLoopTarget{
+            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "VelocityController max time exeeded"])
+            invalidateTimers()
+        }
+        
         // Get distance and bearing from here to stream
-        let (northing, easting, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.pattern.stream)
+        let (_, _, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.pattern.stream)
         
         switch pattern{
         case "circle":
             // Desired yaw rate and radius gives the speed.
-            let desYawRate = self.pattern.pattern.yawRate
-            let radius = self.pattern.pattern.radius
             let radiusError = distance2D - radius
             let speed = 0.01745 * radius * desYawRate// 2*math.pi*radius*desYawRate/360 ~ 0.01745* r* desYawRate
             var CCW = false     // CounterClockWise rotation true or false?
@@ -1191,7 +1229,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 refXVel = radKP*radiusError
             case "absolute":
                 // Ref yaw defined in pattern
-                refYaw = self.pattern.pattern.heading
+                refYaw = desHeading
                 
                 // Calc direction of travel as perpedicular to bearing towards poi.
                 var direction: Double = 0
@@ -1266,7 +1304,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 refYVel = speed*sin(alphaRad)
             case "absolute":
                 // Heading is defined in pattern
-                refYaw = self.pattern.pattern.heading
+                refYaw = desHeading
                 
                 // Set speed to half the distance to target
                 let speed = distance2D/2
@@ -1313,7 +1351,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         refYVel *= turnFactor
         
         // Altitude trackign
-        let desAltDiff = self.pattern.pattern.relAlt
         let altDiff = -dAlt - desAltDiff
         refZVel = altDiff*Double(vPosKP)
 
@@ -1322,13 +1359,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         
         self.sendControlData(velX: Float(refXVel), velY: Float(refYVel), velZ: Float(refZVel), yawRate: Float(_refYawRate), speed: speed)
     
-        // Maxtime for flying to wp
-        if velCtrlLoopCnt >= velCtrlLoopTarget{
-            sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
-
-            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "VelocityController max time exeeded"])
-            velCtrlTimer?.invalidate()
-        }
+       
     }
 }
 
