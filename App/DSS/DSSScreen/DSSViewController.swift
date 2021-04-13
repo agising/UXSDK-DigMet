@@ -48,6 +48,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     let replyEndpoint = "tcp://*:5557"
     let infoPublishEndPoint = "tcp://*:5558"
     let dataPublishEndPoint = "tcp://*:5559"
+    var dscIP = ""
+    let dscPort = ""
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
     var inControls = "PILOT"
@@ -1320,35 +1322,35 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     let (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr) = copter.uploadMission(mission: json_m["mission"])
                     // Nack not owner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: fcnStr, description: nackOwnerStr)
                     }
                     // Nack init point not set
                     else if !copter.initLoc.isInitLocation{
-                        json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
+                        json_r = createJsonNack(fcn: fcnStr, description: "Init point is not set")
                     }
                     // Nack wp violate geofence
                     else if !fenceOK {
-                        json_r = createJsonNack(fcn: "fcnStr", description: fenceDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: fenceDescr)
                     }
                     // Nack wp numbering
                     else if !numberingOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: numberingDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: numberingDescr)
                     }
                     // Nack action not supported
                     else if !actionOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: actionDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: actionDescr)
                     }
                     // Nack speed too low
                     else if !speedOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: speedDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: speedDescr)
                     }
                     // Nack heading error
                     else if !headingOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: headingDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: headingDescr)
                     }
                     // Accept command
                     else{
-                        json_r = createJsonAck("fcnStr")
+                        json_r = createJsonAck(fcnStr)
                     }
                     
                 case "upload_mission_NED":
@@ -1357,35 +1359,35 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     let (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr) = copter.uploadMission(mission: json_m["mission"])
                     // Nack not owner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: fcnStr, description: nackOwnerStr)
                     }
                     // Nack init point not set
                     else if !copter.initLoc.isInitLocation{
-                        json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
+                        json_r = createJsonNack(fcn: fcnStr, description: "Init point is not set")
                     }
                     // Nack wp violate geofence
                     else if !fenceOK {
-                        json_r = createJsonNack(fcn: "fcnStr", description: fenceDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: fenceDescr)
                     }
                     // Nack wp numbering
                     else if !numberingOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: numberingDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: numberingDescr)
                     }
                     // Nack action not supported
                     else if !actionOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: actionDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: actionDescr)
                     }
                     // Nack speed too low
                     else if !speedOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: speedDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: speedDescr)
                     }
                     // Nack heading error
                     else if !headingOK{
-                        json_r = createJsonNack(fcn: "fcnStr", description: headingDescr)
+                        json_r = createJsonNack(fcn: fcnStr, description: headingDescr)
                     }
                     // Accept command
                     else{
-                        json_r = createJsonAck("fcnStr")
+                        json_r = createJsonAck(fcnStr)
                     }
 
                 case "upload_mission_XYZ":
@@ -1396,8 +1398,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "fcnStr", description: nackOwnerStr)
                     }
-                    // Nack init point not set
-                    else if !copter.initLoc.isInitLocation{
+                    // Nack init point not set                   else if !copter.initLoc.isInitLocation{
                         json_r = createJsonNack(fcn: "fcnStr", description: "Init point is not set")
                     }
                     // Nack wp violate geofence
@@ -2083,7 +2084,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         savePhotoButton.isHidden = true
         getDataButton.isHidden = true
         putDataButton.isHidden = true
-        
         
         log("Setting up aircraft")
     

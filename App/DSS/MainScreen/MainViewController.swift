@@ -289,6 +289,12 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         self.presentedViewController?.dismiss(animated: true,
                                             completion: nil)
     }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        if let vc = segue.destination as? DSSViewController{
+            vc.dscIP = ""
+        }
+    }
 }
 
 extension UIViewController {

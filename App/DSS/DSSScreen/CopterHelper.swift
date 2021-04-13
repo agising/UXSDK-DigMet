@@ -16,8 +16,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     //var djiState: DJIFlightControllerState?       // Use to enable the dji state delegate func
     
     // Geofencing defaults set in initLoc init code.
-    // var geoFenceRadius: Double = 50                 // Geofence radius relative initLoc location
-    // var geoFenceHeight: [Double] = [2, 20]          // Geofence height relative initLoc location
+
     
     // Mission stuff
     var pendingMission = JSON()
@@ -55,7 +54,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var dssSrtlActive: Bool = false
 
     // keep or use in smartRTL
-  //  var dssHomeHeading: Double?                   // Home heading of DSS
+    // var dssHomeHeading: Double?                   // Home heading of DSS
 
     var flightMode: String?                         // the flight mode as a string
     var loc: MyLocation = MyLocation()
