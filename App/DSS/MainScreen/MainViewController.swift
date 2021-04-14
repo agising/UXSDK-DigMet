@@ -52,8 +52,15 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     @IBOutlet weak var register: UIButton!
     @IBOutlet weak var connected: UILabel!
     @IBOutlet weak var connect: UIButton!
+    
+    // DSS layout
     @IBOutlet weak var startDSSButton: UIButton!
+    @IBOutlet weak var dscIpTextField: UITextField!
     @IBOutlet weak var DSSIpButton: UIButton!
+    
+    @IBAction func dscIpTextFieldOK(_ sender: UITextField) {
+        print("Editing did end, the entered IP is: ", dscIpTextField.text!)
+    }
     
     //@IBAction func myUnwindAction(unwindSegue: UIStoryboardSegue) {}
     
@@ -96,7 +103,14 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         orangeThinkButton.isEnabled = false
         greyDisabledButton.isEnabled = false
         
-
+        // dsc input field
+        dscIpTextField.layer.cornerRadius = radius
+        dscIpTextField.returnKeyType = .done
+        dscIpTextField.keyboardType = .numbersAndPunctuation
+        dscIpTextField.autocorrectionType = .no
+        dscIpTextField.clearButtonMode = .whileEditing
+        dscIpTextField.clearsOnBeginEditing = true
+        dscIpTextField.delegate = self
         
         NotificationCenter.default.addObserver(self, selector: #selector(productCommunicationDidChange), name: Notification.Name(rawValue: ProductCommunicationServiceStateDidChange), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleFlightControllerSimulatorDidStart), name: Notification.Name(rawValue: FligntControllerSimulatorDidStart), object: nil)
@@ -208,6 +222,14 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         if textField == self.bridgeModeIPField {
             ProductCommunicationService.shared.bridgeAppIP = textField.text!
         }
+        
+        if textField == self.dscIpTextField {
+            // Did end
+        }
+    }
+    
+    func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
+        return true
     }
     
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
@@ -215,8 +237,35 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
     }
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
+        if textField.canResignFirstResponder {
+            textField.resignFirstResponder()
+        }
         return true
+    }
+    
+    func textFieldShouldEndEditing(_ textField: UITextField) -> Bool {
+        if textField == self.dscIpTextField{
+            if let text = textField.text{
+                // Leave blank if not using dsc
+                if text == ""{
+                    return true
+                }
+                let dots = text.filter { $0 == "." }.count
+                let colons = text.filter { $0 == ":"}.count
+                
+                print("number of dots: ", dots, "number of colons: ", colons)
+                if dots == 3 && colons == 0{
+                    return true
+                }
+            }
+            textField.text = "bad IP format"
+            //ipInputField.backgroundColor = UIColor.systemRed
+            return false
+        }
+        // Dont change behaviour of Bridgemode text field
+        else{
+            return true
+        }
     }
     
     // MARK: - Simulator Controls
