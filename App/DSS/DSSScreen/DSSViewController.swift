@@ -1024,6 +1024,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
         else{
             // Owner mismatch
+            print("Requestor owner: ", id, " registered owner: ", self.ownerID)
             return false
         }
     }
@@ -1046,10 +1047,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 
                 // Parse and create an ack/nack
                 let (_, json_m) = getJsonObject(uglyString: _message!)
+                print("Received message: ", json_m)
                 var json_r = JSON()
 
                 // Update message owner status
-                requesterID = json_r["id"].stringValue
+                requesterID = json_m["id"].stringValue
                 if isOwner(id: requesterID){
                     fromOwner = true
                 }
@@ -1131,13 +1133,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     
                 case "set_init_point":
-                    self.log("Received cmd: heart_beat")
+                    self.log("Received cmd: set_init_point")
+                    var navReady = false
+                    if let currLoc = self.copter.getCurrentLocation(){
+                        print("tjohoo")
+                        if currLoc.coordinate.latitude != 0{
+                            print("tjohi")
+                            navReady = true
+                        }
+                    }
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "set_init_point", description: nackOwnerStr)
                     }
-                    // Nack nav not ready
-                    else if self.copter.loc.coordinate.latitude == 0{
+                    // Nack nav not ready - Fail in simulation, pos not updated.
+                    else if !navReady { //self.copter.loc.coordinate.latitude == 0{
                         json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
                     }
                     // Nack init point already set
@@ -1146,7 +1156,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     // Accept command
                     else{
-                        json_r = createJsonAck("set_init_pooint")
+                        json_r = createJsonAck("set_init_point")
                         let headingRef = json_m["heading_ref"].stringValue
 
                         // Test robustness
@@ -1158,7 +1168,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     
                 case "arm_take_off":
                     self.log("Received cmd: arm_take_off")
-                    let toHeight = json_m["arg"]["height"].doubleValue
+                    let toHeight = json_m["height"].doubleValue
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
@@ -2143,7 +2153,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
         _ = initPublisher()
         
-        self.ownerID = "da001"
+        self.ownerID = "da000"
         if startReplyThread(){
             print("Reply thread successfully started")
             self.startHeartBeatThread()

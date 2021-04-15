@@ -324,12 +324,14 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // Not sure if sleep is needed, but loc.setPosition uses initLoc. Completion handler could be used.
         usleep(200000)
         
-        // Update the loc, this is first chance for it to calc XYZ and NED
-        self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc){
-            NotificationCenter.default.post(name: .didPosUpdate, object: nil)
+        Dispatch.main {
+            // Update the loc, this is first chance for it to calc XYZ and NED
+            self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc){
+                NotificationCenter.default.post(name: .didPosUpdate, object: nil)
+            }
+                    
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "InitLocation set to here including gimbalYaw."])
         }
-                
-        NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "InitLocation set to here including gimbalYaw."])
         
         return true
     }
