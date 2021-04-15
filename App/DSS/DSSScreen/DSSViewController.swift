@@ -27,7 +27,19 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 // Generate App icons: https://appicon.co/
 
 
-public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentViewController{//DUXDefaultLayoutViewController { //DUXFPVViewController {
+public class DSSViewController: UIViewController {//DUXContentViewController{//DUXDefaultLayoutViewController {
+    
+    
+    
+    
+    @IBOutlet var fpvView: UIView!
+    var fpvViewController = DUXFPVViewController()
+    
+    @IBOutlet var topBarView: UIView!
+    var topBarViewController = DUXStatusBarViewController()
+    
+    
+    //DUXFPVViewController {
     //**********************
     // Variable declarations
     
@@ -378,12 +390,35 @@ public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentVie
                 print("Failed setting camera mode")
                  self.cameraSetMode(newCameraMode, attempts - 1 , completionHandler: {(success: Bool) in
                  if success{
+                    
+                
+                    
                      completionHandler(true)
                      }
                  })
              }
              else{
                  // Camera mode is successfully set
+                
+                
+                
+                
+                
+//                Dispatch.main {
+//                    print("We kjust changed camera mode, what does the widget say?")
+//                    let widgetmode = self.trailingViewController?.captureWidget!.mode
+//                    if widgetmode == DJICameraMode.mediaDownload{
+//                        print("Widget mode is media download")
+//                    }
+//                    if widgetmode == DJICameraMode.shootPhoto{
+//                        print("Widget mode is shoot photo")
+//                    }
+//
+//                }
+                
+                
+                
+                
                  completionHandler(true)
              }
          })
@@ -1466,6 +1501,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentVie
         copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamFlightModeString)
         copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamAircraftLocation)
         copter.stopListenToParam(DJIFlightControllerKeyString: DJIFlightControllerParamHomeLocation)
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJICameraParamMode)
+        copter.stopListenToParam(DJIFlightControllerKeyString: DJICameraParamIsStoringPhoto)
         print("xClose: Sopped listening to velocity-, flight mode-, position- and home location updates")
 
         self.dismiss(animated: true, completion: nil)
@@ -1548,12 +1585,25 @@ public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentVie
         // Set the control command
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         
-        copter.followStream = true
-        let endPoint = "tcp://192.168.1.249:5560"
-        let topic = "REMOTE1"
-        if startGpsSubThread(endPoint: endPoint, topic: topic){
-            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
-        }
+//        copter.followStream = true
+//        let endPoint = "tcp://192.168.1.249:5560"
+//        let topic = "REMOTE1"
+//        if startGpsSubThread(endPoint: endPoint, topic: topic){
+//            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+//        }
+//
+//        if (isContentViewSwitched) {
+//            isContentViewSwitched = false
+//            self.contentViewController = self.fpvContentViewController
+//        } else {
+//            isContentViewSwitched = true
+//            let newContentViewController = UIViewController()
+//            newContentViewController.view.backgroundColor = UIColor.red
+//            self.fpvContentViewController?.dismiss(animated: false, completion: {() in })
+//            self.fpvContentViewController = self.contentViewController as? DUXFPVViewController
+//            self.contentViewController = newContentViewController
+//        }
+        
         
         
     }
@@ -1712,7 +1762,57 @@ public class DSSViewController:  DUXDefaultLayoutViewController {//DUXContentVie
     // viewDidLoad
     override public func viewDidLoad() {
         super.viewDidLoad()  // run the viDidoad of the superclass
+        self.addChild(self.fpvViewController)
+        self.fpvView.addSubview(self.fpvViewController.view)
+        self.addChild(self.topBarViewController)
+        self.topBarView.addSubview(self.topBarViewController.view)
+        self.topBarViewController.view.translatesAutoresizingMaskIntoConstraints = false;
+        self.topBarViewController.view.topAnchor.constraint(equalTo: self.topBarView.topAnchor).isActive = true
+        self.topBarViewController.view.bottomAnchor.constraint(equalTo: self.topBarView.bottomAnchor).isActive = true
+        self.topBarViewController.view.leadingAnchor.constraint(equalTo: self.topBarView.leadingAnchor).isActive = true
+        self.topBarViewController.view.trailingAnchor.constraint(equalTo: self.topBarView.trailingAnchor).isActive = true
+        self.topBarViewController.didMove(toParent: self)
+        
+//        self.removeRightVersatileViewController()
+//        self.trailingViewController = DUXTrailingBarViewController()
+//        self.leadingViewController = DUXLeadingBarViewController()
+ 
+        
+//
+//        if let switchWidget = self.trailingViewController?.widget(with: DUXPictureVideoSwitchWidget.self){
+//            print("there is a switch widget..")
+//            self.trailingViewController?.removeWidget(switchWidget)
+//        }
+//        if let recordVideoWidget = self.trailingViewController?.widget(with: DUXTakePictureWidget.self){
+//            print("There is a trailing widget")
+//            self.trailingViewController?.removeWidget(recordVideoWidget)
+//        }
+//        if let captureWidget = self.trailingViewController?.widget(with: DUXCaptureWidget.self){
+//            print("There is a capture widget")
+//            self.trailingViewController?.removeWidget(captureWidget)
+//        }
+//
+//        self.removeRightVersatileViewController()
+//        self.removeLeftVersatileViewController()
+//
+//
+        
+        
+//        self.rootView.self?.trailingView?.removeWidget(<#T##oldWidget: UIView & DUXWidgetProtocol##UIView & DUXWidgetProtocol#>)
+//        self.rootView.self?.trailingView?.removeWidget(DUXPictureVideoSwitchWidget)
+//        // Remove the observer to fool the vcamermode?
+    
 
+        
+        
+       //self.rootView?.removeObserver(self, forKeyPath: DJICameraParamMode, context: nil)
+//        if let batteryWidget = self.statusViewController?.widget(with: DUXBatteryWidget.self) {
+//        self.statusViewController?.removeWidget(batteryWidget)
+//        }
+
+
+        
+        
         // Trying to get rid of the mavic mini camera - label. The property is withon the DUXFPVViewController - fpvView.showCameraDisplayName
         // DUXFPVViewController is a SUBclass of DUXContentViewController. DUXContentViewContrller is a container for Vider and stuff and is a subclass of UIViweController.
         // https://forum.dji.com/thread-224097-1-1.html
