@@ -20,7 +20,7 @@ class MyLocation: NSObject{
     var gimbalYaw: Double = 0
     var gimbalYawRelativeToHeading: Double = 0
     var action: String = ""
-    var isStartLocation: Bool = false
+    var isInitLocation: Bool = false
     var coordinate = MyCoordinate()
     var geoFence = GeoFence()
     var vel = Vel()
@@ -34,7 +34,7 @@ class MyLocation: NSObject{
         self.gimbalYaw = 0
         self.gimbalYawRelativeToHeading = 0
         self.action = ""
-        self.isStartLocation = false
+        self.isInitLocation = false
         self.coordinate.latitude = 0
         self.coordinate.longitude = 0
         self.geoFence.radius = 0
@@ -101,15 +101,15 @@ class MyLocation: NSObject{
     
    
    
-    // This function should be used from the startMyLocation
+    // This function should be used from the initLoc object
     func geofenceOK(wp: MyLocation)->Bool{
-        // To make sure function is only used from startlocation.
-        if !isStartLocation {
-            print("geofence: WP used for reference is not a start location.")
+        // To make sure function is only used from initLoc.
+        if !self.isInitLocation {
+            print("geofence: WP used for reference is not init location.")
             return false
         }
         let (_, _, dAlt, dist2D, _, _) = self.distanceTo(wpLocation: wp)
-        print("geofence: OK, dAlt:", dAlt," dist2D: ", dist2D)
+        print("geofenceOK: dAlt:", dAlt," dist2D: ", dist2D)
 
         if dist2D > self.geoFence.radius {
             printToScreen("geofence: Radius violation")
@@ -122,45 +122,63 @@ class MyLocation: NSObject{
         return true
     }
     
-    // Set up wp properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isStartWP: Bool=false, startWP: MyLocation, completionBlock: ()->Void){
+    // Set up a MyLocation given a CLLocation and other properties
+    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isInitLocation: Bool=false, initLoc: MyLocation, completionBlock: ()->Void){
+        if self.isInitLocation{
+            print("setPosition: Init point already set")
+            return
+        }
         self.altitude = pos.altitude
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
         self.gimbalYaw = heading + gimbalYawRelativeToHeading
         self.coordinate.latitude = pos.coordinate.latitude
         self.coordinate.longitude = pos.coordinate.longitude
-        self.isStartLocation = isStartWP
+        self.isInitLocation = isInitLocation
         
-        // Dont set up XYZ for the startMyLocation it self.
-        if self.isStartLocation{
+        // Dont set up local coordinates for the InitLoc it self.
+        if self.isInitLocation{
             return
         }
-        // If startWP is not setup, return
-        if !startWP.isStartLocation {
-            print("setPosition: Error, cannot update XYZ without a set start position")
+        
+        // If initLoc is not setup, local coordinates cannot be calculated - return
+        if !initLoc.isInitLocation {
+            completionBlock()
+            print("setPosition: Local coordinates not set, init point not set")
             return
         }
+        
         // Lat-, lon-, alt-diff
-        let latDiff = pos.coordinate.latitude - startWP.coordinate.latitude
-        let lonDiff = pos.coordinate.longitude - startWP.coordinate.longitude
-        let altDiff = pos.altitude - startWP.altitude
+        let latDiff = pos.coordinate.latitude - initLoc.coordinate.latitude
+        let lonDiff = pos.coordinate.longitude - initLoc.coordinate.longitude
+        let altDiff = pos.altitude - initLoc.altitude
 
         // posN, posE
         let posN = latDiff * 1852 * 60
-        let posE = lonDiff * 1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi)
+        let posE = lonDiff * 1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi)
         self.pos.north = posN
         self.pos.east = posE
         self.pos.down = -altDiff
         
         // X direction definition
-        let alpha = (startWP.gimbalYaw)/180*Double.pi
+        let alpha = (initLoc.gimbalYaw)/180*Double.pi
 
         // Coordinate transformation, from (N, E) to (X,Y)
         self.pos.x =  posN * cos(alpha) + posE * sin(alpha)
         self.pos.y = -posN * sin(alpha) + posE * cos(alpha)
         self.pos.z = -altDiff  // Same as pos.down..
              
+        // Check for geofence violation
+        if -self.pos.z > initLoc.geoFence.height[1]{
+            print("GeoFence: Breaching geo fence high")
+            // Set alt 2m below?
+        }
+        if sqrt(pow(self.pos.x,2)+pow(self.pos.y,2)) > initLoc.geoFence.radius{
+            print("Geofence: Breaching geo fence radius")
+            // Fly mission towards init?
+        }
+        
+        
         completionBlock()
         // Suitable completionblock:
         // {NotificationCenter.default.post(name: .didPosUpdate, object: nil)}
@@ -171,17 +189,17 @@ class MyLocation: NSObject{
         self.geoFence.height = height
     }
     
-    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, startWP: MyLocation){
+    func setUpFromJsonWp(jsonWP: JSON, defaultSpeed: Float, initLoc: MyLocation){
         // Reset all properties
         self.reset()
-                
+        
         // Test if mission is LLA
         if jsonWP["lat"].exists(){
             // Mission is LLA
-            self.altitude = jsonWP["alt"].doubleValue
-            self.heading = jsonWP["heading"].doubleValue
             self.coordinate.latitude = jsonWP["lat"].doubleValue
             self.coordinate.longitude = jsonWP["lon"].doubleValue
+            self.altitude = jsonWP["alt"].doubleValue
+            self.heading = parseHeading(json: jsonWP)
         }
         
         // Test if mission NED
@@ -191,12 +209,12 @@ class MyLocation: NSObject{
             let east = jsonWP["east"].doubleValue
             let down = jsonWP["down"].doubleValue
             // Calc dLat, dLon from north east. Add to start location.
-            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
-            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
+            let dLat = initLoc.coordinate.latitude + north/(1852 * 60)
+            let dLon = initLoc.coordinate.longitude + east/(1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = startWP.altitude - down
-            self.heading = jsonWP["heading"].doubleValue
+            self.altitude = initLoc.altitude - down
+            self.heading = parseHeading(json: jsonWP)
             
         }
         else if jsonWP["x"].exists(){
@@ -205,28 +223,27 @@ class MyLocation: NSObject{
             let y = jsonWP["y"].doubleValue
             let z = jsonWP["z"].doubleValue
             // First calculate northing and easting.
-            let XYZstartHeading = startWP.gimbalYaw
+            let XYZstartHeading = initLoc.gimbalYaw
             let beta = -XYZstartHeading/180*Double.pi
             let north = x * cos(beta) + y * sin(beta)
             let east = -x * sin(beta) + y * cos(beta)
             // Calc dLat, dLon from north east. Add to start location
-            let dLat = startWP.coordinate.latitude + north/(1852 * 60)
-            let dLon = startWP.coordinate.longitude + east/(1852 * 60 * cos(startWP.coordinate.latitude/180*Double.pi))
+            let dLat = initLoc.coordinate.latitude + north/(1852 * 60)
+            let dLon = initLoc.coordinate.longitude + east/(1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi))
             self.coordinate.latitude = dLat
             self.coordinate.longitude = dLon
-            self.altitude = startWP.altitude - z
-            if jsonWP["local_yaw"].doubleValue != -1 {
-                self.heading = startWP.gimbalYaw + jsonWP["local_yaw"].doubleValue
-                // Make sure heading is within 0-360 range (mainly to avoid -1 which has other meaning)
+            self.altitude = initLoc.altitude - z
+            self.heading = parseHeading(json: jsonWP)
+            // Transform to XYZ
+            if self.heading != -1 && self.heading != -99{
+                self.heading += initLoc.gimbalYaw
+                // Make sure heading is within 0-360 range (to avoid -1 and -99 which has other meaning)
                 if self.heading < 0 {
                     self.heading += 360
                 }
                 if self.heading > 360 {
                     self.heading -= 360
                 }
-            }
-            else {
-                self.heading = -1
             }
         }
         
@@ -265,11 +282,11 @@ class MyCoordinate:NSObject{
     var latitude: Double = 0
     var longitude: Double = 0
 }
-// SubClass to MyLocation. Geofence properties that are stored in the startMyLocation. Geofence is checked relative to startMyLocation
+// SubClass to MyLocation. Geofence properties that are stored in the initLoc. Geofence is checked relative to initLoc, from initLoc object.
 class GeoFence: NSObject{
-    var radius: Double = 0
-    var height: [Double] = [0, 0]
-}
+    var radius: Double = 50                 // Geofence radius relative initLoc location
+    var height: [Double] = [2, 20]          // Geofence height relative initLoc location
+   }
 // SubClass to MyLocation. Body class for body velocities
 class Vel: NSObject{
     var bodyX: Float = 0
@@ -279,13 +296,123 @@ class Vel: NSObject{
 }
 
 // SubClass to MyLocation.
-class POS: NSObject{
+class POS: NSObject {
     var x: Double = 0
     var y: Double = 0
     var z: Double = 0
     var north: Double = 0
     var east: Double = 0
     var down: Double = 0
+}
+
+// An object to carry any flight pattern
+class PatternHolder: NSObject{
+    let radiusLimit: Double = 2
+    var pattern: Pattern = Pattern()
+    var stream: MyLocation = MyLocation()
+    var reference: MyLocation = MyLocation()
+    var velCtrlTimer: Timer?                        // Velocity control Timer
+    var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
+    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+
+    
+    func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
+        self.stream.coordinate.latitude = lat
+        self.stream.coordinate.longitude = lon
+        self.stream.altitude = alt
+        self.stream.heading = yaw
+        
+        //self.applyPattern(currentPos: currentPos)
+        
+        
+        
+        
+        
+        
+        // How to (where from) to activate the controller?
+        // What should keep it alive?
+        
+        
+        
+        
+        
+        
+        
+    }
+    
+    //
+    // Set a new pattern
+    func setPattern(pattern: String, relAlt: Double, heading: Double, radius: Double = 0, yawRate: Double = 0){
+        self.pattern.name = pattern
+        self.pattern.relAlt = relAlt
+        
+        if radius != 0{
+            self.pattern.radius = radius
+        }
+        if yawRate != 0{
+            self.pattern.yawRate = yawRate
+        }
+        // Identify heading mode
+        switch heading {
+        case -1:
+            self.pattern.headingMode = "course"
+            self.pattern.heading = -1
+        case -2:
+            self.pattern.headingMode = "poi"
+            // Heading is updated when stream.updateReference
+        default:
+            self.pattern.headingMode = "absolute"
+            self.pattern.heading = heading
+        }
+        
+    }
+    
+    // ********************************************************************
+    // Apply the pattern to the stream to calculate the reference to follow
+//    func applyPattern(currentPos: MyLocation){
+//        // The "Above" - pattern
+//        if pattern.name == "above"{
+//            reference.altitude = stream.altitude + pattern.relAlt
+//            reference.coordinate.latitude = stream.coordinate.latitude + 0
+//            reference.coordinate.longitude = stream.coordinate.longitude + 0
+//            if pattern.headingMode == "poi"{
+//                // Get bearing from current pos to poi
+//                let (_, _, _, _, _, bearing) = currentPos.distanceTo(wpLocation: self.stream)
+//                if bearing < 0{
+//                    print("Bearing is negative, can trigger the course-heading. ROBUSTIFY distanceTo")
+//                }
+//                reference.heading = bearing
+//            }
+//            else {
+//                // Heading is either absolute or course
+//                reference.heading = pattern.heading
+//            }
+//        }
+//        else if pattern.name == "circle" {
+//            // Algorithm: Go to radius, move along circle (90 deg from radius), track heading, track radius, track altitude in velocity commands.
+//            // Phase 1, go straight to radius
+//            let (northing, easting, dAlt, dist2D, dist3D, bearing) = currentPos.distanceTo(wpLocation: self.stream)
+//            if fabs(dist2D - pattern.radius) > radiusLimit{
+//                // Go straigt towars target (backwards or forwards..?)
+//            }
+//            else {
+//
+//
+//            }
+//
+//        }
+//    }
+}
+
+class Pattern: NSObject {
+    var name: String = ""
+    var relAlt: Double = 5
+    var headingMode: String = ""        // Absolute/course/poi
+    var heading: Double = 10
+    var radius: Double = 10
+    var yawRate: Double = 10
+    var startTime = CACurrentMediaTime()
+
 }
 
 //
@@ -411,12 +538,14 @@ class HeartBeat: NSObject{
     var degradedLimit: Double = 2               // Time limit for link to be considered degraded
     var lostLimit: Double = 10                  // Time limit for link to be considered lost
     var beatDetected = false                    // Flag for first received heartBeat
+    var disconnected = true
     
     func newBeat(){
         if !beatDetected{
             beatDetected = true
         }
         self.lastBeat = CACurrentMediaTime()
+        disconnected = false
     }
     
     func elapsed()->Double{
@@ -434,6 +563,7 @@ class HeartBeat: NSObject{
         }
         else{
             print("Link lost, elapsed time since last heartBeat: ", elapsedTime)
+            disconnected = true
             return false
         }
     }
@@ -454,6 +584,78 @@ class imageSaver: NSObject {
 
 
 
+
+// ************************************************************************************************************************Ä*********************************************
+// pasteHeading parses heading that can have valid inputs 0-360 and "course". Valid heading returns the heading, "course" returns -1 and any everything else returns -99.
+func parseHeading(json: JSON)->Double{
+    // If it is not a string its a double..
+    if json["heading"].string == nil{
+        // Check the value for limits
+        let wpHeading = json["heading"].doubleValue
+        if 0 <= wpHeading && wpHeading < 360{
+            return wpHeading
+        }
+        else {
+            // Internal code for handling error.
+            return -99
+        }
+    }
+    // It must be a string, check it
+    else if json["heading"].stringValue == "course"{
+            return -1
+    }
+    else if json["heading"].stringValue == "poi"{
+        return -2
+    }
+    // Probalby misspelled string
+    else {
+        return -99
+    }
+}
+
+// ****************************************
+// Parse index and test if it is ok or not.
+func parseIndex(json: JSON, sessionLastIndex: Int)->Int{
+    // Check for cmd download
+    if json["cmd"].exists(){
+        if json["cmd"].stringValue != "download"{
+            // Its not a download command, index is not used
+            return 0
+        }
+    }
+    // Check for ref
+    if json["ref"].exists(){
+        if json["ref"].stringValue != "LLA" || json["ref"].stringValue != "XYZ"{
+            return 0
+        }
+    }
+    // If it is not a string its an int..
+    if json["index"].string == nil{
+        // Check the value for limits
+        let cmdIndex = json["index"].intValue
+        if 0 < cmdIndex && cmdIndex <= sessionLastIndex {
+            return cmdIndex
+        }
+        else {
+            // Index out of range, return error code.
+            return -11
+        }
+    }
+    // It must be a string, check it
+    else if json["index"].stringValue == "all"{
+        // Return code for 'all'
+        return -1
+    }
+    else if json["index"].stringValue == "latest"{
+        // Return latest index
+        return sessionLastIndex
+    }
+    // Probalby misspelled string
+    else {
+        // Return index error
+        return -12
+    }
+}
 
 
 

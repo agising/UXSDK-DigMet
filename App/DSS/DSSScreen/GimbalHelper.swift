@@ -15,6 +15,7 @@ class GimbalController: NSObject, DJIGimbalDelegate{
     
     var gimbalPitch: Float = 0
     var yawRelativeToHeading: Double = 0
+    var pitchRange: [Double] = [-90, 20]
 
     // *******************************************
     // Init the gimbal, set pitch range extension.

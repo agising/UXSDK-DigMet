@@ -132,11 +132,11 @@ func createJsonAck(_ str: String) -> JSON {
 
 //***************************
 // Create a json nack message
-func createJsonNack(fcn: String, arg2: String) -> JSON {
+func createJsonNack(fcn: String, description: String) -> JSON {
     var json = JSON()
     json["fcn"] = JSON("nack")
     json["arg"] = JSON(fcn)
-    json["arg2"] = JSON(arg2)
+    json["description"] = JSON(description)
     return json
 }
 

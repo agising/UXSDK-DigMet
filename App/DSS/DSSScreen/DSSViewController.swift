@@ -48,9 +48,13 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     let replyEndpoint = "tcp://*:5557"
     let infoPublishEndPoint = "tcp://*:5558"
     let dataPublishEndPoint = "tcp://*:5559"
+    var dscIP = ""
+    let dscPort = ""
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
-    var inControls = "USER"
+    var inControls = "PILOT"
+    var disconnected = true
+    
     
     var pitchRangeExtension_set: Bool = false
     var nextGimbalPitch: Int = 0
@@ -66,11 +70,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
     var transferring: Bool = false
     var jsonMetaDataXYZ: JSON = JSON()                 // All the photo metadata XYZ
+    var jsonMetaDataNED: JSON = JSON()                 // All th photo metadata NED
     var jsonMetaDataLLA: JSON = JSON()                 // All the photo metadata LLA
     var jsonPhotos: JSON = JSON()                   // Photos filename and downloaded status
         
     
     var idle: Bool = true                   // For future implementation of task que
+    
+    var ownerID: String = ""
     
     
     // Steppers
@@ -169,9 +176,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
-    //**************************************************************************************************
-    // Writes metadata to json. Use startLoc for the calulations, if it is not set, set ut to current pos
+    //********************************************************************************
+    // Writes metadata to json. If init point is not set, XYZ and NED are set to 999.0
     func writeMetaData()->Bool{
+
         // Make sure startWP is set in order to be able to calc the local XYZ
         if !self.copter.startLoc.isStartLocation {
             // StartLocation is not set. Try to set it!
@@ -214,30 +222,106 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         metaLLA["lon"] = JSON(self.copter.loc.coordinate.longitude)
         metaLLA["alt"] = JSON(self.copter.loc.altitude)
         metaLLA["agl"] = JSON(-1)
-        metaLLA["yaw"] = JSON(self.copter.loc.gimbalYaw)
+        metaLLA["heading"] = JSON(self.copter.loc.gimbalYaw)
         metaLLA["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-
         
-        var jsonPhoto = JSON()
-        jsonPhoto["filename"] = JSON("")
-        jsonPhoto["stored"].boolValue = false
-        
-        // Separate or squash XYZ and LLA metadata, TODO
-        self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        // Append metaLLA
         self.jsonMetaDataLLA[String(self.sessionLastIndex)] = metaLLA
-        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
         
         // Check for subscriptions
-        if self.subscriptions.photoXYZ{
-            _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
-        }
         if self.subscriptions.photoLLA{
             _ = self.publish(socket: self.infoPublisher, topic: "photo_LLA", json: metaLLA)
         }
         else{
-            print(metaXYZ)
             print(metaLLA)
         }
+        
+        
+        // Local coordinates requires init point.
+        // If init point is set calc XYZ and NED, otherwise set to default
+        if self.copter.initLoc.isInitLocation {
+
+            // XYZ metadata
+            var metaXYZ = JSON()
+            metaXYZ["filename"] = JSON("")
+            metaXYZ["x"] = JSON(self.copter.loc.pos.x)
+            metaXYZ["y"] = JSON(self.copter.loc.pos.y)
+            metaXYZ["z"] = JSON(self.copter.loc.pos.z)
+            metaXYZ["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw - self.copter.initLoc.gimbalYaw)
+            metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaXYZ["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaXYZ
+            self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        
+            // Check for subscriptions
+            if self.subscriptions.photoXYZ{
+                _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
+            }
+            
+            // NED metadata
+            var metaNED = JSON()
+            metaNED["filename"] = JSON("")
+            metaNED["north"] = JSON(self.copter.loc.pos.north)
+            metaNED["east"] = JSON(self.copter.loc.pos.east)
+            metaNED["down"] = JSON(self.copter.loc.pos.down)
+            metaNED["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaNED["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaNED
+            self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
+            
+            // Dont check for subscriptiopns, NED is not subscirbeable.
+        }
+        // No init point, fill empty meta data to not have faulte sizes etc.
+        else{
+            // XYZ metadata
+            var metaXYZ = JSON()
+            metaXYZ["filename"] = JSON("")
+            metaXYZ["x"] = JSON(999.0)
+            metaXYZ["y"] = JSON(999.0)
+            metaXYZ["z"] = JSON(999.0)
+            metaXYZ["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaXYZ["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaXYZ["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaXYZ
+            self.jsonMetaDataXYZ[String(self.sessionLastIndex)] = metaXYZ
+        
+            // Check for subscriptions
+            if self.subscriptions.photoXYZ{
+                _ = self.publish(socket: self.infoPublisher, topic: "photo_XYZ", json: metaXYZ)
+            }
+            
+            // NED metadata
+            var metaNED = JSON()
+            metaNED["filename"] = JSON("")
+            metaNED["north"] = JSON(999.0)
+            metaNED["east"] = JSON(999.0)
+            metaNED["down"] = JSON(999.0)
+            metaNED["agl"] = JSON(-1)
+            // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+            metaNED["heading"] = JSON(self.copter.loc.gimbalYaw)
+            metaNED["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+            metaNED["index"] = JSON(self.sessionLastIndex)
+            
+            // Append metaNED
+            self.jsonMetaDataNED[String(self.sessionLastIndex)] = metaNED
+            
+            
+            if false{
+                print(metaXYZ)
+                print(metaNED)
+            }
+        }
+        
         return true
     }
     
@@ -818,13 +902,24 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         print("Found no topic, the parsed json_m: ", json_m)
                     }
                     print("The topic: ", topic!, " The parsed json_m: ", json_m)
-                    print("CODE FOR TESTING IN SIM ONLY")
-                    copter.activeWP.coordinate.latitude = json_m["lat"].doubleValue
-                    copter.activeWP.coordinate.longitude = json_m["lon"].doubleValue
-                    copter.activeWP.altitude = 10 // 30json_m["alt"].doubleValue + 30
-                    copter.activeWP.speed = 3
-                    // goto is likely called to often..
-                    copter.activeWP.printLocation(sentFrom: "gpsSubThread")
+                    
+                    // Decode the stream message and apply pattern
+                    let lat = json_m["lat"].doubleValue
+                    let lon = json_m["lon"].doubleValue
+                    let alt = json_m["alt"].doubleValue
+                    let yaw = json_m["yaw"].doubleValue
+                    
+                    self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw, currentPos: self.copter.loc)
+                    
+                    // Update the activeWP
+                    self.copter.activeWP.coordinate.latitude = self.copter.pattern.reference.coordinate.latitude
+                    self.copter.activeWP.coordinate.longitude = self.copter.pattern.reference.coordinate.longitude
+                    self.copter.activeWP.altitude = self.copter.pattern.reference.altitude
+                    
+                    // Speed TODO
+                    self.copter.activeWP.speed = 3
+                    
+                    self.copter.activeWP.printLocation(sentFrom: "gpsSubThread")
                     Dispatch.main{
                         self.copter.goto()
                     }
@@ -950,10 +1045,28 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         }
     }
     
+    // If function is not used in more than parser, put it in parser.
+    // Function checks if the ownerID and the id from a request matches or not.
+    func isOwner(id: String)->Bool{
+        if id == self.ownerID{
+            // Owner match
+            return true
+        }
+        else{
+            // Owner mismatch
+            print("Requestor owner: ", id, " registered owner: ", self.ownerID)
+            return false
+        }
+    }
 
     // ****************************************************
     // zmq reply thread that reads command from applictaion
     func readSocket(_ socket: SwiftyZeroMQ.Socket){
+        var fromOwner = false
+        var requesterID = ""
+        var nackOwnerStr = ""
+        var messageQualifiesForHeartBeat = false
+
         while self.replyEnable{
             do {
                 let _message: String? = try socket.recv(bufferLength: 4096, options: .none)
@@ -961,204 +1074,179 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     return
                 }
                 // A message is received.
-                var messageQualifiesForHeartBeat = true
                 
                 // Parse and create an ack/nack
                 let (_, json_m) = getJsonObject(uglyString: _message!)
+                print("Received message: ", json_m)
                 var json_r = JSON()
-            
+
+                // Update message owner status
+                requesterID = json_m["id"].stringValue
+                if isOwner(id: requesterID){
+                    fromOwner = true
+                }
+                else {
+                    fromOwner = false
+                    nackOwnerStr = "Requester (" + requesterID + ") is not the DSS owner"
+
+                }
+                
+                // Message valid for heartbeat?
+                messageQualifiesForHeartBeat = false
+                if fromOwner{
+                    messageQualifiesForHeartBeat = true
+                }
+                
                 switch json_m["fcn"]{
+                case "heart_beat":
+                    self.log("Received cmd: heart_beat")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("heart_beat")
+                    }
+                case "who_controls":
+                    self.log("Received cmd: who_controls")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("who_controls")
+                    json_r["in_controls"].stringValue = self.inControls
+                
+                case "set_geofence":
+                    self.log("Received cmd: set_geofence")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_geofence", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_geofence")
+                        // Parse
+                        let radius = json_m["radius"].doubleValue
+                        var height: [Double] = []
+                        height[0] = json_m["low_height_low"].doubleValue
+                        height[1] = json_m["height_high"].doubleValue
+                        // Set Geo fence
+                        self.copter.initLoc.setGeoFence(radius: radius, height: height)
+                    }
+                    
+                case "idle":
+                    self.log("Received cmd: idle")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("idle")
+                    json_r["idle"].boolValue = self.idle // TODO hardcoded to true..
+                                    
+                                
+                case "reset_dss_srtl":
+                    self.log("Received cmd: reset_dss_srtl")
+                    // TODO, what should it do? pop and replace first wp in smart rtl?
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: nackOwnerStr)
+                    }
+                    // Nack nav not ready
+                    else if self.copter.loc.coordinate.latitude == 0{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Navigation not ready")
+                    }
+                    // Accept command
+                    else{
+                        if copter.resetDSSSRTLMission(){
+                            json_r = createJsonAck("reset_dss_srtl")
+                        }
+                        else {
+                            json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Position not available")
+                        }
+                    }
+                    
+                case "set_init_point":
+                    self.log("Received cmd: set_init_point")
+                    var navReady = false
+                    if let currLoc = self.copter.getCurrentLocation(){
+                        print("tjohoo")
+                        if currLoc.coordinate.latitude != 0{
+                            print("tjohi")
+                            navReady = true
+                        }
+                    }
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_init_point", description: nackOwnerStr)
+                    }
+                    // Nack nav not ready - Fail in simulation, pos not updated.
+                    else if !navReady { //self.copter.loc.coordinate.latitude == 0{
+                        json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
+                    }
+                    // Nack init point already set
+                    else if self.copter.initLoc.isInitLocation{
+                        json_r = createJsonNack(fcn: "set_init_point", description: "Init point already set")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_init_point")
+                        let headingRef = json_m["heading_ref"].stringValue
+
+                        // Test robustness
+                        if !copter.setInitLocation(headingRef: headingRef){
+                            print("Error: Debug. Something is wrong, should not have passed to here.")
+                            json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
+                        }
+                    }
+                    
                 case "arm_take_off":
                     self.log("Received cmd: arm_take_off")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        json_r = createJsonNack(fcn: "arm_take_off", arg2: "State is flying")
+                    let toHeight = json_m["height"].doubleValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
                     }
+                    // TODO nsat check
+                    else if false {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Less than 8 satellites")
+                    }
+                    // Nack is flying
+                    else if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "State is flying")
+                    }
+                    // Nack height limits
+                    else if toHeight < 2 || toHeight > 40 {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Height is out of limits")
+                    }
+                    // Nack nit point not set
+                    else if !self.copter.initLoc.isInitLocation {
+                        json_r = createJsonNack(fcn: "arm_take_off", description: "Init point not set")
+                    }
+                    // Accept command
                     else{
-                        let toAlt = json_m["arg"]["height"].doubleValue
-                        if toAlt >= 2 && toAlt <= 40{
-                            json_r = createJsonAck("arm_take_off")
-                            copter.toAlt = toAlt
-                            copter.toReference = "HOME"
-                            copter.takeOff()
-                        }
-                        else{
-                            json_r = createJsonNack(fcn: "arm_take_off", arg2: "Take-off height out of limit")
-                        }
+                        json_r = createJsonAck("arm_take_off")
+                        copter.toHeight = toHeight
+                        copter.takeOff()
                     }
-                case "data_stream":
-                    self.log("Received cmd: data_stream, with attrubute: " + json_m["arg"]["attribute"].stringValue + " and enable: " + json_m["arg"]["enable"].stringValue)
-                    // Data stream code
-                    let enable = json_m["arg"]["enable"].boolValue
-                    switch json_m["arg"]["attribute"]{
-                        case "ATT":
-                            self.subscriptions.setATT(bool: enable)
-                            log("ATT subscription not supported yet!")
-                            json_r = createJsonNack(fcn: "data_stream", arg2: "ATT not supported for DJI")
-                        case "XYZ":
-                            self.subscriptions.setXYZ(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "photo_XYZ":
-                            self.subscriptions.setPhotoXYZ(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "LLA":
-                            self.subscriptions.setLLA(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "photo_LLA":
-                            self.subscriptions.setPhotoLLA(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "NED":
-                            self.subscriptions.setNED(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        case "WP_ID":
-                            self.subscriptions.setWpId(bool: enable)
-                            json_r = createJsonAck("data_stream")
-                        default:
-                            json_r = createJsonNack(fcn: "data_stream", arg2: "Attribute not supported" + json_m["arg"].stringValue)
-                    }
-                case "disconnect":
-                    json_r = createJsonAck("disconnect")
-                    self.log("Received cmd: disconnect")
-                    self.copter.dssSrtl(hoverTime: 5)
-                    // Disconnect code
-                    return
-                case "gimbal_set":
-                    self.log("Received cmd: gimbal_set")
-                    json_r = createJsonAck("gimbal_set")
-                    self.copter.gimbal.setPitch(pitch: json_m["arg"]["pitch"].doubleValue)
-                    // No feedback, can't read the gimbal pitch value.
+                    
+                case "save_dss_home_position":
+                    self.log("Received cmd: save_dss_home_position")
+                    json_r = createJsonAck("save_dss_home_position")
+                    // TODO REMOVE save dss home position
                 
-                case "follow_stream":
-                    self.log("Received cmd: follow_stream")
-                    json_r = createJsonAck("follow_stream")
-                    // Subscribe/unsubscribe to IP and port
-                    
-                        // Parse incoming stream to activeWP
-                
-                    // Activate followStream..
-                    
-                    
-                case "gogo_LLA":
-                    self.log("Received cmd: gogo_LLA")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                            Dispatch.main{
-                                _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                            }
-                            json_r = createJsonAck("gogo_LLA")
-                        }
-                        else{
-                            json_r = createJsonNack(fcn: "gogo_LLA", arg2: "WP id does not exist")
-                        }
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_LLA", arg2: "State is not flying")
-                    }
-
-                case "gogo_NED":
-                    self.log("Received cmd: gogo_NED")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                                Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                                }
-                                json_r = createJsonAck("gogo_NED")
-                            }
-                            else{
-                                json_r = createJsonNack(fcn: "gogo_NED", arg2: "WP id does not exist")
-                            }
-                        }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_NED", arg2: "State is not flying")
-                    }
-
-                case "gogo_XYZ":
-                    self.log("Received cmd: gogo_XYZ")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
-                        let next_wp = json_m["arg"]["next_wp"].intValue
-                        if copter.pendingMission["id" + String(next_wp)].exists(){
-                                Dispatch.main{
-                                    _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
-                                }
-                                json_r = createJsonAck("gogo_XYZ")
-                            }
-                            else{
-                                json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "WP id does not exist")
-                            }
-                        }
-                    else{
-                        json_r = createJsonNack(fcn: "gogo_XYZ", arg2: "State is not flying")
-                    }
-
-                case "heart_beat": // DONE
-                    json_r = createJsonAck("heart_beat")
-                    //print("Received heart_beat")
-                    // Any heart beat code here
-                    
-                case "info_request":
-                    json_r = createJsonAck("info_request")
-                    // print("Received cmd: info_request", json_m["arg"])
-                    // Info request code
-                    switch json_m["arg"]{
-                    case "operator":
-                        json_r["arg2"].stringValue = "operator"
-                        json_r["arg3"].stringValue = self.inControls
-                    case "posD":
-                        json_r["arg2"].stringValue = "posD"
-                        json_r["arg3"] = JSON(self.copter.loc.pos.z)
-                    case "armed":
-                        json_r["arg2"].stringValue = "armed"
-                        json_r["arg3"].boolValue = self.copter.getAreMotorsOn()
-                    case "idle":
-                        json_r["arg2"].stringValue = "idle"
-                        json_r["arg3"].boolValue = self.idle
-                    case "current_wp":
-                        json_r["arg2"].stringValue = "current_wp"
-                        json_r["arg3"].stringValue = copter.missionNextWp.description
-                    case "metadata":
-                        json_r["arg2"].stringValue = "metadata"
-                        let frame = json_m["arg2"].stringValue
-                        let sessionIndex = json_m["arg3"].intValue
-                        if  sessionIndex == -1{
-                            if frame == "XYZ"{
-                                json_r["arg3"] = self.jsonMetaDataXYZ
-                            }
-                            else if frame == "LLA"{
-                                json_r["arg3"] = self.jsonMetaDataLLA
-                            }
-                        }
-                        else{
-                            if frame == "XYZ"{
-                                if self.jsonMetaDataXYZ[String(describing: sessionIndex)].exists(){
-                                    json_r["arg3"] = self.jsonMetaDataXYZ[String(describing: sessionIndex)]
-                                }
-                                else{
-                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
-                                }
-                            }
-                            else if frame == "LLA"{
-                                if self.jsonMetaDataLLA[String(describing: sessionIndex)].exists(){
-                                    json_r["arg3"] = self.jsonMetaDataLLA[String(describing: sessionIndex)]
-                                }
-                                else{
-                                    json_r = createJsonNack(fcn: "info_request", arg2: "No such index for metadata")
-                                }
-                            }
-                        }
-                    default:
-                        json_r = createJsonNack(fcn: "info_request", arg2: "Attribute not supported " + json_m["arg"].stringValue)
-                    }
                 case "land":
                     self.log("Received cmd: land")
-                    json_r = createJsonAck("land")
-                    if copter.getIsFlying() ?? false{ // Default to false to handle nil
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "land", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Accept command
+                    else{
                         json_r = createJsonAck("land")
                         copter.land()
                     }
-                    else{
-                        json_r = createJsonNack(fcn: "land", arg2: "State is not flying")
-                    }
+
                 case "photo":
                     switch json_m["arg"]["cmd"]{
                         case "take_photo":
@@ -1215,15 +1303,24 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
                             json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
                         }
-                case "rtl":
+
+                  case "rtl":
                     self.log("Received cmd: rtl")
                     // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
                     // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
-                  
-                    if copter.getIsFlying() ?? false { // Default to false to handle nil
-                        // Activate the rtl, the figure if the command whent through or not
+                    
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "rtl", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "rtl", description: "Not flying")
+                    }
+                    // Accept command
+                    else{
+                        // Activate the rtl, then figure if the command whent through or not
                         copter.rtl()
-                        
                         // Sleep for max 8*50ms = 0.4s to allow for mode change to go through.
                         var max_attempts = 8
                         // while flightMode is neither GPS nor Landing -  wait. If flightMode is GPS or Landing - continue
@@ -1237,113 +1334,536 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                             else {
                                 // We tried many times, it must have failed somehow -> nack
                                 print("ReadSocket: RTL did not go through. Debug.")
-                                json_r = createJsonNack(fcn: "rtl", arg2: "RTL did not go through, debug")
+                                json_r = createJsonNack(fcn: "rtl", description: "RTL failed to engage, try again")
                                 break
                             }
                         }
+                        // If RTL is engaged send ack.
                         if copter.flightMode == "GPS" || copter.flightMode == "Landing" {
                             json_r = createJsonAck("rtl")
                         }
                     }
-                    // Copter is not flying
-                    else {
-                        json_r = createJsonNack(fcn: "rtl", arg2: "State is not flying")
-                    }
-               
+                   
                 case "dss_srtl":
-                    // Once activated it should be possible to interfere TODO
                     self.log("Received comd: dss srtl")
-                    if copter.getIsFlying() ?? false { // Default to false to handle nil
+                    let hoverT = json_m["arg"]["hover_time"].intValue
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "rtl", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "rtl", description: "Not flying")
+                    }
+                    // Nack hover time out of limits
+                    else if !(0 <= hoverT && hoverT <= 300){
+                        json_r = createJsonNack(fcn: "dss_srtl", description: "Hover_time is out of limits")
+                    }
+                    // Accept command
+                    else {
                         json_r = createJsonAck("dss_srtl")
-                        var hoverT = json_m["arg"]["hover_time"].intValue
-                        // If not within 0-300, use default of 5
-                        if !(0 <= hoverT && hoverT < 300){
-                                hoverT = 5
-                        }
                         Dispatch.main{
                             self.copter.dssSrtl(hoverTime: hoverT)
                         }
                     }
-                    else {
-                        json_r = createJsonNack(fcn: "dss_srtl", arg2: "State is not flying")
+                    
+                case "set_vel_BODY":
+                    self.log("Received cmd: set_vel_BODY")
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: nackOwnerStr)
                     }
-                case "save_dss_home_position":
-                    // Function saves dss home position, not used for anything yet..
-                    self.log("Received cmd: save_dss_home_position")
-                    if copter.saveCurrentPosAsDSSHome(){
-                        json_r = createJsonAck("save_dss_home_position")
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "set_vel_BODY", description: "Not flying")
                     }
-                    else {
-                        json_r = createJsonNack(fcn: "save_dss_home_position", arg2: "Position not available")
-                    }
-                case "set_vel_body":
-                    self.log("Received cmd: set_vel_body")
-                    if copter.getIsFlying() ?? false { // Defiault to false to handle nil
-                        json_r = createJsonAck("set_vel_body")
-
-                        // Set velocity code
-                        // parse
-                        let velX = Float(json_m["arg"]["vel_X"].stringValue) ?? 0
-                        let velY = Float(json_m["arg"]["vel_Y"].stringValue) ?? 0
-                        let velZ = Float(json_m["arg"]["vel_Z"].stringValue) ?? 0
-                        let yawRate = Float(json_m["arg"]["yaw_rate"].stringValue) ?? 0
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("set_vel_BODY")
+                        let velX = Float(json_m["x"].doubleValue)
+                        let velY = Float(json_m["y"].doubleValue)
+                        let velZ = Float(json_m["z"].doubleValue)
+                        let yawRate = Float(json_m["yaw_rate"].doubleValue)
                         print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
                         Dispatch.main{
                             self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
                             print("Dutt command sent from readSocket")
                         }
                     }
-                    else{
-                        json_r = createJsonNack(fcn: "set_vel_body", arg2: "State is not flying")
-                    }
+                    
                 case "set_yaw":
                     self.log("Received cmd: set_yaw")
-                    // Make sure we are fluying and are not on mission.
-                    if copter.getIsFlying() ?? false && !copter.missionIsActive{
+                    let yaw = json_m["yaw"].doubleValue
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_yaw", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Not flying")
+                    }
+                    // Nack yaw out of limits
+                    else if yaw < 0 || 360 < yaw {
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Yaw is out of limits")
+                    }
+                    // Nack mission active
+                    else if copter.missionIsActive{
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Mission is active")
+                    }
+                    // Accept command
+                    else{
                         json_r = createJsonAck("set_yaw")
                         Dispatch.main{
-                            self.copter.setYaw(targetYaw: json_m["arg"]["yaw"].doubleValue)
+                            self.copter.setYaw(targetYaw: yaw)
                         }
                     }
-                    else{
-                        json_r = createJsonNack(fcn: "set_yaw", arg2: "State is not flying AND not mission")
-                    }
-                case "upload_mission_XYZ":
-                    self.log("Received cmd: upload_mission_XYZ")
-                    
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_XYZ")
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "upload_mission_XYZ", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
-                    }
-                case "upload_mission_NED":
-                    self.log("Received cmd: upload_mission_NED")
-                    
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_NED")
-                    }
-                    else{
-                        json_r = createJsonNack(fcn: "upload_mission_NED", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
-                    }
+
                 case "upload_mission_LLA":
                     self.log("Received cmd: upload_mission_LLA")
+                    let fcnStr = "upload_mission_LLA"
+                    let (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr) = copter.uploadMission(mission: json_m["mission"])
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: fcnStr, description: nackOwnerStr)
+                    }
+                    // Nack init point not set
+                    else if !copter.initLoc.isInitLocation{
+                        json_r = createJsonNack(fcn: fcnStr, description: "Init point is not set")
+                    }
+                    // Nack wp violate geofence
+                    else if !fenceOK {
+                        json_r = createJsonNack(fcn: fcnStr, description: fenceDescr)
+                    }
+                    // Nack wp numbering
+                    else if !numberingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: numberingDescr)
+                    }
+                    // Nack action not supported
+                    else if !actionOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: actionDescr)
+                    }
+                    // Nack speed too low
+                    else if !speedOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: speedDescr)
+                    }
+                    // Nack heading error
+                    else if !headingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: headingDescr)
+                    }
+                    // Accept command
+                    else{
+                        copter.pendingMission = json_m["mission"]
+                        json_r = createJsonAck(fcnStr)
+                    }
                     
-                    let (success, mess) = copter.uploadMission(mission: json_m["arg"])
-                    if success{
-                        json_r = createJsonAck("upload_mission_LLA")
+                case "upload_mission_NED":
+                    self.log("Received cmd: upload_mission_NED")
+                    let fcnStr = "upload_mission_NED"
+                    let (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr) = copter.uploadMission(mission: json_m["mission"])
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: fcnStr, description: nackOwnerStr)
+                    }
+                    // Nack init point not set
+                    else if !copter.initLoc.isInitLocation{
+                        json_r = createJsonNack(fcn: fcnStr, description: "Init point is not set")
+                    }
+                    // Nack wp violate geofence
+                    else if !fenceOK {
+                        json_r = createJsonNack(fcn: fcnStr, description: fenceDescr)
+                    }
+                    // Nack wp numbering
+                    else if !numberingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: numberingDescr)
+                    }
+                    // Nack action not supported
+                    else if !actionOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: actionDescr)
+                    }
+                    // Nack speed too low
+                    else if !speedOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: speedDescr)
+                    }
+                    // Nack heading error
+                    else if !headingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: headingDescr)
+                    }
+                    // Accept command
+                    else{
+                        copter.pendingMission = json_m["mission"]
+                        json_r = createJsonAck(fcnStr)
+                    }
+
+                case "upload_mission_XYZ":
+                    self.log("Received cmd: upload_mission_XYZ")
+                    let fcnStr = "upload_mission_XYZ"
+                    let (fenceOK, fenceDescr, numberingOK, numberingDescr, speedOK, speedDescr, actionOK, actionDescr, headingOK, headingDescr) = copter.uploadMission(mission: json_m["mission"])
+                    // Nack not owner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: fcnStr, description: nackOwnerStr)
+                    }
+                    // Nack init point not set
+                    else if !copter.initLoc.isInitLocation{
+                        json_r = createJsonNack(fcn: fcnStr, description: "Init point is not set")
+                    }
+                    // Nack wp violate geofence
+                    else if !fenceOK {
+                        json_r = createJsonNack(fcn: fcnStr, description: fenceDescr)
+                    }
+                    // Nack wp numbering
+                    else if !numberingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: numberingDescr)
+                    }
+                    // Nack action not supported
+                    else if !actionOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: actionDescr)
+                    }
+                    // Nack speed too low
+                    else if !speedOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: speedDescr)
+                    }
+                    // Nack heading error
+                    else if !headingOK{
+                        json_r = createJsonNack(fcn: fcnStr, description: headingDescr)
+                    }
+                    // Accept command
+                    else{
+                        copter.pendingMission = json_m["mission"]
+                        json_r = createJsonAck(fcnStr)
+                    }
+                    
+                case "gogo":
+                    self.log("Received cmd: gogo")
+                    let next_wp = json_m["next_wp"].intValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Nack Wp number is not available in pending mission
+                    else if !copter.pendingMission["id" + String(next_wp)].exists(){
+                        json_r = createJsonNack(fcn: "gogo", description: "Wp number is not available in pending mission")
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("gogo")
+                        Dispatch.main{
+                            _ = self.copter.gogo(startWp: next_wp, useCurrentMission: false)
+                        }
+                    }
+                            
+                case "set_pattern":
+                    self.log("Received cmd: set_pattern")
+                    let heading = parseHeading(json: json_m)
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "set_pattern", description: nackOwnerStr)
+                    }
+                    // Nack faulty heading
+                    else if heading == -99{
+                        // heading faulty
+                        json_r = createJsonNack(fcn: "set_pattern", description: "Heading faulty")
+                    }
+                    // Accept command
+                    else {
+                        // Parse and set pattern
+                        let pattern = json_m["pattern"].stringValue
+                        let relAlt = json_m["rel_alt"].doubleValue
+                        if pattern == "above"{
+                            copter.pattern.setPattern(pattern: pattern, relAlt: relAlt, heading: heading)
+                            json_r = createJsonAck("set_pattern")
+                        }
+                        else if pattern == "circle"{
+                            let radius = json_m["radius"].doubleValue
+                            let yawRate = json_m["yaw_rate"].doubleValue
+                            copter.pattern.setPattern(pattern: pattern, relAlt: relAlt, heading: heading, radius: radius, yawRate: yawRate)
+                        }
+                    }
+                    
+                    
+                case "follow_stream":
+                    self.log("Received cmd: follow_stream")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack not flying
+                    else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
+                        json_r = createJsonNack(fcn: "land", description: "Not flying")
+                    }
+                    // Nack pattern not set
+                    else if copter.pattern.pattern.name == "" {
+                        json_r = createJsonNack(fcn: "follow_stream", description: "Pattern not set")
+                    }
+                    // Acccept command
+                    else {
+                        let enable = json_m["enable"].boolValue
+                        let endPoint = json_m["endpoint"].stringValue
+                        if enable {
+                            let topic = "LLA"
+                            if startGpsSubThread(endPoint: endPoint, topic: topic) {
+                                self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+                                copter.followStream = enable
+                                copter.startFollowStream()
+                                
+                            }
+                            else{
+                                self.log("Cannot subscribe to stream: " + endPoint)
+                                json_r = createJsonNack(fcn: "follow_stream", description: "Cannot connect to stream")
+                                copter.followStream = false
+                            }
+                        }
+                        else {
+                            // If enable is false, the subscription thread is exited.
+                            copter.followStream = false
+                        }
+                        
+                        json_r = createJsonAck("follow_stream")
+                    }
+               
+                case "set_gimbal":
+                    self.log("Received cmd: set_gimbal")
+                    _ = json_m["roll"].doubleValue
+                    let pitch = json_m["pitch"].doubleValue
+                    _ = json_m["yaw"].doubleValue
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack out of range
+                    else if pitch < self.copter.gimbal.pitchRange[0] || self.copter.gimbal.pitchRange[1] < pitch {
+                        json_r = createJsonNack(fcn: "set_gimbal", description: "Pitch, roll or yaw is out of range for the gimbal")
+                    }
+                    // Acccept command
+                    else{
+                        json_r = createJsonAck("set_gimbal")
+                        self.copter.gimbal.setPitch(pitch: pitch)
+                    }
+                    
+                case "set_gripper":
+                    self.log("Received cmd: set_gripper")
+                    json_r = createJsonNack(fcn: "set_gripper", description: "Not applicable to DJI")
+                
+                case "photo":
+                    self.log("Received cmd: photo")
+                    let parsedIndex = parseIndex(json: json_m, sessionLastIndex: self.sessionLastIndex)
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "gogo", description: nackOwnerStr)
+                    }
+                    // Nack camera busy
+                    else if self.cameraAllocator.allocated {
+                        json_r = createJsonNack(fcn: "photo", description: "Camera resource is busy")
+                    }
+                    // Nack index out of range (coded from parseIndex)
+                    else if parsedIndex == -11{
+                        json_r = createJsonNack(fcn: "photo", description: "Index out of range, " + String(json_m["index"].intValue))
+                    }
+                    // Nack index faulty (coded from parseIndex)
+                    else if parsedIndex == -12{
+                        json_r = createJsonNack(fcn: "photo", description: "Index string faulty, " + json_m["index"].stringValue)
+                    }
+                    // Accept command:
+                    else {
+                        json_r = createJsonAck("photo")
+                        // Switch cmd
+                        switch json_m["cmd"]{
+                            case "take_photo":
+                                self.log("Received cmd: photo, with arg take_photo")
+                                if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
+                                    // Complete ack message
+                                    json_r["description"] = "take_photo"
+                                    takePhotoCMD()
+                                }
+                                else{
+                                    json_r = createJsonNack(fcn: "photo", description: "Allocator1 denied, report")
+                                    print("DEBUG: Allocator1 denied")
+                                    self.log("Allocator1 denied, report")
+                                }
+                            case "download":
+                                self.log("Received cmd: photo, with arg download")
+                                // Default resolution
+                                var resolution  = "high"
+                                // Check resolution argument
+                                if json_m["resulution"].exists(){
+                                    resolution = json_m["resolution"].stringValue
+                                }
+                                if resolution == "low"{
+                                    print("TODO Low resolution not supported yet, getting high res")
+                                }
+                                // Download all or single index
+                                if parsedIndex == -1 {
+                                    if transferAllAllocator.allocate("transferAll", maxTime: 300) {
+                                        // Complete ack message
+                                        json_r["description"].stringValue = "download all"
+                                        // Transfer all in background, transferAll handles the allcoator
+                                        Dispatch.background {
+                                            // Transfer function handles the allocator
+                                            self.log("Downloading all photos...")
+                                            self.transferAll()
+                                        }
+                                    }
+                                    else {
+                                        json_r = createJsonNack(fcn: "photo", description: "Allocator2 denied, report")
+                                        print("DEBUG: Allocator2 denied")
+                                        self.log("Allocator2 denied, report")
+                                    }
+                                }
+                                // Index must be ok, download the index
+                                else{
+                                    // Complete ack message
+                                    json_r["description"].stringValue = "download " + String(parsedIndex)
+                                    Dispatch.background{
+                                        // Download function handles the allocator
+                                        self.log("Download photo index " + String(parsedIndex))
+                                        self.transferSingle(sessionIndex: parsedIndex, attempt: 1)
+                                    }
+                                }
+                            default:
+                            self.log("Photo cmd faulty: " + json_m["cmd"].stringValue)
+                                json_r = createJsonNack(fcn: "photo", description: "Cmd faulty")
+                        }
+                    }
+                    
+                case "get_armed":
+                    self.log("Received cmd: get_armed")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_armed")
+                    if self.copter.getAreMotorsOn(){
+                        json_r["armed"].boolValue = true
                     }
                     else{
-                        json_r = createJsonNack(fcn: "upload_mission_LLA", arg2: mess)
-                        self.log("Mission upload failed: " + mess)
+                        json_r["armed"].boolValue = false
+                    }
+                    
+                case "get_currentWP":
+                    self.log("received cmd: get_currentWP")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_currentWP")
+                    json_r["currentWP"].intValue = copter.missionNextWp
+                    
+                case "get_flightmode":
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_flightmode")
+                    if copter.flightMode != nil {
+                        json_r["flightmode"].stringValue = copter.flightMode!
+                    }
+                    else{
+                        json_r["flightmode"].stringValue = "No flight mode"
+                    }
+                case "get_metadata":
+                    self.log("Received cmd: get_metadata")
+                    let parsedIndex = parseIndex(json: json_m, sessionLastIndex: self.sessionLastIndex)
+                    // Nack reference faulty
+                    if parsedIndex == 0{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Reference faulty, " + json_m["ref"].stringValue)
+                    }
+                    // Nack index out of range (coded from parseIndex)
+                    else if parsedIndex == -11{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Index out of range, " + String(json_m["index"].intValue))
+                    }
+                    // Nack index faulty (coded from parseIndex)
+                    else if parsedIndex == -12{
+                        json_r = createJsonNack(fcn: "get_metadata", description: "Index string faulty, " + json_m["index"].stringValue)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("get_metadata")
+                        let frame = json_m["ref"].stringValue
+                        // All indexes
+                        if  parsedIndex == -1{
+                            if frame == "XYZ"{
+                                json_r["metadata"] = self.jsonMetaDataXYZ
+                            }
+                            else if frame == "NED"{
+                                json_r["metadata"] = self.jsonMetaDataNED
+                            }
+                            else if frame == "LLA"{
+                                json_r["metadata"] = self.jsonMetaDataLLA
+                            }
+                        }
+                        // Specific index
+                        else{
+                            if frame == "XYZ"{
+                                json_r["metadata"] = self.jsonMetaDataXYZ[String(describing: parsedIndex)]
+                            }
+                            else if frame == "NED"{
+                                json_r["metadata"] = self.jsonMetaDataNED[String(describing: parsedIndex)]
+                        }
+                            else if frame == "LLA"{
+                                    json_r["metadata"] = self.jsonMetaDataLLA[String(describing: parsedIndex)]
+                            }
+                        }
+                    }
+                    
+                case "get_posD":
+                    self.log("Received cmd: get_posD")
+                    // No nack reasons
+                    // Accept command
+                    json_r = createJsonAck("get_posD")
+                    json_r["posD"].doubleValue = self.copter.loc.pos.down
+                
+                case "get_PWM":
+                    self.log("Received cmd: get_PWM")
+                    json_r = createJsonNack(fcn: "get_PWM", description: "Not applicable to DJI")
+                    
+                case "disconnect":
+                    self.log("Received cmd: disconnect")
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                    }
+                    // Accept command
+                    else{
+                        json_r = createJsonAck("disconnect")
+                        // Stop
+                        copter.dutt(x: 0, y: 0, z: 0, yawRate: 0)
+                        // Prevent wp action to resume mission
+                        self.heartBeat.disconnected = true
+                        // TODO call DSC
+                    }
+                    
+                case "data_stream":
+                    self.log("Received cmd: data_stream with attrubute: " + json_m["stream"].stringValue + " and enable: " + String(json_m["enable"].boolValue))
+                    let enable = json_m["enable"].boolValue
+                    // Nack faulty stream handeled in switch case
+                    // Accept command (and nack later if neccessary)
+                    json_r = createJsonAck("data_stream")
+                    switch json_m["stream"]{
+                        case "ATT":
+                            json_r["stream"].stringValue = "ATT"
+                            self.subscriptions.setATT(bool: enable)
+                            print("TODO: support ATT")
+                        case "LLA":
+                            json_r["stream"].stringValue = "LLA"
+                            self.subscriptions.setLLA(bool: enable)
+                        case "NED":
+                            json_r["stream"].stringValue = "NED"
+                            self.subscriptions.setNED(bool: enable)
+                        case "XYZ":
+                            json_r["stream"].stringValue = "XYZ"
+                            self.subscriptions.setXYZ(bool: enable)
+                        case "photo_LLA":
+                            json_r["stream"].stringValue = "photo_LLA"
+                            self.subscriptions.setPhotoLLA(bool: enable)
+                        case "photo_XYZ":
+                            json_r["stream"].stringValue = "photo_XYZ"
+                            self.subscriptions.setPhotoXYZ(bool: enable)
+                        case "currentWP":
+                            json_r["stream"].stringValue = "currentWP"
+                            self.subscriptions.setWpId(bool: enable)
+                        default:
+                            json_r = createJsonNack(fcn: "data_stream", description: "Stream faulty, " + json_m["stream"].stringValue)
                     }
                     
                 default:
-                    json_r = createJsonNack(fcn: json_m["fcn"].stringValue, arg2: "API call not recognized")
+                    json_r = createJsonNack(fcn: json_m["fcn"].stringValue, description: "API call not recognized")
                     self.log("API call not recognized: " + json_m["fcn"].stringValue)
                     messageQualifiesForHeartBeat = false
                 }
@@ -1430,21 +1950,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //************************************************************************************
     // ActivateSticks: Touch down up inside action, ativate when ready (release of button)
     @IBAction func ActivateSticksPressed(_ sender: UIButton) {
-        if inControls == "USER"{
+        if inControls == "PILOT"{
             // GIVE the controls to client
-            inControls = "CLIENT"
+            inControls = "APPLICATION"
             // Prepare button text for next toggle
             controlsButton.setTitle("TAKE Controls", for: .normal)
             activateSticks()
-            self.log("CLIENT has the Controls")
+            self.log("APPLICATION has the Controls")
         }
         else{
             // TAKE back the controls from CLIENT
             deactivateSticks()
-            inControls = "USER"
+            inControls = "PILOT"
             // Prepare button text for next toggle
             controlsButton.setTitle("GIVE Controls", for: .normal)
-            self.log("USER has the Controls")
+            self.log("PILOT has the Controls")
         }
     }
 
@@ -1542,7 +2062,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             json["z"].doubleValue = round(100 * copter.loc.pos.z) / 100
             json["agl"].doubleValue = -1
             json["local_yaw"].doubleValue =
-                round(100 * (copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)) / 100
+                round(100 * (copter.loc.gimbalYaw - self.copter.initLoc.gimbalYaw)) / 100
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
     }
@@ -1601,8 +2121,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         usleep(200000)
                         //print("WP action waiting for takePhoto to complete")
                     }
-                    Dispatch.main {
-                        _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
+                    if !self.heartBeat.disconnected{
+                        Dispatch.main {
+                            _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
+                        }
                     }
                 }
             }
@@ -1669,7 +2191,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         getDataButton.isHidden = true
         putDataButton.isHidden = true
         
-        
         log("Setting up aircraft")
     
         // Setup aircraft
@@ -1726,6 +2247,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         NotificationCenter.default.addObserver(self, selector: #selector(onDidWPAction(_:)), name: .didWPAction, object: nil)
         
         _ = initPublisher()
+        
+        self.ownerID = "da000"
         if startReplyThread(){
             print("Reply thread successfully started")
             self.startHeartBeatThread()
