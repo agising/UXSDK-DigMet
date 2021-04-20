@@ -1196,6 +1196,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         copter.takeOff()
                     }
                     
+                case "save_dss_home_position":
+                    self.log("Received cmd: save_dss_home_position")
+                    json_r = createJsonAck("save_dss_home_position")
+                    // TODO REMOVE save dss home position
+                
                 case "land":
                     self.log("Received cmd: land")
                     // Nack not owner
@@ -1275,8 +1280,8 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         }
                     }
                     
-                case "set_vel_body":
-                    self.log("Received cmd: set_vel_body")
+                case "set_vel_BODY":
+                    self.log("Received cmd: set_vel_BODY")
                     // Nack not owner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "set_vel_BODY", description: nackOwnerStr)
@@ -1287,11 +1292,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     // Accept command
                     else{
-                        json_r = createJsonAck("set_vel_body")
-                        let velX = Float(json_m["arg"]["vel_X"].doubleValue)
-                        let velY = Float(json_m["arg"]["vel_Y"].doubleValue)
-                        let velZ = Float(json_m["arg"]["vel_Z"].doubleValue)
-                        let yawRate = Float(json_m["arg"]["yaw_rate"].doubleValue)
+                        json_r = createJsonAck("set_vel_BODY")
+                        let velX = Float(json_m["x"].doubleValue)
+                        let velY = Float(json_m["y"].doubleValue)
+                        let velZ = Float(json_m["z"].doubleValue)
+                        let yawRate = Float(json_m["yaw_rate"].doubleValue)
                         print("VelX: " + String(velX) + ", velY: " + String(velY) + ", velZ: " + String(velZ) + ", yawRate: "  + String(yawRate))
                         Dispatch.main{
                             self.copter.dutt(x: velX, y: velY, z: velZ, yawRate: yawRate)
@@ -1301,14 +1306,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     
                 case "set_yaw":
                     self.log("Received cmd: set_yaw")
-                    let yaw = json_m["arg"]["yaw"].doubleValue
+                    let yaw = json_m["yaw"].doubleValue
                     // Nack not owner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "set_vel_BODY", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: "set_yaw", description: nackOwnerStr)
                     }
                     // Nack not flying
                     else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
-                        json_r = createJsonNack(fcn: "set_vel_BODY", description: "Not flying")
+                        json_r = createJsonNack(fcn: "set_yaw", description: "Not flying")
                     }
                     // Nack yaw out of limits
                     else if yaw < 0 || 360 < yaw {
@@ -1360,6 +1365,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     // Accept command
                     else{
+                        copter.pendingMission = json_m["mission"]
                         json_r = createJsonAck(fcnStr)
                     }
                     
@@ -1397,6 +1403,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     // Accept command
                     else{
+                        copter.pendingMission = json_m["mission"]
                         json_r = createJsonAck(fcnStr)
                     }
 
@@ -1434,6 +1441,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     }
                     // Accept command
                     else{
+                        copter.pendingMission = json_m["mission"]
                         json_r = createJsonAck(fcnStr)
                     }
                     

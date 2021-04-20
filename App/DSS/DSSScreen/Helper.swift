@@ -592,7 +592,7 @@ func parseHeading(json: JSON)->Double{
     if json["heading"].string == nil{
         // Check the value for limits
         let wpHeading = json["heading"].doubleValue
-        if 0 <= wpHeading && 360 < wpHeading {
+        if 0 <= wpHeading && wpHeading < 360{
             return wpHeading
         }
         else {

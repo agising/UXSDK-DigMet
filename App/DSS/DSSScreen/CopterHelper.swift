@@ -193,9 +193,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
-                        if self.toHeight != -1{
+                        let height = self.toHeight
+                        if height != -1{
+                            print("The takeoff complete is identified, ", height)
                             Dispatch.main{
-                                self.setAlt(targetAlt: self.initLoc.altitude + self.toHeight)
+                                self.setAlt(targetAlt: self.initLoc.altitude + height)
                             }
                             // Reset take off height
                             self.toHeight = -1
