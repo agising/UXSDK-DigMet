@@ -470,7 +470,7 @@ class Allocator: NSObject{
             }
         }
         else{
-            print("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
+            //ppprint("Resource was busy for " + String(self.timeAllocated()) + "by: " + self.owner)
             self.allocated = false
             self.owner = ""
             

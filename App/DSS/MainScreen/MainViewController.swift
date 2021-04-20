@@ -115,6 +115,7 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(productCommunicationDidChange), name: Notification.Name(rawValue: ProductCommunicationServiceStateDidChange), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleFlightControllerSimulatorDidStart), name: Notification.Name(rawValue: FligntControllerSimulatorDidStart), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleFlightControllerSimulatorDidStop), name: Notification.Name(rawValue: FligntControllerSimulatorDidStop), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(productRegisterDidError), name: Notification.Name(rawValue: ProductRegisterDidError), object: nil)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -138,6 +139,20 @@ class MainViewController: UITableViewController, UITextFieldDelegate {
 
     @IBAction func registerAction() {
         ProductCommunicationService.shared.registerWithProduct()
+    }
+    
+    @objc func productRegisterDidError() {
+        // Look for errors at shared string
+        let regError = ProductCommunicationService.shared.regError
+        if regError != ""{
+            if let firstRange = regError.range(of: "(code:"){
+                if let secondRange = regError.range(of: "))") {
+                    let substring = regError[firstRange.lowerBound...secondRange.lowerBound]
+                    self.registered.text = String(substring)
+                    self.registered.textColor = UIColor.systemRed
+                }
+            }
+        }
     }
     
     @IBAction func connectAction() {

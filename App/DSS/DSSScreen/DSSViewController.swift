@@ -179,12 +179,41 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     //********************************************************************************
     // Writes metadata to json. If init point is not set, XYZ and NED are set to 999.0
     func writeMetaData()->Bool{
-        
-        var jsonPhoto = JSON()
-        jsonPhoto["filename"] = JSON("")
-        jsonPhoto["stored"].boolValue = false
-        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
-        
+
+        // Make sure startWP is set in order to be able to calc the local XYZ
+        if !self.copter.startLoc.isStartLocation {
+            // StartLocation is not set. Try to set it!
+            if copter.setStartLocation(){
+                print("writeMetaData: setStartLocation set from here")
+                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to get it right in simulation too.
+                guard let heading = self.copter.getHeading() else {
+                   print("writeMetaData: Error updating heading")
+                   return false}
+                self.copter.loc.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
+                
+                // Start location is set, call the function again, return true because problem is fixed.
+                _ = writeMetaData()
+                return true
+            }
+            else{
+                self.log("writeMetaData: Could not setStartLocation, Aircraft ready?")
+                // TODO Write empty metadata?
+                return false
+            }
+        }
+
+        // XYZ metadata
+        var metaXYZ = JSON()
+        metaXYZ["filename"] = JSON("")
+        metaXYZ["x"] = JSON(self.copter.loc.pos.x)
+        metaXYZ["y"] = JSON(self.copter.loc.pos.y)
+        metaXYZ["z"] = JSON(self.copter.loc.pos.z)
+        metaXYZ["agl"] = JSON(-1)
+        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
+        metaXYZ["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
+        metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
+        metaXYZ["index"] = JSON(self.sessionLastIndex)
+
         // LLA metadata
         var metaLLA = JSON()
         metaLLA["filename"] = JSON("")
@@ -600,6 +629,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         // Check if there are any photos to transfer
         if self.sessionLastIndex == 0 {
             print("transferAll: No photos to transfer")
+            self.transferAllAllocator.deallocate()
             return
         }
         self.transferAllHelper(sessionIndex: self.sessionLastIndex, attempt: 1, skipped: 0)
@@ -1216,8 +1246,65 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonAck("land")
                         copter.land()
                     }
-                    
-                case "rtl":
+
+                case "photo":
+                    switch json_m["arg"]["cmd"]{
+                        case "take_photo":
+                            self.log("Received cmd: photo, with arg take_photo")
+                            
+                            if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
+                                json_r = createJsonAck("photo")
+                                json_r["arg2"].stringValue = "take_photo"
+                                takePhotoCMD()
+                            }
+                            else{ // camera resource busy
+                                json_r = createJsonNack(fcn: "photo", arg2: "Camera resource busy")
+                            }
+                        case "download":
+                            self.log("Received cmd: photo, with arg download")
+                            // Check if argument is ok, send reply and do actions in the background
+                            let sessionIndex = json_m["arg"]["index"].intValue
+                            // Index does not exist
+                            if sessionIndex > self.sessionLastIndex {
+                                let tempStr = String(self.sessionLastIndex)
+                                self.log("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
+                                json_r = createJsonNack(fcn: "photo", arg2: "Requested index does not exist, last index is: " + tempStr)
+                                // Done
+                            }
+                            else if sessionIndex == -1 {
+                                if transferAllAllocator.allocate("transferAll", maxTime: 300) {
+                                    json_r = createJsonAck("photo")
+                                    json_r["arg2"].stringValue = "download"
+                                    // Transfer all in background, transferAll handles the allcoator
+                                    self.log("Downloading all photos...")
+                                    // Transfer function handles the allocator
+                                    self.transferAll()
+                                }
+                                else {
+                                    json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
+                                    self.log("Dowload all nacked, already running")
+                                }
+                            }
+                            // Index is 0 or less (but not -1 since it is already tested)
+                            else if sessionIndex < 1 {
+                                self.log("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
+                                json_r = createJsonNack(fcn: "photo", arg2: "Bad index, first possible index is 1")
+                                // Done
+                            }
+                            // Index must be ok, download the index
+                            else{
+                                json_r = createJsonAck("photo")
+                                json_r["arg2"].stringValue = "download"
+                                // Download function handles the allocator
+                                self.log("Download photo index " + String(sessionIndex))
+                                self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
+                            }
+                        default:
+                            self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
+                            json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
+                        }
+
+                  case "rtl":
                     self.log("Received cmd: rtl")
                     // We want to know if the command is accepted or not. Problem is that it takes ~1s to know for sure that the RTL is accepted (completion code of rtl) and we can't wait 1s with the reponse.
                     // Instead we look at flight mode which changes much faster, although we do not know for sure that the rtl is accepted. For example, the flight mode is already GPS after take-off..
