@@ -1901,7 +1901,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     @IBAction func DuttRightPressed(_ sender: UIButton) {
         // Set the control command
         //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-        copter.followStream = false
+//        copter.followStream = false
         
     }
 
@@ -1911,12 +1911,12 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         // Set the control command
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         
-        copter.followStream = true
-        let endPoint = "tcp://192.168.1.249:5560"
-        let topic = "REMOTE1"
-        if startGpsSubThread(endPoint: endPoint, topic: topic){
-            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
-        }
+//        copter.followStream = true
+//        let endPoint = "tcp://192.168.1.249:5560"
+//        let topic = "REMOTE1"
+//        if startGpsSubThread(endPoint: endPoint, topic: topic){
+//            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
+//        }
         
         
     }
