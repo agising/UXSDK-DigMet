@@ -25,6 +25,7 @@ class MyLocation: NSObject{
     var geoFence = GeoFence()
     var vel = Vel()
     var pos = POS()
+    var isSetAlt = false
 
     // Reset all values.
     func reset(){
@@ -49,6 +50,7 @@ class MyLocation: NSObject{
         self.pos.north = 0
         self.pos.east = 0
         self.pos.down = 0
+        self.isSetAlt = false
     }
     
     
@@ -607,7 +609,7 @@ func parseHeading(json: JSON)->Double{
     else if json["heading"].stringValue == "poi"{
         return -2
     }
-    // Probalby misspelled string
+    // Probably misspelled string
     else {
         return -99
     }
@@ -616,20 +618,23 @@ func parseHeading(json: JSON)->Double{
 // ****************************************
 // Parse index and test if it is ok or not.
 func parseIndex(json: JSON, sessionLastIndex: Int)->Int{
-    // Check for cmd download
+    // Check for cmd download - Not used? Commenting for now
     if json["cmd"].exists(){
         if json["cmd"].stringValue != "download"{
-            // Its not a download command, index is not used
+            // Its not a photo download command, index is not used
             return 0
         }
     }
-    // Check for ref
+
+    // Check if reference is ok
     if json["ref"].exists(){
-        if json["ref"].stringValue != "LLA" || json["ref"].stringValue != "XYZ"{
-            return 0
+        if !(json["ref"].stringValue == "LLA" || json["ref"].stringValue == "NED" || json["ref"].stringValue == "XYZ"){
+            // Wrong reference, mistyped?
+            return -10
         }
     }
-    // If it is not a string its an int..
+
+    // Parse the index, can be int or string. If it is not a string its an int..
     if json["index"].string == nil{
         // Check the value for limits
         let cmdIndex = json["index"].intValue

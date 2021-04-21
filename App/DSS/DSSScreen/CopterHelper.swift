@@ -195,7 +195,6 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
                         let height = self.toHeight
                         if height != -1{
-                            print("The takeoff complete is identified, ", height)
                             Dispatch.main{
                                 self.setAlt(targetAlt: self.initLoc.altitude + height)
                             }
@@ -350,19 +349,19 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // Reset dssSmartRtlMission
         self.dssSmartRtlMission = JSON()
         let id = "id0"
-        dssSmartRtlMission[id] = JSON()
-        dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
-        dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
-        dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
-        dssSmartRtlMission[id]["heading"] = JSON(heading)
-        dssSmartRtlMission[id]["action"] = JSON("land")
+        self.dssSmartRtlMission[id] = JSON()
+        self.dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
+        self.dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
+        self.dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
+        self.dssSmartRtlMission[id]["heading"] = JSON(heading)
+        self.dssSmartRtlMission[id]["action"] = JSON("land")
         
-        //if pos.altitude - self.initLoc.altitude < 2 {
-        //    print("reserDSSSRTLMission: Forcing land altitude to 2m min")
-        self.dssSmartRtlMission[id]["alt"].doubleValue = self.initLoc.altitude + 2
-        //}
+        if pos.altitude - self.initLoc.altitude < 2 {
+            print("reserDSSSRTLMission: Forcing land altitude to 2m min")
+            self.dssSmartRtlMission[id]["alt"].doubleValue = self.initLoc.altitude + 2
+        }
         
-        print("resetDSSSRTLMission: DSS SRTL reset: ",self.dssSmartRtlMission)
+        print("resetDSSSRTLMission: DSS SRTL reset: ", self.dssSmartRtlMission)
         return true
     }
     
@@ -388,7 +387,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         self.dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
         self.dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
         self.dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
-        self.dssSmartRtlMission[id]["heading"] = JSON(-1)
+        self.dssSmartRtlMission[id]["heading"] = JSON("course")
         self.dssSmartRtlMission[id]["speed"] = JSON(self.activeWP.speed)
         return true
     }
@@ -534,7 +533,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Stop ongoing stick command, invalidate all related timers. TODO: handle all modes, stop is stop..
     func stop(){
         invalidateTimers()
-        sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
+        // This following causes an error if called during landing or takeoff for example. The copter is not in stick mode then.
+        //sendControlData(velX: 0, velY: 0, velZ: 0, yawRate: 0, speed: 0)
     }
     
     // *****************************************************
@@ -638,10 +638,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         if (self.flightController?.yawControlMode.self == DJIVirtualStickYawControlMode.angularVelocity){
             self.flightController?.send(controlData, withCompletion: { (error: Error?) in
                 if error != nil {
-                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "sendControlData: Error:" + String(describing: error.debugDescription)])
+                    NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "sendControlData: Error:" + error.debugDescription])
                     // Disable the timer(s)
-                    self.duttTimer?.invalidate()
-                    self.posCtrlTimer?.invalidate()
+                    self.invalidateTimers()
                 }
                 else{
                     //_ = "flightContoller data sent ok"
@@ -750,6 +749,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             dss_cnt += 1
         }
         self.pendingMission = tempMission
+        
+        print("The inverted (corrected) DSSrtl mission: ", pendingMission)
         
         _ = self.gogo(startWp: 0, useCurrentMission: false, isDssSrtl: true)
         NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "DSS Smart RTL activated"])

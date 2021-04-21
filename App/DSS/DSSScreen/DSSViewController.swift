@@ -26,8 +26,9 @@ import SwiftyJSON // https://github.com/SwiftyJSON/SwiftyJSON good examples in r
 
 // Generate App icons: https://appicon.co/
 
+// Look into media download scheduler: fetchFileDataWithOffset:updateQueue:updateBlock
 
-public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewController {
+public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewController {
     //**********************
     // Variable declarations
     
@@ -35,7 +36,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
         
     var aircraft: DJIAircraft?
     var camera: DJICamera?
-    var DJIgimbal: DJIGimbal?
+    //var DJIgimbal: DJIGimbal?
     
     
     //var acks = 0
@@ -65,6 +66,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     var transferAllAllocator = Allocator(name: "transferAll")
     
     var copter = CopterController()
+    var cameraTODO = CameraController()
    
     var sessionLastIndex: Int = 0 // Picture index of this session
     var sdFirstIndex: Int = -1 // Start index of SDCard, updates at first download
@@ -180,40 +182,11 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     // Writes metadata to json. If init point is not set, XYZ and NED are set to 999.0
     func writeMetaData()->Bool{
 
-        // Make sure startWP is set in order to be able to calc the local XYZ
-        if !self.copter.startLoc.isStartLocation {
-            // StartLocation is not set. Try to set it!
-            if copter.setStartLocation(){
-                print("writeMetaData: setStartLocation set from here")
-                // In simulation the position is not updated until take-off. So we need to update the loc with the current gimbal data to get it right in simulation too.
-                guard let heading = self.copter.getHeading() else {
-                   print("writeMetaData: Error updating heading")
-                   return false}
-                self.copter.loc.gimbalYaw = heading + self.copter.gimbal.yawRelativeToHeading
-                
-                // Start location is set, call the function again, return true because problem is fixed.
-                _ = writeMetaData()
-                return true
-            }
-            else{
-                self.log("writeMetaData: Could not setStartLocation, Aircraft ready?")
-                // TODO Write empty metadata?
-                return false
-            }
-        }
-
-        // XYZ metadata
-        var metaXYZ = JSON()
-        metaXYZ["filename"] = JSON("")
-        metaXYZ["x"] = JSON(self.copter.loc.pos.x)
-        metaXYZ["y"] = JSON(self.copter.loc.pos.y)
-        metaXYZ["z"] = JSON(self.copter.loc.pos.z)
-        metaXYZ["agl"] = JSON(-1)
-        // In sim loc.gimbalYaw does not update while on ground exept for first photo.
-        metaXYZ["local_yaw"] = JSON(self.copter.loc.gimbalYaw - self.copter.startLoc.gimbalYaw)
-        metaXYZ["pitch"] = JSON(self.copter.gimbal.gimbalPitch)
-        metaXYZ["index"] = JSON(self.sessionLastIndex)
-
+        var jsonPhoto = JSON()
+        jsonPhoto["filename"] = JSON("")
+        jsonPhoto["stored"].boolValue = false
+        self.jsonPhotos[String(self.sessionLastIndex)] = jsonPhoto
+        
         // LLA metadata
         var metaLLA = JSON()
         metaLLA["filename"] = JSON("")
@@ -327,7 +300,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
     
 
     
-    // Move this somewhere.. Also start monitoring mode camera mode changes
+    // Implement the camera delegate in cameraHelper. TODO
     //***************************************
     // Monitor when data is written to sdCard
     func startListenToCamera(){
@@ -1077,7 +1050,10 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 
                 // Parse and create an ack/nack
                 let (_, json_m) = getJsonObject(uglyString: _message!)
-                print("Received message: ", json_m)
+                
+                if json_m["fcn"] != "heart_beat"{
+                    print("Received message: ", json_m)
+                }
                 var json_r = JSON()
 
                 // Update message owner status
@@ -1099,7 +1075,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                 
                 switch json_m["fcn"]{
                 case "heart_beat":
-                    self.log("Received cmd: heart_beat")
+                    self.printDB("Received cmd: heart_beat")
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
@@ -1133,42 +1109,21 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         self.copter.initLoc.setGeoFence(radius: radius, height: height)
                     }
                     
-                case "idle":
-                    self.log("Received cmd: idle")
+                case "get_idle":
+                    self.log("Received cmd: get_idle")
                     // No nack reasons
                     // Accept command
-                    json_r = createJsonAck("idle")
+                    json_r = createJsonAck("get_idle")
                     json_r["idle"].boolValue = self.idle // TODO hardcoded to true..
                                     
                                 
-                case "reset_dss_srtl":
-                    self.log("Received cmd: reset_dss_srtl")
-                    // TODO, what should it do? pop and replace first wp in smart rtl?
-                    // Nack not fromOwner
-                    if !fromOwner{
-                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: nackOwnerStr)
-                    }
-                    // Nack nav not ready
-                    else if self.copter.loc.coordinate.latitude == 0{
-                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Navigation not ready")
-                    }
-                    // Accept command
-                    else{
-                        if copter.resetDSSSRTLMission(){
-                            json_r = createJsonAck("reset_dss_srtl")
-                        }
-                        else {
-                            json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Position not available")
-                        }
-                    }
+
                     
                 case "set_init_point":
                     self.log("Received cmd: set_init_point")
                     var navReady = false
                     if let currLoc = self.copter.getCurrentLocation(){
-                        print("tjohoo")
                         if currLoc.coordinate.latitude != 0{
-                            print("tjohi")
                             navReady = true
                         }
                     }
@@ -1176,7 +1131,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "set_init_point", description: nackOwnerStr)
                     }
-                    // Nack nav not ready - Fail in simulation, pos not updated.
+                    // Nack nav not ready
                     else if !navReady { //self.copter.loc.coordinate.latitude == 0{
                         json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
                     }
@@ -1193,6 +1148,32 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         if !copter.setInitLocation(headingRef: headingRef){
                             print("Error: Debug. Something is wrong, should not have passed to here.")
                             json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
+                        }
+                    }
+                    
+                case "reset_dss_srtl":
+                    self.log("Received cmd: reset_dss_srtl")
+                    var navReady = false
+                    if let currLoc = self.copter.getCurrentLocation(){
+                        if currLoc.coordinate.latitude != 0{
+                            navReady = true
+                        }
+                    }
+                    // Nack not fromOwner
+                    if !fromOwner{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: nackOwnerStr)
+                    }
+                    // Nack nav not ready
+                    else if !navReady{
+                        json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Navigation not ready")
+                    }
+                    // Accept command
+                    else{
+                        if copter.resetDSSSRTLMission(){
+                            json_r = createJsonAck("reset_dss_srtl")
+                        }
+                        else {
+                            json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Position not available")
                         }
                     }
                     
@@ -1226,10 +1207,14 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         copter.takeOff()
                     }
                     
-                case "save_dss_home_position":
-                    self.log("Received cmd: save_dss_home_position")
-                    json_r = createJsonAck("save_dss_home_position")
-                    // TODO REMOVE save dss home position
+//                case "save_dss_home_position":
+//                    self.log("Received cmd: save_dss_home_position")
+//                    if self.copter.resetDSSSRTLMission(){
+//                        json_r = createJsonAck("save_dss_home_position")
+//                    }
+//                    else{
+//                        json_r = createJsonNack(fcn: "save_dss_home_position", description: "Nav not ready. TODO proper nacks")
+//                    }
                 
                 case "land":
                     self.log("Received cmd: land")
@@ -1246,63 +1231,6 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                         json_r = createJsonAck("land")
                         copter.land()
                     }
-
-                case "photo":
-                    switch json_m["arg"]["cmd"]{
-                        case "take_photo":
-                            self.log("Received cmd: photo, with arg take_photo")
-                            
-                            if self.cameraAllocator.allocate("take_photo", maxTime: 3) {
-                                json_r = createJsonAck("photo")
-                                json_r["arg2"].stringValue = "take_photo"
-                                takePhotoCMD()
-                            }
-                            else{ // camera resource busy
-                                json_r = createJsonNack(fcn: "photo", arg2: "Camera resource busy")
-                            }
-                        case "download":
-                            self.log("Received cmd: photo, with arg download")
-                            // Check if argument is ok, send reply and do actions in the background
-                            let sessionIndex = json_m["arg"]["index"].intValue
-                            // Index does not exist
-                            if sessionIndex > self.sessionLastIndex {
-                                let tempStr = String(self.sessionLastIndex)
-                                self.log("Requested photo index does not exist " + String(sessionIndex) + " the last index available is: " + tempStr)
-                                json_r = createJsonNack(fcn: "photo", arg2: "Requested index does not exist, last index is: " + tempStr)
-                                // Done
-                            }
-                            else if sessionIndex == -1 {
-                                if transferAllAllocator.allocate("transferAll", maxTime: 300) {
-                                    json_r = createJsonAck("photo")
-                                    json_r["arg2"].stringValue = "download"
-                                    // Transfer all in background, transferAll handles the allcoator
-                                    self.log("Downloading all photos...")
-                                    // Transfer function handles the allocator
-                                    self.transferAll()
-                                }
-                                else {
-                                    json_r = createJsonNack(fcn: "photo", arg2: "Download all already running")
-                                    self.log("Dowload all nacked, already running")
-                                }
-                            }
-                            // Index is 0 or less (but not -1 since it is already tested)
-                            else if sessionIndex < 1 {
-                                self.log("Requested photo index cannot not exist " + String(sessionIndex) + " index starts at 1")
-                                json_r = createJsonNack(fcn: "photo", arg2: "Bad index, first possible index is 1")
-                                // Done
-                            }
-                            // Index must be ok, download the index
-                            else{
-                                json_r = createJsonAck("photo")
-                                json_r["arg2"].stringValue = "download"
-                                // Download function handles the allocator
-                                self.log("Download photo index " + String(sessionIndex))
-                                self.transferSingle(sessionIndex: sessionIndex, attempt: 1)
-                            }
-                        default:
-                            self.log("Received cmd: photo, with unknow arg: " + json_m["arg"]["cmd"].stringValue)
-                            json_r = createJsonNack(fcn: "photo", arg2: "Unknown cmd: " + json_m["arg"]["cmd"].stringValue)
-                        }
 
                   case "rtl":
                     self.log("Received cmd: rtl")
@@ -1761,7 +1689,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
                     self.log("Received cmd: get_metadata")
                     let parsedIndex = parseIndex(json: json_m, sessionLastIndex: self.sessionLastIndex)
                     // Nack reference faulty
-                    if parsedIndex == 0{
+                    if parsedIndex == -10{
                         json_r = createJsonNack(fcn: "get_metadata", description: "Reference faulty, " + json_m["ref"].stringValue)
                     }
                     // Nack index out of range (coded from parseIndex)
@@ -2061,7 +1989,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             json["y"].doubleValue = round(100 * copter.loc.pos.y) / 100
             json["z"].doubleValue = round(100 * copter.loc.pos.z) / 100
             json["agl"].doubleValue = -1
-            json["local_yaw"].doubleValue =
+            json["heading"].doubleValue =
                 round(100 * (copter.loc.gimbalYaw - self.copter.initLoc.gimbalYaw)) / 100
             _ = self.publish(socket: self.infoPublisher, topic: "XYZ", json: json)
         }
@@ -2096,7 +2024,7 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
 
             // Publish if subscribed
             if self.subscriptions.WpId {
-                _ = self.publish(socket: self.infoPublisher, topic: "WP_ID", json:  json_o)
+                _ = self.publish(socket: self.infoPublisher, topic: "currentWP", json:  json_o)
             }
         }
     }
@@ -2211,6 +2139,9 @@ public class DSSViewController:  DUXDefaultLayoutViewController { //DUXFPVViewCo
             
             // Store the camera refence
             if let cam = product.camera {
+                // Implement the camera functions, including delegate in class CameraController.
+                self.cameraTODO.camera = cam
+                self.cameraTODO.initCamera()
                 self.camera = cam
                 self.camera?.setPhotoAspectRatio(DJICameraPhotoAspectRatio.ratio4_3, withCompletion: {(error) in
                     if error != nil{
