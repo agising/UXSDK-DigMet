@@ -51,6 +51,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     let dataPublishEndPoint = "tcp://*:5559"
     var dscIP = ""
     let dscPort = ""
+    var dscInUse = false
     var subscriptions = Subscriptions()
     var heartBeat = HeartBeat()
     var inControls = "PILOT"
@@ -866,7 +867,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         
     func gpsSubThread(endPoint: String){
         if let socket = endPointDict[endPoint]{
-            while copter.followStream {             // TODO, shold be other criter
+            while true {//copter.followStream {             // TODO, shold be other criter
                 let (success,jsonString) = pollAndRecv(socket: socket)
                 if success{
                     print("Received message: " + jsonString)
@@ -885,17 +886,17 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw, currentPos: self.copter.loc)
                     
                     // Update the activeWP
-                    self.copter.activeWP.coordinate.latitude = self.copter.pattern.reference.coordinate.latitude
-                    self.copter.activeWP.coordinate.longitude = self.copter.pattern.reference.coordinate.longitude
-                    self.copter.activeWP.altitude = self.copter.pattern.reference.altitude
-                    
-                    // Speed TODO
-                    self.copter.activeWP.speed = 3
-                    
-                    self.copter.activeWP.printLocation(sentFrom: "gpsSubThread")
-                    Dispatch.main{
-                        self.copter.goto()
-                    }
+//                    self.copter.activeWP.coordinate.latitude = self.copter.pattern.reference.coordinate.latitude
+//                    self.copter.activeWP.coordinate.longitude = self.copter.pattern.reference.coordinate.longitude
+//                    self.copter.activeWP.altitude = self.copter.pattern.reference.altitude
+//
+//                    // Speed TODO
+//                    self.copter.activeWP.speed = 3
+//
+//                    self.copter.activeWP.printLocation(sentFrom: "gpsSubThread")
+//                    Dispatch.main{
+//                        self.copter.goto()
+//                    }
                 }
                 print("Subscribe: Nothing to receive")
             }
@@ -986,15 +987,41 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
             usleep(1000000)
         }
         print("heartBeats: Starting to monitor heartBests")
+
         // Monitor heartbeats
         while self.heartBeat.alive() {
             usleep(150000)
+            // User disconnect will call DSC immidiatly on receive of comma
         }
         
-        // Recover the aircraft and stop the replyThread
-        print("Link is to appliciton is lost. Activating autopilot rtl and stopping comminication with application")
-        self.copter.rtl()
-        self.replyEnable = false
+        // Lost 1 time
+        if self.dscInUse{
+            // If the link is lost for the first time
+            if !self.heartBeat.lostOnce {
+                // TODO: call DSC
+                // Reset the timer by sending a new beat.
+                self.heartBeat.newBeat()
+                // Set lostOnce flag
+                self.heartBeat.lostOnce = true
+                Dispatch.background{
+                    self.heartBeats()
+                }
+                return
+            }
+        }
+        
+        // Lost 2 times
+        print("Link lost. Autopilot Rtl")
+        // Activate RTL
+        Dispatch.main{
+            self.copter.rtl()
+        }
+        // Reset the heartbeat state diagram. Wait for new heartbeats
+        self.heartBeat.beatDetected = false
+        Dispatch.background{
+            self.heartBeats()
+        }
+        return
     }
     
     // ******************************
@@ -1319,30 +1346,30 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                         }
                     }
                     
-                case "set_yaw":
-                    self.log("Received cmd: set_yaw")
-                    let yaw = json_m["yaw"].doubleValue
+                case "set_heading":
+                    self.log("Received cmd: set_heading")
+                    let heading = json_m["heading"].doubleValue
                     // Nack not owner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "set_yaw", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: "set_heading", description: nackOwnerStr)
                     }
                     // Nack not flying
                     else if !(copter.getIsFlying() ?? false){ // Default to false to handle nil
-                        json_r = createJsonNack(fcn: "set_yaw", description: "Not flying")
+                        json_r = createJsonNack(fcn: "set_heading", description: "Not flying")
                     }
                     // Nack yaw out of limits
-                    else if yaw < 0 || 360 < yaw {
-                        json_r = createJsonNack(fcn: "set_yaw", description: "Yaw is out of limits")
+                    else if heading < 0 || 360 < heading {
+                        json_r = createJsonNack(fcn: "set_heading", description: "Yaw is out of limits")
                     }
                     // Nack mission active
                     else if copter.missionIsActive{
-                        json_r = createJsonNack(fcn: "set_yaw", description: "Mission is active")
+                        json_r = createJsonNack(fcn: "set_heading", description: "Mission is active")
                     }
                     // Accept command
                     else{
-                        json_r = createJsonAck("set_yaw")
+                        json_r = createJsonAck("set_heading")
                         Dispatch.main{
-                            self.copter.setYaw(targetYaw: yaw)
+                            self.copter.setHeading(targetHeading: heading)
                         }
                     }
 
@@ -1745,16 +1772,17 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     self.log("Received cmd: disconnect")
                     // Nack not fromOwner
                     if !fromOwner{
-                        json_r = createJsonNack(fcn: "arm_take_off", description: nackOwnerStr)
+                        json_r = createJsonNack(fcn: "disconnect", description: nackOwnerStr)
                     }
                     // Accept command
                     else{
                         json_r = createJsonAck("disconnect")
-                        // Stop
+                        // Stop any rtl or other flight mode, then stop
+                        activateSticks()
                         copter.dutt(x: 0, y: 0, z: 0, yawRate: 0)
                         // Prevent wp action to resume mission
                         self.heartBeat.disconnected = true
-                        // TODO call DSC
+                        // TODO: call DSC, dsc
                     }
                     
                 case "data_stream":
@@ -1899,10 +1927,16 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     //***************************************************************************************************************
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
-        // Set the control command
-        //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-//        copter.followStream = false
-        
+
+//        // Set a flight pattern
+//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: 45, radius: 10, yawRate: 20)
+//
+//        // Set follow stream flag to true
+//        copter.followStream = true
+//
+//        // Execute follow stream controller
+//        self.copter.startFollowStream()
+
     }
 
     //***************************************************************************************************************
@@ -1911,14 +1945,15 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         // Set the control command
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         
+        // Set a flight pattern
+//        copter.pattern.setPattern(pattern: "above", relAlt: -110, heading: self.copter.loc.heading)
+//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: -2, radius: 14, yawRate: -20)
+//
+//        // Set follow stream flag to true
 //        copter.followStream = true
-//        let endPoint = "tcp://192.168.1.249:5560"
-//        let topic = "REMOTE1"
-//        if startGpsSubThread(endPoint: endPoint, topic: topic){
-//            self.log("startGpsSubThread listening to :" + endPoint + " topic: " + topic)
-//        }
-        
-        
+//
+//        // Execute the follow stream controller
+//        self.copter.startFollowStream()
     }
     
     //**********************************************
@@ -2049,7 +2084,8 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                         usleep(200000)
                         //print("WP action waiting for takePhoto to complete")
                     }
-                    if !self.heartBeat.disconnected{
+                    // Stop contination of link is lost or application disconnected.
+                    if self.heartBeat.alive() && !self.heartBeat.disconnected{
                         Dispatch.main {
                             _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
                         }
@@ -2168,6 +2204,20 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
             setupOk = false
             self.log("Aircraft not loaded")
         }
+        
+        
+        
+        
+//        // Hardcode Subscribe to stream
+//        let ipPort = "192.168.1.249:5560"
+//        let endPointStr = "tcp://" + ipPort
+//        let topic = "LLA"
+//        if startGpsSubThread(endPoint: endPointStr, topic: topic){
+//            self.log("startGpsSubThread listening to :" + endPointStr + " topic: " + topic)
+//        }
+
+        
+        
         
 
         // Notification center,https://learnappmaking.com/notification-center-how-to-swift/

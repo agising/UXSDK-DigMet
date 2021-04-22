@@ -315,7 +315,7 @@ class PatternHolder: NSObject{
     var reference: MyLocation = MyLocation()
     var velCtrlTimer: Timer?                        // Velocity control Timer
     var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
-    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+    var velCtrlLoopTarget: Int = 25099999                // Velocity control loop counter max
 
     
     func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
@@ -323,8 +323,6 @@ class PatternHolder: NSObject{
         self.stream.coordinate.longitude = lon
         self.stream.altitude = alt
         self.stream.heading = yaw
-        
-        //self.applyPattern(currentPos: currentPos)
         
         
         
@@ -407,12 +405,12 @@ class PatternHolder: NSObject{
 }
 
 class Pattern: NSObject {
-    var name: String = ""
-    var relAlt: Double = 5
+    var name: String = "above"
+    var relAlt: Double = 10
     var headingMode: String = ""        // Absolute/course/poi
     var heading: Double = 10
     var radius: Double = 10
-    var yawRate: Double = 10
+    var yawRate: Double = 0
     var startTime = CACurrentMediaTime()
 
 }
@@ -540,14 +538,16 @@ class HeartBeat: NSObject{
     var degradedLimit: Double = 2               // Time limit for link to be considered degraded
     var lostLimit: Double = 10                  // Time limit for link to be considered lost
     var beatDetected = false                    // Flag for first received heartBeat
-    var disconnected = true
+    var lostOnce = false                           // Link has been lost once and no heartbeats since
+    var disconnected = false                    // Flag to not allow mission continuation after disconnect
     
     func newBeat(){
         if !beatDetected{
             beatDetected = true
+            lostOnce = false
+            disconnected = false
         }
         self.lastBeat = CACurrentMediaTime()
-        disconnected = false
     }
     
     func elapsed()->Double{
@@ -565,7 +565,6 @@ class HeartBeat: NSObject{
         }
         else{
             print("Link lost, elapsed time since last heartBeat: ", elapsedTime)
-            disconnected = true
             return false
         }
     }
