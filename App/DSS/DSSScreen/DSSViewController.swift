@@ -154,6 +154,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         
         // Disable copter stick mode
         copter.stickDisable()
+        self.inControls = "PILOT"
     }
     
     //****************************************************************
@@ -168,6 +169,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         
         // Enable stick mode
         copter.stickEnable()
+        self.inControls = "APPLICATION"
     }
     
     //*****************************************************
@@ -990,7 +992,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
 
         // Monitor heartbeats
         while self.heartBeat.alive() {
-            usleep(150000)
+            usleep(150000)  
             // User disconnect will call DSC immidiatly on receive of comma
         }
         
@@ -1011,7 +1013,15 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         }
         
         // Lost 2 times
-        print("Link lost. Autopilot Rtl")
+        self.log("Link lost. Autopilot Rtl")
+        Dispatch.main{
+            self.deactivateSticks()
+            usleep(100)    // TODO, deactivate sticks sets inControls to PILOT..
+            self.inControls = "DSS"
+            self.controlsButton.backgroundColor = UIColor.systemGreen
+            self.controlsButton.setTitle("TAKE Controls from DSS", for: .normal)
+
+        }
         // Activate RTL
         Dispatch.main{
             self.copter.rtl()
@@ -1778,7 +1788,13 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     else{
                         json_r = createJsonAck("disconnect")
                         // Stop any rtl or other flight mode, then stop
-                        activateSticks()
+                        Dispatch.main{
+                            self.deactivateSticks()
+                            usleep(100)                 // TODO, ugly hack
+                            self.controlsButton.setTitle("TAKE Controls from DSS", for: .normal)
+                            self.controlsButton.backgroundColor = UIColor.systemGreen
+                            self.inControls = "DSS"
+                        }
                         copter.dutt(x: 0, y: 0, z: 0, yawRate: 0)
                         // Prevent wp action to resume mission
                         self.heartBeat.disconnected = true
