@@ -191,6 +191,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     let flightMode = checkedNewValue.value as! String
                     let printStr = "New Flight mode: " + flightMode
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
+                    // If pilot takes off manually, set init point at take-off location.
+                    if flightMode == "TakeOff" && !self.initLoc.isInitLocation{
+                        self.setInitLocation(headingRef: self.loc.heading)
+                    }
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
                         let height = self.toHeight
@@ -667,10 +671,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     }
 
     
-    func setYaw(targetYaw: Double){
-        print("setYaw: Target yaw:", targetYaw, "current yaw: ", self.loc.heading)
+    func setHeading(targetHeading: Double){
+        print("setHeading: Target heading:", targetHeading, "current heading: ", self.loc.heading)
         self.activeWP.altitude = self.loc.altitude
-        self.activeWP.heading = targetYaw
+        self.activeWP.heading = targetHeading
         self.activeWP.coordinate.latitude = self.loc.coordinate.latitude
         self.activeWP.coordinate.longitude = self.loc.coordinate.longitude
         self.activeWP.speed = 0

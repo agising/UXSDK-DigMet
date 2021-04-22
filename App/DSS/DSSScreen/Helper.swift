@@ -324,8 +324,6 @@ class PatternHolder: NSObject{
         self.stream.altitude = alt
         self.stream.heading = yaw
         
-        //self.applyPattern(currentPos: currentPos)
-        
         
         
         
@@ -407,12 +405,12 @@ class PatternHolder: NSObject{
 }
 
 class Pattern: NSObject {
-    var name: String = ""
-    var relAlt: Double = 5
+    var name: String = "above"
+    var relAlt: Double = 10
     var headingMode: String = ""        // Absolute/course/poi
     var heading: Double = 10
     var radius: Double = 10
-    var yawRate: Double = 10
+    var yawRate: Double = 0
     var startTime = CACurrentMediaTime()
 
 }
@@ -540,14 +538,14 @@ class HeartBeat: NSObject{
     var degradedLimit: Double = 2               // Time limit for link to be considered degraded
     var lostLimit: Double = 10                  // Time limit for link to be considered lost
     var beatDetected = false                    // Flag for first received heartBeat
-    var disconnected = true
+    var lostOnce = false                           // Link has been lost once and no heartbeats since
     
     func newBeat(){
         if !beatDetected{
             beatDetected = true
+            lostOnce = false
         }
         self.lastBeat = CACurrentMediaTime()
-        disconnected = false
     }
     
     func elapsed()->Double{
@@ -565,7 +563,6 @@ class HeartBeat: NSObject{
         }
         else{
             print("Link lost, elapsed time since last heartBeat: ", elapsedTime)
-            disconnected = true
             return false
         }
     }
