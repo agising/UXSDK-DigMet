@@ -867,7 +867,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         
     func gpsSubThread(endPoint: String){
         if let socket = endPointDict[endPoint]{
-            while copter.followStream {             // TODO, shold be other criter
+            while true {//copter.followStream {             // TODO, shold be other criter
                 let (success,jsonString) = pollAndRecv(socket: socket)
                 if success{
                     print("Received message: " + jsonString)
@@ -1358,7 +1358,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                         json_r = createJsonNack(fcn: "set_heading", description: "Not flying")
                     }
                     // Nack yaw out of limits
-                    else if yaw < 0 || 360 < yaw {
+                    else if heading < 0 || 360 < heading {
                         json_r = createJsonNack(fcn: "set_heading", description: "Yaw is out of limits")
                     }
                     // Nack mission active
@@ -1927,10 +1927,16 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     //***************************************************************************************************************
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
-        // Set the control command
-        //copter.dutt(x: 0, y: 1, z: 0, yawRate: 0)
-        copter.followStream = false
-        
+
+//        // Set a flight pattern
+//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: 45, radius: 10, yawRate: 20)
+//
+//        // Set follow stream flag to true
+//        copter.followStream = true
+//
+//        // Execute follow stream controller
+//        self.copter.startFollowStream()
+
     }
 
     //***************************************************************************************************************
@@ -1940,24 +1946,14 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
         
         // Set a flight pattern
-        copter.pattern.setPattern(pattern: "above", relAlt: 12, heading: self.copter.loc.heading)
-        
-        // Set follow stream flag to true
-        copter.followStream = true
-        
-        // Subscribe to stream
-        let ipPort = "192.168.1.249:5560"
-        let endPointStr = "tcp://" + ipPort
-        let topic = "LLA"
-        if startGpsSubThread(endPoint: endPointStr, topic: topic){
-            self.log("startGpsSubThread listening to :" + endPointStr + " topic: " + topic)
-        }
-        
-        // Execute the follow stream controller
-        // Background?
-        self.copter.startFollowStream()
-        
-        
+//        copter.pattern.setPattern(pattern: "above", relAlt: -110, heading: self.copter.loc.heading)
+//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: -2, radius: 14, yawRate: -20)
+//
+//        // Set follow stream flag to true
+//        copter.followStream = true
+//
+//        // Execute the follow stream controller
+//        self.copter.startFollowStream()
     }
     
     //**********************************************
@@ -2088,7 +2084,8 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                         usleep(200000)
                         //print("WP action waiting for takePhoto to complete")
                     }
-                    if !self.heartBeat.alive(){
+                    // Stop contination of link is lost or application disconnected.
+                    if self.heartBeat.alive() && !self.heartBeat.disconnected{
                         Dispatch.main {
                             _ = self.copter.gogo(startWp: 99, useCurrentMission: true) // startWP not used
                         }
@@ -2207,6 +2204,20 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
             setupOk = false
             self.log("Aircraft not loaded")
         }
+        
+        
+        
+        
+//        // Hardcode Subscribe to stream
+//        let ipPort = "192.168.1.249:5560"
+//        let endPointStr = "tcp://" + ipPort
+//        let topic = "LLA"
+//        if startGpsSubThread(endPoint: endPointStr, topic: topic){
+//            self.log("startGpsSubThread listening to :" + endPointStr + " topic: " + topic)
+//        }
+
+        
+        
         
 
         // Notification center,https://learnappmaking.com/notification-center-how-to-swift/

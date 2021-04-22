@@ -87,7 +87,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     var etaLimit: Float = 2.0
     private let vPosKP: Float = 1
     private let vVelKD: Float = 0
-    private let yawKP: Float = 1
+    private let yawKP: Float = 1.3
     private let yawFFKP: Float = 0.05
     private let radKP: Double = 1                    // KP for radius tracking
     
@@ -193,7 +193,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
                     // If pilot takes off manually, set init point at take-off location.
                     if flightMode == "TakeOff" && !self.initLoc.isInitLocation{
-                        self.setInitLocation(headingRef: self.loc.heading)
+                        self.setInitLocation(headingRef: "drone")
                     }
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
@@ -1198,6 +1198,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         var refYVel: Double = 0
         var refZVel: Double = 0
         let headingRangeLimit: Double = 3
+        var yawRateFF: Double = 0
         
         self.pattern.velCtrlLoopCnt += 1
     
@@ -1235,6 +1236,12 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 }
                 // Radius tracking
                 refXVel = radKP*radiusError
+                
+                // YawRate feed forward when closing in to radius
+                if abs(radiusError) < 4{
+                    yawRateFF = desYawRate
+                }
+                
             case "absolute":
                 // Ref yaw defined in pattern
                 refYaw = desHeading
@@ -1343,12 +1350,16 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         // Calculate yaw-error, use shortest way (right or left?)
         let yawError = getDoubleWithinAngleRange(angle: (self.loc.heading - refYaw))
         // P-controller for Yaw
-        _refYawRate = -yawError*Double(yawKP)
+        _refYawRate = yawRateFF - yawError*Double(yawKP)
+        
+
+        print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
 
         // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
         var turnFactor: Double = 1
-        if abs(yawError) > 10 {
+        if abs(yawError) > 20 {
             turnFactor = 0
+            print("turnfactor 0!")
         }
         else{
             turnFactor = 1

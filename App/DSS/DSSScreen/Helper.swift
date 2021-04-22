@@ -315,7 +315,7 @@ class PatternHolder: NSObject{
     var reference: MyLocation = MyLocation()
     var velCtrlTimer: Timer?                        // Velocity control Timer
     var velCtrlLoopCnt: Int = 0                     // Velocity control loop counter
-    var velCtrlLoopTarget: Int = 250                // Velocity control loop counter max
+    var velCtrlLoopTarget: Int = 25099999                // Velocity control loop counter max
 
     
     func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
@@ -539,11 +539,13 @@ class HeartBeat: NSObject{
     var lostLimit: Double = 10                  // Time limit for link to be considered lost
     var beatDetected = false                    // Flag for first received heartBeat
     var lostOnce = false                           // Link has been lost once and no heartbeats since
+    var disconnected = false                    // Flag to not allow mission continuation after disconnect
     
     func newBeat(){
         if !beatDetected{
             beatDetected = true
             lostOnce = false
+            disconnected = false
         }
         self.lastBeat = CACurrentMediaTime()
     }
