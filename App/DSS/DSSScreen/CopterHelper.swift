@@ -1193,6 +1193,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         let desYawRate = self.pattern.pattern.yawRate
         let radius = self.pattern.pattern.radius
         var refYaw: Double = 0
+        var refCourse: Double = 0
         var _refYawRate: Double = 0
         var refXVel: Double = 0
         var refYVel: Double = 0
@@ -1230,16 +1231,25 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             // For each headingMode, calculate the refYaw, refXVel and refYVel
             switch headingMode{
             case "poi":
+                // refYaw towards poi
                 refYaw = bearing
+                // calc refCourse
                 if CCW {
-                    refYVel = speed
+                    refCourse = bearing - 90
                 }
                 else{
-                    refYVel = -speed
+                    refCourse = bearing + 90
                 }
-
-                // Radius tracking
-                refXVel = radKP*radiusError
+                    
+                // Calc body velocitites to follow refCourse (parallell to course)
+                let alphaRad = (self.loc.heading - refCourse)/180*Double.pi
+                refXVel = speed*cos(alphaRad)
+                refYVel = speed*sin(alphaRad)
+                
+                // Radius tracking, add components to x and y
+                let betaRad = (self.loc.heading - bearing)/180*Double.pi
+                refXVel += radKP*radiusError*cos(betaRad)
+                refYVel -= radKP*radiusError*sin(betaRad)
                 
                 // YawRate feed forward when closing in to radius
                 if abs(radiusError) < 4{
@@ -1272,6 +1282,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             case "course":
                 // Special case of absolute where heading is same as direction of travel.
                 // Calc direction of travel as perpedicular to bearing towards poi.
+                
                 if CCW {
                     refYaw = bearing + 90.0
                 }
@@ -1357,7 +1368,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         _refYawRate = yawRateFF - yawError*Double(yawKP)
         
 
-        //print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
+        print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
 
         // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
         var turnFactor: Double = 1
