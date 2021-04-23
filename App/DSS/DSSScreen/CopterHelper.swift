@@ -1207,6 +1207,12 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         let headingRangeLimit: Double = 3
         var yawRateFF: Double = 0
         
+        if self.pattern.stream.coordinate.latitude == 0 || self.pattern.stream.coordinate.longitude == 0{
+            NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": "Stream is set for Africa.."])
+            invalidateTimers()
+            return
+        }
+        
         self.pattern.velCtrlLoopCnt += 1
     
         // TODO, integrate gimbal control in patterns
