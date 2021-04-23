@@ -38,6 +38,8 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     var camera: DJICamera?
     //var DJIgimbal: DJIGimbal?
     
+    var leftTicker = 0
+    var rightTicker = 0
     
     //var acks = 0
     var context: SwiftyZeroMQ.Context = try! SwiftyZeroMQ.Context()
@@ -1945,13 +1947,29 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     @IBAction func DuttRightPressed(_ sender: UIButton) {
 
 //        // Set a flight pattern
-//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: 45, radius: 10, yawRate: 20)
-//
-//        // Set follow stream flag to true
-//        copter.followStream = true
-//
-//        // Execute follow stream controller
-//        self.copter.startFollowStream()
+        switch rightTicker{
+            case 0:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -2, radius: 10, yawRate: 20)
+                self.log("Cricle +15 poi r10")
+            case 1:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -1, radius: 15, yawRate: 20)
+                self.log("Cricle +20 course r15")
+            case 2:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 25, heading: -1, radius: 20, yawRate: -20)
+                self.log("Cricle +25 north r20")
+                // Reset ticker
+                rightTicker = -1
+            default:
+                rightTicker = -1
+        }
+        rightTicker += 1
+        print(rightTicker)
+        
+        // Set follow stream flag to true
+        copter.followStream = true
+     
+        // Execute follow stream controller
+        self.copter.startFollowStream()
 
     }
 
@@ -1960,16 +1978,30 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     @IBAction func DuttLeftPressed(_ sender: UIButton) {
         // Set the control command
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
+       
+        switch leftTicker{
+            case 0:
+                copter.pattern.setPattern(pattern: "above", relAlt: 10, heading: 0)
+                self.log("Above +10 north")
+            case 1:
+                copter.pattern.setPattern(pattern: "above", relAlt: 15, heading: -1)
+                self.log("Above +15 course")
+            case 2:
+                copter.pattern.setPattern(pattern: "above", relAlt: 20, heading: -1)
+                self.log("Above +20 south")
+                // Reset ticker
+                leftTicker = -1
+            default:
+                leftTicker = -1
+        }
+        leftTicker += 1
+        print(leftTicker)
         
-        // Set a flight pattern
-//        copter.pattern.setPattern(pattern: "above", relAlt: -110, heading: self.copter.loc.heading)
-//        copter.pattern.setPattern(pattern: "circle", relAlt: -110, heading: -2, radius: 14, yawRate: -20)
-//
-//        // Set follow stream flag to true
-//        copter.followStream = true
-//
-//        // Execute the follow stream controller
-//        self.copter.startFollowStream()
+        // Set follow stream flag to true
+        copter.followStream = true
+
+        // Execute the follow stream controller
+        self.copter.startFollowStream()
     }
     
     //**********************************************
@@ -2222,15 +2254,17 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         }
         
         
-        
+        print("dscIP: ", dscIP)
         
 //        // Hardcode Subscribe to stream
-//        let ipPort = "192.168.1.249:5560"
-//        let endPointStr = "tcp://" + ipPort
-//        let topic = "LLA"
-//        if startGpsSubThread(endPoint: endPointStr, topic: topic){
-//            self.log("startGpsSubThread listening to :" + endPointStr + " topic: " + topic)
-//        }
+        let ipPort = "192.168.1.249:5560"
+//        let port = "5560"
+//        let ipPort = dscIP + ":" + port
+        let endPointStr = "tcp://" + ipPort
+        let topic = "LLA"
+        if startGpsSubThread(endPoint: endPointStr, topic: topic){
+            self.log("startGpsSubThread listening to :" + endPointStr + " topic: " + topic)
+        }
 
         
         

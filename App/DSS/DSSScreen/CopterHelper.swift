@@ -1221,7 +1221,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         case "circle":
             // Desired yaw rate and radius gives the speed.
             let radiusError = distance2D - radius
-            let speed = 0.01745 * radius * desYawRate// 2*math.pi*radius*desYawRate/360 ~ 0.01745* r* desYawRate
+            let speed = abs(0.01745 * radius * desYawRate)// 2*math.pi*radius*desYawRate/360 ~ 0.01745* r* desYawRate
             var CCW = false     // CounterClockWise rotation true or false?
             if desYawRate < 0{
                 CCW = true
@@ -1234,6 +1234,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 if CCW {
                     refYVel = -speed
                 }
+                else{
+                    refYVel = speed
+                }
+
                 // Radius tracking
                 refXVel = radKP*radiusError
                 
@@ -1268,27 +1272,27 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             case "course":
                 // Special case of absolute where heading is same as direction of travel.
                 // Calc direction of travel as perpedicular to bearing towards poi.
-                var direction: Double = 0
                 if CCW {
-                    direction = bearing + 90.0
+                    refYaw = bearing + 90.0
                 }
                 else {
-                    direction = bearing - 90.0
+                    refYaw = bearing - 90.0
                 }
-                
-                // Ref yaw is same as direction of travel
-                refYaw = direction
                 
                 
                 // Calc body velocitites based on speed direction and refYaw
-                let alphaRad = (direction-refYaw)/180*Double.pi
+                let alphaRad = (self.loc.heading-refYaw)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
                 
                 // Radius tracking, add components to x and y
-                let betaRad = (bearing-refYaw)/180*Double.pi
+                let betaRad = (self.loc.heading-bearing)/180*Double.pi
                 refXVel += radKP*radiusError*cos(betaRad)
-                refYVel += radKP*radiusError*sin(betaRad)
+                refYVel -= radKP*radiusError*sin(betaRad)
+
+                if abs(radiusError) < 4{
+                    yawRateFF = desYawRate
+                }
                 
             default:
                 print("Circle heading mode not supported. Stop follower TODO")
@@ -1353,7 +1357,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         _refYawRate = yawRateFF - yawError*Double(yawKP)
         
 
-        print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
+        //print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
 
         // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
         var turnFactor: Double = 1
