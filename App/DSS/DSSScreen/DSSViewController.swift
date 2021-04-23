@@ -887,20 +887,22 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     let alt = json_m["alt"].doubleValue
                     let yaw = json_m["yaw"].doubleValue
                     
-                    self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw, currentPos: self.copter.loc)
+                    self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
                     
-                    // Update the activeWP
-//                    self.copter.activeWP.coordinate.latitude = self.copter.pattern.reference.coordinate.latitude
-//                    self.copter.activeWP.coordinate.longitude = self.copter.pattern.reference.coordinate.longitude
-//                    self.copter.activeWP.altitude = self.copter.pattern.reference.altitude
-//
-//                    // Speed TODO
-//                    self.copter.activeWP.speed = 3
-//
-//                    self.copter.activeWP.printLocation(sentFrom: "gpsSubThread")
-//                    Dispatch.main{
-//                        self.copter.goto()
-//                    }
+                    self.log("StreamUpd alt: " + String(alt))
+                    
+                    
+                    // Debug
+                    let (_, _, dAlt, distance2D, _, bearing) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
+                    let desAltDiff = self.copter.pattern.pattern.relAlt
+                    let altDiff = -dAlt - desAltDiff
+                    let refZVel = altDiff*Double(1)
+                    
+                    self.log("altDiff: " + String(altDiff))
+                    self.log("Z-vel: " + String(refZVel))
+                    
+                    
+                    
                 }
                 print("Subscribe: Nothing to receive")
             }
@@ -1188,6 +1190,14 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                             print("Error: Debug. Something is wrong, should not have passed to here.")
                             json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
                         }
+                        
+                        // ALso set stream default to avoid flying to Arfica
+                        let lat = self.copter.loc.coordinate.latitude
+                        let lon = self.copter.loc.coordinate.latitude
+                        let alt = self.copter.loc.altitude
+                        let yaw = self.copter.loc.heading
+                        
+                        self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
                     }
                     
                 case "reset_dss_srtl":
@@ -1945,7 +1955,10 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
     //***************************************************************************************************************
     // Sends a command to go body right for some time at some speed per settings. Cancel any current joystick command
     @IBAction func DuttRightPressed(_ sender: UIButton) {
+        // Reset the other ticker
+        leftTicker = 0
 
+        
 //        // Set a flight pattern
         switch rightTicker{
             case 0:
@@ -1979,6 +1992,9 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         // Set the control command
         //copter.dutt(x: 0, y: -1, z: 0, yawRate: 0)
        
+        // Reset the other ticker
+        rightTicker = 0
+        
         switch leftTicker{
             case 0:
                 copter.pattern.setPattern(pattern: "above", relAlt: 10, heading: 0)

@@ -192,9 +192,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     let printStr = "New Flight mode: " + flightMode
                     NotificationCenter.default.post(name: .didPrintThis, object: self, userInfo: ["printThis": printStr])
                     // If pilot takes off manually, set init point at take-off location.
-                    if flightMode == "TakeOff" && !self.initLoc.isInitLocation{
-                        self.setInitLocation(headingRef: "drone")
-                    }
+//                    if flightMode == "TakeOff" && !self.initLoc.isInitLocation{
+//                        self.setInitLocation(headingRef: "drone")
+//                    }
                     // Trigger completed take-off to climb to correct take-off altitude
                     if self.flightMode == "TakeOff" && flightMode == "GPS"{
                         let height = self.toHeight
@@ -260,16 +260,22 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // If motors are armed without Init point has been initiated, initiate it
                 if motorsOn && !self.initLoc.isInitLocation {
                     // TODO test robustness.
-                    if !self.setInitLocation(headingRef: "drone"){
-                        print("Debug start listen to motors on")
-                        usleep(200000)
-                        if !self.setInitLocation(headingRef: "drone"){
-                            print("Debug start listen to motors on2")
-                            usleep(200000)
-                            _ = self.setInitLocation(headingRef: "drone")
-                        }
-                    }
+                    _ = self.setInitLocation(headingRef: "drone")
+                    // ALso set stream default to avoid flying to Arfica
+                    guard let pos = self.getCurrentLocation() else {
+                        print("setInitLocation: Can't get current location")
+                        return}
+                    guard let heading = self.getHeading() else {
+                        print("setInitLocation: Can't get current heading")
+                        return}
                     
+                    let lat = pos.coordinate.latitude
+                    let lon = pos.coordinate.longitude
+                    let alt = pos.altitude
+                    let yaw = heading
+                    
+                    self.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
+                    print("Stream default set to init point", lat)
                 }
             }
         })
@@ -1371,7 +1377,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         _refYawRate = yawRateFF - yawError*Double(yawKP)
         
 
-        print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
+        //print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
 
         // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
         var turnFactor: Double = 1

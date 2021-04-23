@@ -318,25 +318,11 @@ class PatternHolder: NSObject{
     var velCtrlLoopTarget: Int = 25099999                // Velocity control loop counter max
 
     
-    func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double, currentPos: MyLocation){
+    func streamUpdate(lat: Double, lon: Double, alt: Double, yaw: Double){
         self.stream.coordinate.latitude = lat
         self.stream.coordinate.longitude = lon
         self.stream.altitude = alt
         self.stream.heading = yaw
-        
-        
-        
-        
-        
-        
-        // How to (where from) to activate the controller?
-        // What should keep it alive?
-        
-        
-        
-        
-        
-        
         
     }
     
