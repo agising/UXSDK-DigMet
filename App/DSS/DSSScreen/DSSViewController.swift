@@ -1949,13 +1949,13 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
 //        // Set a flight pattern
         switch rightTicker{
             case 0:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -1, radius: 10, yawRate: 20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -2, radius: 10, yawRate: 20)
                 self.log("Cricle +15 poi r10")
             case 1:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -1, radius: 10, yawRate: -20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -1, radius: 15, yawRate: -20)
                 self.log("Cricle +20 course r15")
             case 2:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 25, heading: -1, radius: 20, yawRate: -20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 25, heading: 0, radius: 20, yawRate: 20)
                 self.log("Cricle +25 north r20")
                 // Reset ticker
                 rightTicker = -1
@@ -1987,7 +1987,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                 copter.pattern.setPattern(pattern: "above", relAlt: 15, heading: -1)
                 self.log("Above +15 course")
             case 2:
-                copter.pattern.setPattern(pattern: "above", relAlt: 20, heading: -1)
+                copter.pattern.setPattern(pattern: "above", relAlt: 20, heading: -180)
                 self.log("Above +20 south")
                 // Reset ticker
                 leftTicker = -1
@@ -2257,7 +2257,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         print("dscIP: ", dscIP)
         
 //        // Hardcode Subscribe to stream
-        let ipPort = "192.168.1.249:5560"
+        let ipPort = "25.29.189.135:5560"
 //        let port = "5560"
 //        let ipPort = dscIP + ":" + port
         let endPointStr = "tcp://" + ipPort
