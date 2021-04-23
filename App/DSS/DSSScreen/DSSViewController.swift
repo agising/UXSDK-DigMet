@@ -1949,10 +1949,10 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
 //        // Set a flight pattern
         switch rightTicker{
             case 0:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -2, radius: 10, yawRate: 20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -1, radius: 10, yawRate: 20)
                 self.log("Cricle +15 poi r10")
             case 1:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -2, radius: 10, yawRate: -20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -1, radius: 10, yawRate: -20)
                 self.log("Cricle +20 course r15")
             case 2:
                 copter.pattern.setPattern(pattern: "circle", relAlt: 25, heading: -1, radius: 20, yawRate: -20)

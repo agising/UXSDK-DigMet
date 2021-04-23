@@ -1283,16 +1283,19 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // Special case of absolute where heading is same as direction of travel.
                 // Calc direction of travel as perpedicular to bearing towards poi.
                 
+                // Calc refCourse
                 if CCW {
-                    refYaw = bearing + 90.0
+                    refCourse = bearing + 90.0
                 }
                 else {
-                    refYaw = bearing - 90.0
+                    refCourse = bearing - 90.0
                 }
                 
+                // Ref yaw is refCourse. Or should i be course..
+                refYaw = refCourse
                 
                 // Calc body velocitites based on speed direction and refYaw
-                let alphaRad = (self.loc.heading-refYaw)/180*Double.pi
+                let alphaRad = (self.loc.heading-refCourse)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
                 
