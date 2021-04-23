@@ -1232,10 +1232,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             case "poi":
                 refYaw = bearing
                 if CCW {
-                    refYVel = -speed
+                    refYVel = speed
                 }
                 else{
-                    refYVel = speed
+                    refYVel = -speed
                 }
 
                 // Radius tracking
