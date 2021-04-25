@@ -893,11 +893,13 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     
                     
                     // Debug
-                    let (_, _, dAlt, distance2D, _, bearing) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
+                    let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
                     let desAltDiff = self.copter.pattern.pattern.relAlt
                     let altDiff = -dAlt - desAltDiff
                     let refZVel = altDiff*Double(1)
                     
+                    self.log("drone alt: " + String(self.copter.loc.altitude))
+                    self.log("stream alt: " + String(alt))
                     self.log("altDiff: " + String(altDiff))
                     self.log("Z-vel: " + String(refZVel))
                     

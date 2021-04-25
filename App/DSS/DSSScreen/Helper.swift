@@ -26,6 +26,7 @@ class MyLocation: NSObject{
     var vel = Vel()
     var pos = POS()
     var isSetAlt = false
+    var homeLocationAMSL: Double = 150
 
     // Reset all values.
     func reset(){
@@ -51,6 +52,7 @@ class MyLocation: NSObject{
         self.pos.east = 0
         self.pos.down = 0
         self.isSetAlt = false
+        self.homeLocationAMSL = 150
     }
     
     
@@ -130,7 +132,8 @@ class MyLocation: NSObject{
             print("setPosition: Init point already set")
             return
         }
-        self.altitude = pos.altitude
+        self.altitude = pos.altitude + self.homeLocationAMSL
+        print("homeLocationAMSL: ", self.homeLocationAMSL)
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
         self.gimbalYaw = heading + gimbalYawRelativeToHeading

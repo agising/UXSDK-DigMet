@@ -282,6 +282,28 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     }
     
     
+    //****************************
+    // Start listen to armed state
+    func startListenToTakeOffLocationAlt(){
+        guard let takeoffLocationKey = DJIFlightControllerKey(param: DJIFlightControllerParamTakeoffLocationAltitude) else {
+            NSLog("Couldn't create the key")
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return
+        }
+        
+        keyManager.startListeningForChanges(on: takeoffLocationKey, withListener: self, andUpdate: {(oldState: DJIKeyedValue?, newState: DJIKeyedValue?) in
+            if let checkedValue = newState {
+                let takeOffLocationAMSL = checkedValue.value as! Double
+                self.loc.homeLocationAMSL = Double(takeOffLocationAMSL) + 40
+                print("takeoff location changed")
+            }
+        })
+    }
+    
     //*************************************************************************************
     // Generic func to stop listening for updates. Stop all listeners at exit (func xClose)
     func stopListenToParam(DJIFlightControllerKeyString: String){
@@ -331,6 +353,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         
         // GimbalYawRelativeToHeading is forced to 0. If gimbal yaw shoulb be in cluded it is alreade added to heading.
         self.initLoc.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isInitLocation: true, initLoc: self.initLoc){}
+        self.flightController?.setHomeLocation(pos, withCompletion:{(error) in
+            if error != nil{
+                print("An error occured when setting home wp")
+            }
+        })
         self.initLoc.printLocation(sentFrom: "setInitLocation")
         // Not sure if sleep is needed, but loc.setPosition uses initLoc. Completion handler could be used.
         usleep(200000)
@@ -499,6 +526,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         self.startListenToPos()
         self.startListenToFlightMode()
         self.startListenToMotorsOn()
+        self.startListenToTakeOffLocationAlt()
         // No reason to track velocities as for now. Uncomment to enable
         self.startListenToVel()
         
@@ -1229,11 +1257,11 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         
         // Get distance and bearing from here to stream
         let (_, _, dAlt, distance2D, _, bearing) = self.loc.distanceTo(wpLocation: self.pattern.stream)
+        let radiusError = distance2D - radius
         
         switch pattern{
         case "circle":
             // Desired yaw rate and radius gives the speed.
-            let radiusError = distance2D - radius
             let speed = abs(0.01745 * radius * desYawRate)// 2*math.pi*radius*desYawRate/360 ~ 0.01745* r* desYawRate
             var CCW = false     // CounterClockWise rotation true or false?
             if desYawRate < 0{
@@ -1246,7 +1274,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // refYaw towards poi
                 refYaw = bearing
                 // calc refCourse
-                if CCW {
+                if radiusError > 8 {
+                    refCourse = bearing
+                }
+                else if CCW {
                     refCourse = bearing - 90
                 }
                 else{
@@ -1296,7 +1327,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 // Calc direction of travel as perpedicular to bearing towards poi.
                 
                 // Calc refCourse
-                if CCW {
+                if radiusError > 8 {
+                    refCourse = bearing
+                }
+                else if CCW {
                     refCourse = bearing + 90.0
                 }
                 else {
@@ -1377,6 +1411,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             print("Pattern not supported Stop follower TODO")
         }
         
+        // Gimbla control
+        let gPitch = atan(radiusError/dAlt)
+        self.gimbal.setPitch(pitch: gPitch)
+        
         // Calculate yaw-error, use shortest way (right or left?)
         let yawError = getDoubleWithinAngleRange(angle: (self.loc.heading - refYaw))
         // P-controller for Yaw
@@ -1400,7 +1438,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         refYVel *= turnFactor
         
         // Altitude trackign
-        let altDiff = -dAlt - desAltDiff
+        let altDiff = dAlt - desAltDiff
         refZVel = altDiff*Double(vPosKP)
 
         // Set up a speed limit. Use global limit for now, it is given in cm/s..
