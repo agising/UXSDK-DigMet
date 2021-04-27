@@ -889,24 +889,29 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     
                     self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
                     
-                    self.log("StreamUpd alt: " + String(alt))
+                    self.log("Stream base alt: " + String(alt))
+                    //self.log("Stream des drone alt: " + String(alt + copter.pattern.pattern.relAlt))
                     
                     
                     // Debug
-                    let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
-                    let desAltDiff = self.copter.pattern.pattern.relAlt
-                    let altDiff = -dAlt - desAltDiff
-                    let refZVel = altDiff*Double(1)
-                    
-                    self.log("drone alt: " + String(self.copter.loc.altitude))
-                    self.log("stream alt: " + String(alt))
-                    self.log("altDiff: " + String(altDiff))
-                    self.log("Z-vel: " + String(refZVel))
-                    
-                    
-                    
+//                    // dAlt from copter to stream (positive downwards)
+//                    let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
+//                    // desAltDiff from stream to copter (positive upwards)
+//                    let desAltDiff = self.copter.pattern.pattern.relAlt
+//                    // altError from stream to copter ref
+//                    let zError = dAlt - (-desAltDiff)
+//                    // Control in z (positive downwards..)
+//                    let refZVel = -zError*Double(1)
+//                    
+//                    self.log("dAlt :" + String(dAlt) + "desAltDiff: " + String(desAltDiff) + " zError: " + String(zError))
+////                    self.log("drone alt: " + String(self.copter.loc.altitude))
+//                    self.log("stream alt: " + String(alt))
+//                    self.log("Z-vel: " + String(refZVel))
+//                    self.log("altError: " + String(altError))
                 }
                 print("Subscribe: Nothing to receive")
+                // TODO. Sleep only for the while true test setup
+                usleep(1000)
             }
             print("Exiting subscribe thread")
         }
@@ -1075,6 +1080,19 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         }
     }
 
+    // ***************************************************************************
+    // Function the evaluates if the position is initialized or not.
+    // Should/can we require takeoff alt to be set here too? That would be great..
+    func navReady()->Bool{
+        var isReady = false
+        let (lat, lon, alt) = self.copter.getCurrentLocation()
+        // If both lat and lon are not nil and not 0, nav is ready
+        if ((lat != nil && lat != 0) && (lon != nil && lon != 0)) {
+            isReady = true
+        }
+        return isReady
+    }
+    
     // ****************************************************
     // zmq reply thread that reads command from applictaion
     func readSocket(_ socket: SwiftyZeroMQ.Socket){
@@ -1159,23 +1177,15 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     json_r = createJsonAck("get_idle")
                     json_r["idle"].boolValue = self.idle // TODO hardcoded to true..
                                     
-                                
-
                     
                 case "set_init_point":
                     self.log("Received cmd: set_init_point")
-                    var navReady = false
-                    if let currLoc = self.copter.getCurrentLocation(){
-                        if currLoc.coordinate.latitude != 0{
-                            navReady = true
-                        }
-                    }
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "set_init_point", description: nackOwnerStr)
                     }
                     // Nack nav not ready
-                    else if !navReady { //self.copter.loc.coordinate.latitude == 0{
+                    else if !navReady() { //self.copter.loc.coordinate.latitude == 0{
                         json_r = createJsonNack(fcn: "set_init_point", description: "Navigation not ready")
                     }
                     // Nack init point already set
@@ -1204,18 +1214,12 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     
                 case "reset_dss_srtl":
                     self.log("Received cmd: reset_dss_srtl")
-                    var navReady = false
-                    if let currLoc = self.copter.getCurrentLocation(){
-                        if currLoc.coordinate.latitude != 0{
-                            navReady = true
-                        }
-                    }
                     // Nack not fromOwner
                     if !fromOwner{
                         json_r = createJsonNack(fcn: "reset_dss_srtl", description: nackOwnerStr)
                     }
                     // Nack nav not ready
-                    else if !navReady{
+                    else if !navReady(){
                         json_r = createJsonNack(fcn: "reset_dss_srtl", description: "Navigation not ready")
                     }
                     // Accept command
@@ -1247,7 +1251,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     else if toHeight < 2 || toHeight > 40 {
                         json_r = createJsonNack(fcn: "arm_take_off", description: "Height is out of limits")
                     }
-                    // Nack nit point not set
+                    // Nack init point not set
                     else if !self.copter.initLoc.isInitLocation {
                         json_r = createJsonNack(fcn: "arm_take_off", description: "Init point not set")
                     }
@@ -1964,14 +1968,24 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
 //        // Set a flight pattern
         switch rightTicker{
             case 0:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 15, heading: -2, radius: 10, yawRate: 20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: 10)
                 self.log("Cricle +15 poi r10")
             case 1:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 20, heading: -1, radius: 15, yawRate: -20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: -10)
                 self.log("Cricle +20 course r15")
             case 2:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 25, heading: 0, radius: 20, yawRate: 20)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: 10)
                 self.log("Cricle +25 north r20")
+            case 3:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: -10)
+                self.log("Cricle +25 north r20")
+            case 4:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: 10)
+                self.log("Cricle +25 north r20")
+            case 5:
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: -10)
+                self.log("Cricle +25 north r20")
+
                 // Reset ticker
                 rightTicker = -1
             default:
@@ -1999,13 +2013,13 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
         
         switch leftTicker{
             case 0:
-                copter.pattern.setPattern(pattern: "above", relAlt: 10, heading: 0)
+                copter.pattern.setPattern(pattern: "above", relAlt: 30, heading: 0)
                 self.log("Above +10 north")
             case 1:
-                copter.pattern.setPattern(pattern: "above", relAlt: 15, heading: -1)
+                copter.pattern.setPattern(pattern: "above", relAlt: 30, heading: -1)
                 self.log("Above +15 course")
             case 2:
-                copter.pattern.setPattern(pattern: "above", relAlt: 20, heading: -180)
+                copter.pattern.setPattern(pattern: "above", relAlt: 30, heading: -180)
                 self.log("Above +20 south")
                 // Reset ticker
                 leftTicker = -1

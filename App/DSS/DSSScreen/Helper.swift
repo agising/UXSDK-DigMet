@@ -26,8 +26,8 @@ class MyLocation: NSObject{
     var vel = Vel()
     var pos = POS()
     var isSetAlt = false
-    var homeLocationAMSL: Double = 150
-
+    var takeOffLocationDjiAMSL: Double = 99
+    
     // Reset all values.
     func reset(){
         self.speed = 0
@@ -52,7 +52,7 @@ class MyLocation: NSObject{
         self.pos.east = 0
         self.pos.down = 0
         self.isSetAlt = false
-        self.homeLocationAMSL = 150
+        self.takeOffLocationDjiAMSL = 99  //TODO FIX Correct CRITICAL                 // Compensated for djiDatumOffset in listerner for homepos updates
     }
     
     
@@ -127,18 +127,19 @@ class MyLocation: NSObject{
     }
     
     // Set up a MyLocation given a CLLocation and other properties
-    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isInitLocation: Bool=false, initLoc: MyLocation, completionBlock: ()->Void){
+//    func setPosition(pos: CLLocation, heading: Double, gimbalYawRelativeToHeading: Double, isInitLocation: Bool=false, initLoc: MyLocation, completionBlock: ()->Void){
+    func setPosition(lat: Double, lon: Double, alt: Double, heading: Double, gimbalYawRelativeToHeading: Double, isInitLocation: Bool=false, initLoc: MyLocation, completionBlock: ()->Void){
         if self.isInitLocation{
             print("setPosition: Init point already set")
             return
         }
-        self.altitude = pos.altitude + self.homeLocationAMSL
-        print("homeLocationAMSL: ", self.homeLocationAMSL)
+        self.altitude = alt
+        //print("takeOffLocationDJIAMSL: ", self.takeOffLocationDjiAMSL)
         self.heading = heading
         self.gimbalYawRelativeToHeading = gimbalYawRelativeToHeading
         self.gimbalYaw = heading + gimbalYawRelativeToHeading
-        self.coordinate.latitude = pos.coordinate.latitude
-        self.coordinate.longitude = pos.coordinate.longitude
+        self.coordinate.latitude = lat
+        self.coordinate.longitude = lon
         self.isInitLocation = isInitLocation
         
         // Dont set up local coordinates for the InitLoc it self.
@@ -154,10 +155,11 @@ class MyLocation: NSObject{
         }
         
         // Lat-, lon-, alt-diff
-        let latDiff = pos.coordinate.latitude - initLoc.coordinate.latitude
-        let lonDiff = pos.coordinate.longitude - initLoc.coordinate.longitude
-        let altDiff = pos.altitude - initLoc.altitude
-
+        let latDiff = lat - initLoc.coordinate.latitude
+        let lonDiff = lon - initLoc.coordinate.longitude
+        let altDiff = alt - initLoc.altitude
+        
+        
         // posN, posE
         let posN = latDiff * 1852 * 60
         let posE = lonDiff * 1852 * 60 * cos(initLoc.coordinate.latitude/180*Double.pi)

@@ -17,7 +17,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     
     // Geofencing defaults set in initLoc init code.
 
-    
+    let djiDatumAltOffset: Double = 30.8            // DJI uses a some geoid altitude. The offset should be around 30m in Sweden..
+            
     // Mission stuff
     var pendingMission = JSON()
     var mission = JSON()
@@ -89,7 +90,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     private let vVelKD: Float = 0
     private let yawKP: Float = 1.3
     private let yawFFKP: Float = 0.05
-    private let radKP: Double = 1                    // KP for radius tracking
+    private let radKP: Double = 0.5                    // KP for radius tracking
     
     
     override init(){
@@ -136,8 +137,8 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     }
 
     
-    //*************************************
-    // Start listening for position updates
+    //**********************************************************************************************
+    // Start listening for position updates. Correct relative alt for startAMSL and djiDatum Offset.
     func startListenToPos(){
         guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
             NSLog("Couldn't create the key")
@@ -157,13 +158,16 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                    return}
                 
                 // Update the XYZ coordinates relative to the XYZ frame. XYZ if XYZ is not set prior to takeoff, the homelocation updated at takeoff will be set as XYZ origin.
-                
                 if !self.initLoc.isInitLocation {
                     print("startListenToPos: No start location saved, local XYZ cannot be calculated")
                     return
                 }
                 
-                self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc) {
+                let lat = pos.coordinate.latitude
+                let lon = pos.coordinate.longitude
+                let alt = pos.altitude + self.loc.takeOffLocationDjiAMSL + self.djiDatumAltOffset
+                
+                self.loc.setPosition(lat: lat, lon: lon, alt: alt, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc) {
                         // The completionBock called upon succsessful update of pos.
                         NotificationCenter.default.post(name: .didPosUpdate, object: nil)
                     }
@@ -228,7 +232,7 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             if let checkedNewValue = newValue{
                 self.homeHeading = self.getHeading()
                 self.homeLocation = (checkedNewValue.value as! CLLocation)
-                print("HomePosListener: Home pos was updated.")
+                print("HomePosListener: DJI home location was updated.")
                
                 // If initLoc is not yet set and we are flying, set initLoc to here.  // TODO Should use armed state instead for force setting init.
                 if !self.initLoc.isInitLocation && self.getIsFlying() == true {
@@ -262,19 +266,20 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     // TODO test robustness.
                     _ = self.setInitLocation(headingRef: "drone")
                     // ALso set stream default to avoid flying to Arfica
-                    guard let pos = self.getCurrentLocation() else {
-                        print("setInitLocation: Can't get current location")
+                    // Get the optional lat, lon, alt.
+                    let (optLat, optLon, optAlt) = self.getCurrentLocation()
+                    // Gurad any nil values. Return false if nil.
+                    guard let lat = optLat else {
+                        return}
+                    guard let lon = optLon else {
+                        return}
+                    guard let alt = optAlt else {
                         return}
                     guard let heading = self.getHeading() else {
                         print("setInitLocation: Can't get current heading")
                         return}
-                    
-                    let lat = pos.coordinate.latitude
-                    let lon = pos.coordinate.longitude
-                    let alt = pos.altitude
-                    let yaw = heading
-                    
-                    self.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
+                                        
+                    self.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: heading)
                     print("Stream default set to init point", lat)
                 }
             }
@@ -298,11 +303,32 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         keyManager.startListeningForChanges(on: takeoffLocationKey, withListener: self, andUpdate: {(oldState: DJIKeyedValue?, newState: DJIKeyedValue?) in
             if let checkedValue = newState {
                 let takeOffLocationAMSL = checkedValue.value as! Double
-                self.loc.homeLocationAMSL = Double(takeOffLocationAMSL) + 40
-                print("takeoff location changed")
+                self.loc.takeOffLocationDjiAMSL = Double(takeOffLocationAMSL)
+                print("Takeoff location altitude changed: ", self.loc.takeOffLocationDjiAMSL)
             }
         })
     }
+    
+    // *********************************
+    // Get the takeOff location altitude
+    func GetTakeOffLocationAlt()->Double?{
+        guard let takeOffAltitudeKey = DJIFlightControllerKey(param: DJIFlightControllerParamTakeoffLocationAltitude) else {
+            NSLog("Couldn't create the key")
+            return nil
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            return nil
+        }
+        
+        if let altitudeValue = keyManager.getValueFor(takeOffAltitudeKey) {
+            let altitude = altitudeValue.value as! Double
+            return altitude
+        }
+        return nil
+    }
+    
     
     //*************************************************************************************
     // Generic func to stop listening for updates. Stop all listeners at exit (func xClose)
@@ -323,11 +349,29 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Set the initLocation and orientation as a reference of the system. Can only be set once for safety!
     // old: setOriginXYZ
     func setInitLocation(headingRef: String)->Bool{
+        
+        if let takeoffalt = GetTakeOffLocationAlt(){
+            print("The takeoff alt is: ", takeoffalt)
+        }
+        else{
+            print("Takeoff alt is nil")
+        }
+        
+        
         if self.initLoc.isInitLocation{
             print("setInitLocation Caution: Start location already set!")
             return false
         }
-        guard let pos = getCurrentLocation() else {
+        // Get the optional lat, lon, alt.
+        let (optLat, optLon, optAlt) = self.getCurrentLocation()
+        // Gurad any nil values. Return false if nil.
+        guard let lat = optLat else {
+            print("setInitLocation: Can't get current location")
+            return false}
+        guard let lon = optLon else {
+            print("setInitLocation: Can't get current location")
+            return false}
+        guard let alt = optAlt else {
             print("setInitLocation: Can't get current location")
             return false}
         guard let heading = getHeading() else {
@@ -352,19 +396,19 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         //stopListenToParam(DJIFlightControllerKeyString: "DJIFlightControllerParamAreMotorsOn")
         
         // GimbalYawRelativeToHeading is forced to 0. If gimbal yaw shoulb be in cluded it is alreade added to heading.
-        self.initLoc.setPosition(pos: pos, heading: startHeading, gimbalYawRelativeToHeading: 0, isInitLocation: true, initLoc: self.initLoc){}
-        self.flightController?.setHomeLocation(pos, withCompletion:{(error) in
-            if error != nil{
-                print("An error occured when setting home wp")
-            }
-        })
+        self.initLoc.setPosition(lat: lat, lon: lon, alt: alt, heading: startHeading, gimbalYawRelativeToHeading: 0, isInitLocation: true, initLoc: self.initLoc){}
+//        self.flightController?.setHomeLocation(pos, withCompletion:{(error) in
+//            if error != nil{
+//                print("An error occured when setting home wp")
+//            }
+//        })
         self.initLoc.printLocation(sentFrom: "setInitLocation")
         // Not sure if sleep is needed, but loc.setPosition uses initLoc. Completion handler could be used.
         usleep(200000)
         
         Dispatch.main {
             // Update the loc, this is first chance for it to calc XYZ and NED
-            self.loc.setPosition(pos: pos, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc){
+            self.loc.setPosition(lat: lat, lon: lon, alt: alt, heading: heading, gimbalYawRelativeToHeading: self.gimbal.yawRelativeToHeading, initLoc: self.initLoc){
                 NotificationCenter.default.post(name: .didPosUpdate, object: nil)
             }
                     
@@ -373,27 +417,67 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         
         return true
     }
-    
+
+    // **************************************************************
+    // Caution: The strange altitude datum of dji shall be used here!
+    func setAutoPilotHomeLocation(completionHandler: @escaping (Bool) -> Void){
+        print(" NOT TESTED set autopilot home. Note dji altitude datum used")
+        guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
+            NSLog("Couldn't create the key")
+            completionHandler(false)
+            return
+        }
+
+        guard let keyManager = DJISDKManager.keyManager() else {
+            print("Couldn't get the keyManager, are you registered")
+            completionHandler(false)
+            return
+        }
+                
+        if let locationValue = keyManager.getValueFor(locationKey) {
+            let location = locationValue.value as! CLLocation
+            self.flightController?.setHomeLocation(location, withCompletion:{(error) in
+                if error != nil{
+                    print("An error occured when setting home wp")
+                    completionHandler(false)
+                    return
+                }
+                else{
+                    completionHandler(true)
+                    return
+                }
+            })
+        }
+        completionHandler(false)
+    }
+        
     //**************************************************************************************************
     // Clears the DSS smart rtl list and adds current location as DSS home location, also saves heading.
     func resetDSSSRTLMission()->Bool{
         guard let heading = getHeading() else {
             return false
         }
-        guard let pos = self.getCurrentLocation() else {
+        // Get the optional lat, lon, alt.
+        let (optLat, optLon, optAlt) = self.getCurrentLocation()
+        // Gurad any nil values. Return false if nil.
+        guard let lat = optLat else {
+            return false}
+        guard let lon = optLon else {
+            return false}
+        guard let alt = optAlt else {
             return false}
         
         // Reset dssSmartRtlMission
         self.dssSmartRtlMission = JSON()
         let id = "id0"
         self.dssSmartRtlMission[id] = JSON()
-        self.dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
-        self.dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
-        self.dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
+        self.dssSmartRtlMission[id]["lat"] = JSON(lat)
+        self.dssSmartRtlMission[id]["lon"] = JSON(lon)
+        self.dssSmartRtlMission[id]["alt"] = JSON(alt)
         self.dssSmartRtlMission[id]["heading"] = JSON(heading)
         self.dssSmartRtlMission[id]["action"] = JSON("land")
         
-        if pos.altitude - self.initLoc.altitude < 2 {
+        if alt - self.initLoc.altitude < 2 {
             print("reserDSSSRTLMission: Forcing land altitude to 2m min")
             self.dssSmartRtlMission[id]["alt"].doubleValue = self.initLoc.altitude + 2
         }
@@ -406,8 +490,16 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
     // Appends current location to the DSS smart rtl mission
     func appendLocToDssSmartRtlMission()->Bool{
         // TODO, should copy loc instead, but it is not supported yet..
-        guard let pos = self.getCurrentLocation() else {
+        // Get the optional lat, lon, alt.
+        let (optLat, optLon, optAlt) = self.getCurrentLocation()
+        // Gurad any nil values. Return false if nil.
+        guard let lat = optLat else {
             return false}
+        guard let lon = optLon else {
+            return false}
+        guard let alt = optAlt else {
+            return false}
+        
         
         var wpCnt = 0
         // Find what wp id to add next. If mission is empty result will be id0
@@ -421,9 +513,9 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         print("appendLocToDssSmartRtlMission: id to add: ", wpCnt)
         let id = "id" + String(wpCnt)
         self.dssSmartRtlMission[id] = JSON()
-        self.dssSmartRtlMission[id]["lat"] = JSON(pos.coordinate.latitude)
-        self.dssSmartRtlMission[id]["lon"] = JSON(pos.coordinate.longitude)
-        self.dssSmartRtlMission[id]["alt"] = JSON(pos.altitude)
+        self.dssSmartRtlMission[id]["lat"] = JSON(lat)
+        self.dssSmartRtlMission[id]["lon"] = JSON(lon)
+        self.dssSmartRtlMission[id]["alt"] = JSON(alt)
         self.dssSmartRtlMission[id]["heading"] = JSON("course")
         self.dssSmartRtlMission[id]["speed"] = JSON(self.activeWP.speed)
         return true
@@ -431,23 +523,26 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
 
     
     //*************************************
-    // Get current location as location object
-    func getCurrentLocation()->CLLocation?{
+    // Get current location as lat, lon, alt COMPENSATED for the strange djiDatumAltitudeOffset AND take-off AMSL. Always guard the result before using it.
+    func getCurrentLocation()->(Double?, Double?, Double?){
         guard let locationKey = DJIFlightControllerKey(param: DJIFlightControllerParamAircraftLocation) else {
             NSLog("Couldn't create the key")
-            return nil
+            return (nil, nil, nil)
         }
 
         guard let keyManager = DJISDKManager.keyManager() else {
             print("Couldn't get the keyManager, are you registered")
-            return nil
+            return (nil, nil, nil)
         }
                 
         if let locationValue = keyManager.getValueFor(locationKey) {
             let location = locationValue.value as! CLLocation
-            return location
+            let lat = location.coordinate.latitude
+            let lon = location.coordinate.longitude
+            let alt = location.altitude + self.djiDatumAltOffset + self.loc.takeOffLocationDjiAMSL
+            return (lat, lon, alt)
         }
-     return nil
+     return (nil, nil, nil)
     }
     
     // ********************************
@@ -1302,25 +1397,33 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             case "absolute":
                 // Ref yaw defined in pattern
                 refYaw = desHeading
+
                 
                 // Calc direction of travel as perpedicular to bearing towards poi.
-                var direction: Double = 0
+                //var direction: Double = 0
                 if CCW {
-                    direction = bearing + 90.0
+                    refCourse = bearing + 90.0
                 }
                 else {
-                    direction = bearing - 90.0
+                    refCourse = bearing - 90.0
                 }
-                
-                // Calc body velocitites based on speed direction and refYaw
-                let alphaRad = (direction-refYaw)/180*Double.pi
+
+//                // Calc body velocitites based on speed direction and refYaw
+                let alphaRad = (refCourse-refYaw)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
-                
-                // Radius tracking, add components to x and y
+//                let alphaRad = (self.loc.heading - refCourse)/180*Double.pi
+//                refXVel = speed*cos(alphaRad)
+//                refYVel = speed*sin(alphaRad)
+//
+//
+//                // Radius tracking, add components to x and y
                 let betaRad = (bearing-refYaw)/180*Double.pi
                 refXVel += radKP*radiusError*cos(betaRad)
                 refYVel += radKP*radiusError*sin(betaRad)
+//                let betaRad = (self.loc.heading - bearing)/180*Double.pi
+//                refXVel += radKP*radiusError*cos(betaRad)
+//                refYVel -= radKP*radiusError*sin(betaRad)
                 
             case "course":
                 // Special case of absolute where heading is same as direction of travel.
@@ -1437,9 +1540,20 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         refXVel *= turnFactor
         refYVel *= turnFactor
         
-        // Altitude trackign
-        let altDiff = dAlt - desAltDiff
-        refZVel = altDiff*Double(vPosKP)
+        // dAlt from copter to stream (positive downwards)
+        //let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
+        // desAltDiff from stream to copter (positive upwards)
+        //let desAltDiff = self.copter.pattern.pattern.relAlt
+        // altError from stream to copter ref
+        //let altError = dAlt - (-desAltDiff)
+        // Control in z (positive downwards..)
+        //let refZVel = -altError*Double(1)
+        
+        // Altitude trackign, zError positive downwards, current - ref
+        // dAlt is from copter to stream device (positive DOWNWARDS), desAltDiff is above stream device (positive UPWARDS)
+        let zError = (dAlt - (-desAltDiff))
+        
+        refZVel = -zError*Double(vPosKP)
 
         // Set up a speed limit. Use global limit for now, it is given in cm/s..
         let speed = xyVelLimit/100
