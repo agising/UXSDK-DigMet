@@ -888,26 +888,7 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
                     let yaw = json_m["yaw"].doubleValue
                     
                     self.copter.pattern.streamUpdate(lat: lat, lon: lon, alt: alt, yaw: yaw)
-                    
                     self.log("Stream base alt: " + String(alt))
-                    //self.log("Stream des drone alt: " + String(alt + copter.pattern.pattern.relAlt))
-                    
-                    
-                    // Debug
-//                    // dAlt from copter to stream (positive downwards)
-//                    let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
-//                    // desAltDiff from stream to copter (positive upwards)
-//                    let desAltDiff = self.copter.pattern.pattern.relAlt
-//                    // altError from stream to copter ref
-//                    let zError = dAlt - (-desAltDiff)
-//                    // Control in z (positive downwards..)
-//                    let refZVel = -zError*Double(1)
-//                    
-//                    self.log("dAlt :" + String(dAlt) + "desAltDiff: " + String(desAltDiff) + " zError: " + String(zError))
-////                    self.log("drone alt: " + String(self.copter.loc.altitude))
-//                    self.log("stream alt: " + String(alt))
-//                    self.log("Z-vel: " + String(refZVel))
-//                    self.log("altError: " + String(altError))
                 }
                 print("Subscribe: Nothing to receive")
                 // TODO. Sleep only for the while true test setup
@@ -1968,22 +1949,22 @@ public class DSSViewController: DUXDefaultLayoutViewController { //DUXFPVViewCon
 //        // Set a flight pattern
         switch rightTicker{
             case 0:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: 10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: 20)
                 self.log("Cricle +15 poi r10")
             case 1:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: -10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -2, radius: 15, yawRate: -20)
                 self.log("Cricle +20 course r15")
             case 2:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: 10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: 20)
                 self.log("Cricle +25 north r20")
             case 3:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: -10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: 0, radius: 20, yawRate: -20)
                 self.log("Cricle +25 north r20")
             case 4:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: 10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: 20)
                 self.log("Cricle +25 north r20")
             case 5:
-                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: -10)
+                copter.pattern.setPattern(pattern: "circle", relAlt: 30, heading: -1, radius: 25, yawRate: -20)
                 self.log("Cricle +25 north r20")
 
                 // Reset ticker

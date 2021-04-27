@@ -1373,32 +1373,35 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     refCourse = bearing
                 }
                 else if CCW {
-                    refCourse = bearing - 90
-                }
-                else{
                     refCourse = bearing + 90
                 }
-                    
+                else{
+                    refCourse = bearing - 90
+                }
+                
                 // Calc body velocitites to follow refCourse (parallell to course)
-                let alphaRad = (self.loc.heading - refCourse)/180*Double.pi
+                let alphaRad = (refCourse - self.loc.heading)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
-                
+
                 // Radius tracking, add components to x and y
-                let betaRad = (self.loc.heading - bearing)/180*Double.pi
+                let betaRad = (bearing - self.loc.heading)/180*Double.pi
                 refXVel += radKP*radiusError*cos(betaRad)
-                refYVel -= radKP*radiusError*sin(betaRad)
+                refYVel += radKP*radiusError*sin(betaRad)
                 
                 // YawRate feed forward when closing in to radius
                 if abs(radiusError) < 4{
                     yawRateFF = desYawRate
                 }
                 
+                // Gimbla control
+                let gPitch = atan(dAlt/distance2D)/Double.pi*180
+                self.gimbal.setPitch(pitch: gPitch)
+                
             case "absolute":
                 // Ref yaw defined in pattern
                 refYaw = desHeading
 
-                
                 // Calc direction of travel as perpedicular to bearing towards poi.
                 //var direction: Double = 0
                 if CCW {
@@ -1408,22 +1411,15 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                     refCourse = bearing - 90.0
                 }
 
-//                // Calc body velocitites based on speed direction and refYaw
-                let alphaRad = (refCourse-refYaw)/180*Double.pi
+                // Calc body velocitites to follow refCourse (parallell to course)
+                let alphaRad = (refCourse - self.loc.heading)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
-//                let alphaRad = (self.loc.heading - refCourse)/180*Double.pi
-//                refXVel = speed*cos(alphaRad)
-//                refYVel = speed*sin(alphaRad)
-//
-//
-//                // Radius tracking, add components to x and y
-                let betaRad = (bearing-refYaw)/180*Double.pi
+
+                // Radius tracking, add components to x and y
+                let betaRad = (bearing - self.loc.heading)/180*Double.pi
                 refXVel += radKP*radiusError*cos(betaRad)
                 refYVel += radKP*radiusError*sin(betaRad)
-//                let betaRad = (self.loc.heading - bearing)/180*Double.pi
-//                refXVel += radKP*radiusError*cos(betaRad)
-//                refYVel -= radKP*radiusError*sin(betaRad)
                 
             case "course":
                 // Special case of absolute where heading is same as direction of travel.
@@ -1439,19 +1435,18 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
                 else {
                     refCourse = bearing - 90.0
                 }
-                
                 // Ref yaw is refCourse. Or should i be course..
                 refYaw = refCourse
                 
-                // Calc body velocitites based on speed direction and refYaw
-                let alphaRad = (self.loc.heading-refCourse)/180*Double.pi
+                // Calc body velocitites to follow refCourse (parallell to course)
+                let alphaRad = (refCourse - self.loc.heading)/180*Double.pi
                 refXVel = speed*cos(alphaRad)
                 refYVel = speed*sin(alphaRad)
-                
+
                 // Radius tracking, add components to x and y
-                let betaRad = (self.loc.heading-bearing)/180*Double.pi
+                let betaRad = (bearing - self.loc.heading)/180*Double.pi
                 refXVel += radKP*radiusError*cos(betaRad)
-                refYVel -= radKP*radiusError*sin(betaRad)
+                refYVel += radKP*radiusError*sin(betaRad)
 
                 if abs(radiusError) < 4{
                     yawRateFF = desYawRate
@@ -1514,23 +1509,17 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
             print("Pattern not supported Stop follower TODO")
         }
         
-        // Gimbla control
-        let gPitch = atan(radiusError/dAlt)
-        self.gimbal.setPitch(pitch: gPitch)
+      
         
         // Calculate yaw-error, use shortest way (right or left?)
         let yawError = getDoubleWithinAngleRange(angle: (self.loc.heading - refYaw))
         // P-controller for Yaw
         _refYawRate = yawRateFF - yawError*Double(yawKP)
         
-
-        //print("Yawrate: ", _refYawRate, " Yawerror: ", yawError, " yawrateFF: ", yawRateFF)
-
         // Punish horizontal velocity on yaw error. Otherwise drone will not fly in straight line
         var turnFactor: Double = 1
         if abs(yawError) > 20 {
             turnFactor = 0
-            print("turnfactor 0!")
         }
         else{
             turnFactor = 1
@@ -1540,19 +1529,10 @@ class CopterController: NSObject, DJIFlightControllerDelegate {
         refXVel *= turnFactor
         refYVel *= turnFactor
         
-        // dAlt from copter to stream (positive downwards)
-        //let (_, _, dAlt, distance2D, _, _) = self.copter.loc.distanceTo(wpLocation: self.copter.pattern.stream)
-        // desAltDiff from stream to copter (positive upwards)
-        //let desAltDiff = self.copter.pattern.pattern.relAlt
-        // altError from stream to copter ref
-        //let altError = dAlt - (-desAltDiff)
-        // Control in z (positive downwards..)
-        //let refZVel = -altError*Double(1)
-        
         // Altitude trackign, zError positive downwards, current - ref
         // dAlt is from copter to stream device (positive DOWNWARDS), desAltDiff is above stream device (positive UPWARDS)
         let zError = (dAlt - (-desAltDiff))
-        
+        // Negative feedback loop
         refZVel = -zError*Double(vPosKP)
 
         // Set up a speed limit. Use global limit for now, it is given in cm/s..
